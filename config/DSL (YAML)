@@ -1,0 +1,54 @@
+# config/strategy.yaml
+name: rsi_ema_second_hour
+universe: ["ABB.ST", "VOLV-B.ST"]
+bar: "1h"
+# Handel endast på vanliga börsdagar i Europe/Stockholm mellan 09:00-17:30
+session:
+tz: "Europe/Stockholm"
+open: "09:00"
+close: "17:30"
+
+
+features:
+- { name: rsi, kind: "rsi", params: { length: 14 } }
+- { name: emaF, kind: "ema", params: { length: 20 } }
+- { name: emaS, kind: "ema", params: { length: 50 } }
+- { name: atr, kind: "atr", params: { length: 14 } }
+
+
+entry:
+all: # ALL villkor måste vara sanna vid 1h-barens close
+- { expr: "rsi > rsi_thr" }
+- { expr: "emaF > emaS" }
+- { expr: "is_second_hour == True" } # dagens 2:a timme från öppning
+
+
+exit:
+any: # någon av villkoren får utträde
+- { expr: "take_profit_pct >= tp_pct" }
+- { expr: "stop_loss_pct <= -sl_pct" }
+- { expr: "time_in_trade_hours >= max_hold_h" }
+
+
+position:
+sizing: { type: "risk_pct_of_equity", value: 1.0 }
+side: "long"
+
+
+# Parametrar och intervall för optimering
+parameters:
+rsi_thr: [50, 55, 60, 65]
+emaF: [10, 20, 30]
+emaS: [50, 100, 150]
+tp_pct: [2.0, 3.0, 4.0]
+sl_pct: [1.0, 1.5, 2.0]
+max_hold_h: [4, 6, 8]
+
+
+objective: "sharpe" # sharpe | cagr | cagr_over_maxdd | custom
+
+
+walkforward:
+train_months: 12
+test_months: 3
+purge_hours: 24 # rensa glapp mellan train och test

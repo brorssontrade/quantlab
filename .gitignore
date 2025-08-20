@@ -1,0 +1,10 @@
+﻿.venv/
+__pycache__/
+.env
+secrets/
+logs/
+storage/parquet/
+db/
+reports/*.png
+.env
+db/

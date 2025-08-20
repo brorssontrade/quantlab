@@ -1,0 +1,21 @@
+quantlab/
+config/
+strategy.yaml # DSL: regler + paramintervall + walk-forward
+engine/
+calendar.py # Öppettider XSTO, sessionlogik ("dagens 2:a timme")
+ingest.py # EODHD-klient (1m) + cache
+resample.py # 1m -> 1h (right-closed)
+features.py # RSI/EMA/ATR/... (vektoriserat)
+rules.py # Regelbyggare (AND/OR/ALL/ANY, jämförelser, korsningar)
+strategy.py # Strategy-class: binder features + regler
+backtest.py # Event-driven/vektoriserat backtest, latency-policy
+metrics.py # CAGR, Sharpe, Sortino, MaxDD, hit-rate, etc.
+optimize.py # Grid + Optuna (Bayes)
+walkforward.py # Rullande train/test, purged
+storage/
+parquet/ # symbol=.../date=... filstruktur (Parquet)
+reports/
+... # CSV/JSON sammanställningar, heatmaps, bästa params
+cli.py # Kommandon: ingest, build, backtest, optimize, wf
+requirements.txt # pandas, numpy, pyyaml, optuna, duckdb, pyarrow
+README.md
