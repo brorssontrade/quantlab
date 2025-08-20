@@ -1,4 +1,9 @@
-﻿# quantlab
+﻿![CI](https://github.com/brorssontrade/quantlab/actions/workflows/ci.yml/badge.svg)
+[![Charts (GitHub Pages)](https://img.shields.io/badge/Charts-LIVE-2ea44f?logo=github)](https://brorssontrade.github.io/quantlab/)
+
+
+
+# quantlab
 Pipeline: hämta kursdata (yfinance) → lagra i DuckDB → plotta → rapporter.
 
 ## Quickstart (Windows)
@@ -26,3 +31,6 @@ python .\scripts\plot_symbol.py --symbol ABB.ST --days 60
 
 
 ![CI](https://github.com/brorssontrade/quantlab/actions/workflows/ci.yml/badge.svg)
+
+[![Charts (GitHub Pages)](https://img.shields.io/badge/Charts-LIVE-2ea44f?logo=github)](https://brorssontrade.github.io/quantlab/)
+
