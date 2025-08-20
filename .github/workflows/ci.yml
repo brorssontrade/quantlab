@@ -11,6 +11,9 @@ on:
 jobs:
   pipeline:
     runs-on: windows-latest
+    strategy:
+      matrix:
+        symbol: [ABB.ST, AAPL, MSFT, VOLV-B.ST]   # lägg till/ta bort här
     steps:
       - uses: actions/checkout@v4
 
@@ -29,17 +32,19 @@ jobs:
           mkdir storage\parquet\raw_1h 2>$null
           mkdir db 2>$null
 
-      - name: Fetch ABB 1h (10d)
-        run: python .\cli_live.py --symbol ABB.ST --interval 1h --days 10
+      - name: Fetch ${{ matrix.symbol }} 1h (10d)
+        run: python .\cli_live.py --symbol "${{ matrix.symbol }}" --interval 1h --days 10
 
       - name: Init DuckDB
         run: python .\scripts\init_duckdb.py
 
-      - name: Plot ABB
-        run: python .\scripts\plot_symbol.py --symbol ABB.ST --days 10
+      - name: Plot ${{ matrix.symbol }}
+        run: python .\scripts\plot_symbol.py --symbol "${{ matrix.symbol }}" --days 10
 
-      - name: Upload reports
+      - name: Upload report ${{ matrix.symbol }}
         uses: actions/upload-artifact@v4
         with:
-          name: reports
+          name: report-${{ matrix.symbol }}
           path: reports/*.png
+          retention-days: 7
+
