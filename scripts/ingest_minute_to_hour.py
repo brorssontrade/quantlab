@@ -1,9 +1,17 @@
 # scripts/ingest_minute_to_hour.py
+import sys
 import argparse, os
 from datetime import datetime
 import pandas as pd
 import yfinance as yf
 import yaml
+
+# Tvinga UTF-8 ut (för Windows-runners/Actions)
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
 STO_TZ = "Europe/Stockholm"
 
@@ -30,7 +38,7 @@ def fetch_yf_intraday(symbol: str, days: int) -> pd.DataFrame:
     if df is None or df.empty:
         return pd.DataFrame()
 
-    # Tidszon → Stockholm
+    # Tidszon -> Stockholm
     idx = pd.to_datetime(df.index, utc=True).tz_convert(STO_TZ)
     df.index = idx
 
@@ -95,14 +103,15 @@ def save_partitioned_hourly(df: pd.DataFrame, root="./storage/parquet/raw_1h"):
     return n
 
 def run_one(symbol: str, days: int):
-    print(f"Hämtar {symbol} ~{days} dagar (1m/5m→1h)…")
+    # ASCII i loggen för att undvika UnicodeEncodeError i vissa miljöer
+    print(f"Hämtar {symbol} ~{days} dagar (1m/5m->1h)...")
     raw = fetch_yf_intraday(symbol, days)
     if raw.empty:
         print("Ingen data från yfinance.")
         return 0
     h = resample_to_hour(raw, symbol)
     rows = save_partitioned_hourly(h)
-    print(f"Skrev {rows} rader 1h → storage/parquet/raw_1h/symbol={symbol}/date=…")
+    print(f"Skrev {rows} rader 1h -> storage/parquet/raw_1h/symbol={symbol}/date=...")
     return rows
 
 def main():

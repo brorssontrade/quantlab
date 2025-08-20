@@ -13,6 +13,9 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
+    env:
+      PYTHONUTF8: "1"
+      PYTHONIOENCODING: "utf-8"
 
     steps:
       - name: Checkout
@@ -23,6 +26,11 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Force UTF-8 in PowerShell
+        shell: pwsh
+        run: |
+          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
       - name: Install dependencies
         shell: pwsh
         run: |
@@ -30,7 +38,6 @@ jobs:
           pip install -r requirements.txt
           pip install yfinance matplotlib
 
-      # Säkerställ ConvertFrom-Yaml finns
       - name: Install PowerShell-Yaml
         shell: pwsh
         run: |
@@ -44,10 +51,17 @@ jobs:
           mkdir db -ea 0
           mkdir reports -ea 0
 
-      - name: Ingest minute→hour (watchlist)
+      - name: List repo contents (debug)
         shell: pwsh
         run: |
-          python .\scripts\ingest_minute_to_hour.py --days 60
+          pwd
+          dir
+          dir scripts
+
+      - name: Ingest minute->hour (watchlist)
+        shell: pwsh
+        run: |
+          python -m scripts.ingest_minute_to_hour --days 60
 
       - name: Init DuckDB
         run: python .\scripts\init_duckdb.py
