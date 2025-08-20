@@ -24,3 +24,5 @@ python .\cli_live.py --symbol ABB.ST --interval 1h --days 60
 python .\scripts\init_duckdb.py
 python .\scripts\plot_symbol.py --symbol ABB.ST --days 60
 
+
+![CI](https://github.com/brorssontrade/quantlab/actions/workflows/ci.yml/badge.svg)
