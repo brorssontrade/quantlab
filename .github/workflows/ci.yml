@@ -116,13 +116,47 @@ jobs:
     mkdir pages 2>$null
     Copy-Item reports\*.png pages\ -ErrorAction SilentlyContinue
     Copy-Item reports\*.csv pages\ -ErrorAction SilentlyContinue
+    Copy-Item reports\*_metrics.json pages\ -ErrorAction SilentlyContinue
+
     $h = @"
-    <html><head><meta charset='utf-8'><title>Quantlab charts</title></head><body>
+    <html><head><meta charset='utf-8'><title>Quantlab charts</title>
+    <style>
+      body{font-family:Arial,Helvetica,sans-serif;max-width:1280px;margin:20px auto;padding:0 12px}
+      table{border-collapse:collapse;width:100%;margin:16px 0}
+      th,td{border:1px solid #ddd;padding:8px;text-align:right}
+      th{text-align:center;background:#f3f3f3}
+      td.symbol{font-weight:bold;text-align:left}
+      img{max-width:1200px}
+      .muted{color:#666;font-size:12px}
+    </style>
+    </head><body>
     <h1>Quantlab charts</h1>
-    "@
-    Get-ChildItem pages -Filter *.png | ForEach-Object {
-      $n = $_.Name; $h += "<h3>$n</h3><img src='$n' style='max-width:1200px'><hr/>"
+    <p class="muted">Senast genererad: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss") UTC</p>
+"@
+
+    # KPI-tabell från *_metrics.json om de finns
+    $metrics = Get-ChildItem pages -Filter *_metrics.json -ErrorAction SilentlyContinue
+    if ($metrics) {
+      $h += "<h2>KPI (senaste backtest)</h2>"
+      $h += "<table><thead><tr><th>Ticker</th><th>CAGR</th><th>Sharpe</th><th>MaxDD</th><th>HitRate</th><th>Trades</th></tr></thead><tbody>"
+      foreach ($m in $metrics) {
+        try {
+          $j = Get-Content $m.FullName -Raw | ConvertFrom-Json
+          $ticker = ($m.BaseName -replace '_metrics$','')
+          $cagr   = "{0:P2}" -f [double]$j.CAGR
+          $sharpe = "{0:N2}" -f [double]$j.Sharpe
+          $maxdd  = "{0:P1}" -f [double]$j.MaxDD
+          $hit    = "{0:P1}" -f [double]$j.HitRate
+          $tr     = [int]$j.Trades
+          $h += "<tr><td class='symbol'>$ticker</td><td>$cagr</td><td>$sharpe</td><td>$maxdd</td><td>$hit</td><td>$tr</td></tr>"
+        } catch {
+          # hoppa över trasig json
+        }
+      }
+      $h += "</tbody></table>"
     }
+
+    # Lista CSV (signals/backtests)
     if (Test-Path pages\*.csv) {
       $h += "<h2>Signals & Backtests (CSV)</h2><ul>"
       Get-ChildItem pages -Filter *.csv | ForEach-Object {
@@ -130,8 +164,16 @@ jobs:
       }
       $h += "</ul>"
     }
+
+    # Visa alla PNG-grafer
+    Get-ChildItem pages -Filter *.png | ForEach-Object {
+      $n = $_.Name
+      $h += "<h3>$n</h3><img src='$n'><hr/>"
+    }
+
     $h += "</body></html>"
     $h | Out-File pages\index.html -Encoding utf8
+
 
 - name: Publish to GitHub Pages
   uses: peaceiris/actions-gh-pages@v4
@@ -140,4 +182,5 @@ jobs:
     publish_dir: pages
     publish_branch: gh-pages
     force_orphan: true
+
 

@@ -5,14 +5,20 @@ import sys, pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from engine.features import add_common
 
+from datetime import datetime, timezone, timedelta
+import duckdb
+import pandas as pd
+
 def load_bars(db, symbol, days):
     con = duckdb.connect(db)
     q = """
     SELECT * FROM bars_all
-    WHERE symbol=? AND ts >= now() - INTERVAL ? DAY
+    WHERE symbol = ? AND ts >= ?
     ORDER BY ts
     """
-    return con.execute(q, [symbol, days]).df()
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    return con.execute(q, [symbol, cutoff]).df()
+
 
 def simple_entry(df):
     """Samma som signals_example: andra timmen + EMA-faster över EMA-slow + RSI>55.
