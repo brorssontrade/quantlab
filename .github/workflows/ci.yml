@@ -10,6 +10,27 @@ on:
 permissions:
   contents: write   # krävs för att pusha till gh-pages
 
+
+- name: Signals for watchlist
+  shell: pwsh
+  run: |
+    $cfg = (Get-Content config/watchlist.yml -Raw | ConvertFrom-Yaml)
+    foreach ($t in $cfg.tickers) {
+      python -m scripts.signals_example --symbol $t --days 120
+    }
+
+- name: Backtest for watchlist
+  shell: pwsh
+  run: |
+    $cfg = (Get-Content config/watchlist.yml -Raw | ConvertFrom-Yaml)
+    foreach ($t in $cfg.tickers) {
+      python -m scripts.backtest_min --symbol $t --days 180
+    }
+
+
+
+
+
 jobs:
   build:
     runs-on: windows-latest
@@ -89,3 +110,34 @@ jobs:
           publish_branch: gh-pages
           force_orphan: true
           commit_message: "Deploy charts: ${{ github.sha }}"
+- name: Build static page
+  shell: pwsh
+  run: |
+    mkdir pages 2>$null
+    Copy-Item reports\*.png pages\ -ErrorAction SilentlyContinue
+    Copy-Item reports\*.csv pages\ -ErrorAction SilentlyContinue
+    $h = @"
+    <html><head><meta charset='utf-8'><title>Quantlab charts</title></head><body>
+    <h1>Quantlab charts</h1>
+    "@
+    Get-ChildItem pages -Filter *.png | ForEach-Object {
+      $n = $_.Name; $h += "<h3>$n</h3><img src='$n' style='max-width:1200px'><hr/>"
+    }
+    if (Test-Path pages\*.csv) {
+      $h += "<h2>Signals & Backtests (CSV)</h2><ul>"
+      Get-ChildItem pages -Filter *.csv | ForEach-Object {
+        $h += "<li><a href='$($_.Name)'>$($_.Name)</a></li>"
+      }
+      $h += "</ul>"
+    }
+    $h += "</body></html>"
+    $h | Out-File pages\index.html -Encoding utf8
+
+- name: Publish to GitHub Pages
+  uses: peaceiris/actions-gh-pages@v4
+  with:
+    github_token: ${{ secrets.GITHUB_TOKEN }}
+    publish_dir: pages
+    publish_branch: gh-pages
+    force_orphan: true
+
