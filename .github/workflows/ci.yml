@@ -1,15 +1,17 @@
 name: CI
 
 on:
-  workflow_dispatch:      # gör att du kan köra manuellt från Actions-fliken
   push:
     branches: [ main ]
-  pull_request:
   schedule:
-    - cron: '0 1 * * *'  # kör varje natt 01:00 UTC
+    - cron: "0 1 * * *"   # nattligt jobb (UTC)
+  workflow_dispatch:
+
+permissions:
+  contents: write   # krävs för att pusha till gh-pages
 
 jobs:
-  pipeline:
+  build:
     runs-on: windows-latest
 
     steps:
@@ -17,42 +19,73 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
-          cache: 'pip'
+          python-version: "3.12"
 
-      - name: Install dependencies
+      - name: Installera beroenden
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt matplotlib yfinance pyyaml
+          python -m pip install -U pip
+          pip install -r requirements.txt yfinance matplotlib
 
-      - name: Prepare folders
-        run: |
-          mkdir storage\parquet\raw_1h 2>$null
-          mkdir db 2>$null
-          mkdir reports 2>$null
-
-      # Loopar igenom tickers från config/watchlist.yml
-      - name: Process watchlist
+      - name: Förbered mappar
         shell: pwsh
         run: |
-          python - << 'PY'
-          import yaml, subprocess, sys
-          with open('config/watchlist.yml', encoding='utf-8') as f:
-              tickers = yaml.safe_load(f).get('tickers', [])
-          if not tickers:
-              print("No tickers in config/watchlist.yml", file=sys.stderr)
-              sys.exit(1)
-          for s in tickers:
-              subprocess.check_call([sys.executable, 'cli_live.py', '--symbol', s, '--interval', '1h', '--days', '10'])
-              subprocess.check_call([sys.executable, 'scripts/init_duckdb.py'])
-              subprocess.check_call([sys.executable, 'scripts/plot_symbol.py', '--symbol', s, '--days', '10'])
-          PY
+          mkdir storage\parquet\raw_1h -ea 0
+          mkdir db -ea 0
+          mkdir reports -ea 0
 
-      - name: Upload all reports
+  - name: Hämta & resampla (watchlist)
+  shell: pwsh
+  run: |
+    python .\scripts\ingest_minute_to_hour.py --days 60
+
+      - name: Initiera DuckDB
+        run: python .\scripts\init_duckdb.py
+
+      - name: Plotta alla tickers
+        shell: pwsh
+        run: |
+          $cfg = ConvertFrom-Yaml (Get-Content config\watchlist.yml -Raw)
+          foreach ($t in $cfg.tickers) {
+            python .\scripts\plot_symbol.py --symbol $t --days 60
+          }
+
+      - name: Ladda upp grafer som artifact
         uses: actions/upload-artifact@v4
         with:
           name: reports
           path: reports/*.png
           retention-days: 7
 
+      # --- NYTT: bygg statisk sida + publicera till gh-pages ---
+      - name: Bygg statisk sida (pages/)
+        shell: pwsh
+        run: |
+          Remove-Item -Recurse -Force pages -ErrorAction SilentlyContinue
+          mkdir pages
+          Copy-Item reports\*.png pages\ -ErrorAction SilentlyContinue
+          $h = @"
+          <html><head><meta charset='utf-8'>
+          <title>Quantlab charts</title>
+          <style>
+            body{font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:1200px;margin:40px auto;padding:0 20px}
+            h1{margin-bottom:8px}
+            img{max-width:100%;height:auto}
+          </style>
+          </head><body><h1>Quantlab charts</h1>
+          "@
+          Get-ChildItem pages -Filter *.png | Sort-Object Name | ForEach-Object {
+            $n = $_.Name
+            $h += "<h3>$n</h3><img src='$n'><hr/>"
+          }
+          $h += "</body></html>"
+          $h | Out-File pages\index.html -Encoding utf8
+          New-Item -ItemType File -Path pages\.nojekyll -Force | Out-Null
 
+      - name: Publicera till GitHub Pages (gh-pages)
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: pages
+          publish_branch: gh-pages
+          force_orphan: true
+          commit_message: "Deploy charts: ${{ github.sha }}"
