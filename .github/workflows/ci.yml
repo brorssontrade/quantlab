@@ -11,9 +11,7 @@ on:
 jobs:
   pipeline:
     runs-on: windows-latest
-    strategy:
-      matrix:
-        symbol: [ABB.ST, AAPL, MSFT, VOLV-B.ST]   # lägg till/ta bort här
+
     steps:
       - uses: actions/checkout@v4
 
@@ -25,26 +23,36 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt matplotlib yfinance
+          pip install -r requirements.txt matplotlib yfinance pyyaml
 
       - name: Prepare folders
         run: |
           mkdir storage\parquet\raw_1h 2>$null
           mkdir db 2>$null
+          mkdir reports 2>$null
 
-      - name: Fetch ${{ matrix.symbol }} 1h (10d)
-        run: python .\cli_live.py --symbol "${{ matrix.symbol }}" --interval 1h --days 10
+      # Loopar igenom tickers från config/watchlist.yml
+      - name: Process watchlist
+        shell: pwsh
+        run: |
+          python - << 'PY'
+          import yaml, subprocess, sys
+          with open('config/watchlist.yml', encoding='utf-8') as f:
+              tickers = yaml.safe_load(f).get('tickers', [])
+          if not tickers:
+              print("No tickers in config/watchlist.yml", file=sys.stderr)
+              sys.exit(1)
+          for s in tickers:
+              subprocess.check_call([sys.executable, 'cli_live.py', '--symbol', s, '--interval', '1h', '--days', '10'])
+              subprocess.check_call([sys.executable, 'scripts/init_duckdb.py'])
+              subprocess.check_call([sys.executable, 'scripts/plot_symbol.py', '--symbol', s, '--days', '10'])
+          PY
 
-      - name: Init DuckDB
-        run: python .\scripts\init_duckdb.py
-
-      - name: Plot ${{ matrix.symbol }}
-        run: python .\scripts\plot_symbol.py --symbol "${{ matrix.symbol }}" --days 10
-
-      - name: Upload report ${{ matrix.symbol }}
+      - name: Upload all reports
         uses: actions/upload-artifact@v4
         with:
-          name: report-${{ matrix.symbol }}
+          name: reports
           path: reports/*.png
           retention-days: 7
+
 
