@@ -1,44 +1,45 @@
 name: CI
 
 on:
+  workflow_dispatch:      # gör att du kan köra manuellt från Actions-fliken
   push:
     branches: [ main ]
   pull_request:
+  schedule:
+    - cron: '0 1 * * *'  # kör varje natt 01:00 UTC
 
 jobs:
-  pipeline-check:
+  pipeline:
     runs-on: windows-latest
-
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
           cache: 'pip'
 
-      - name: Install deps
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt matplotlib yfinance
 
       - name: Prepare folders
         run: |
-          mkdir storage\parquet\raw_1h -ea 0
-          mkdir db -ea 0
+          mkdir storage\parquet\raw_1h 2>$null
+          mkdir db 2>$null
 
-      - name: Fetch sample data (ABB.ST)
-        run: python .\cli_live.py --symbol ABB.ST --interval 1h --days 5
+      - name: Fetch ABB 1h (10d)
+        run: python .\cli_live.py --symbol ABB.ST --interval 1h --days 10
 
       - name: Init DuckDB
         run: python .\scripts\init_duckdb.py
 
-      - name: Plot chart
-        run: python .\scripts\plot_symbol.py --symbol ABB.ST --days 5
+      - name: Plot ABB
+        run: python .\scripts\plot_symbol.py --symbol ABB.ST --days 10
 
-      - name: Upload report
+      - name: Upload reports
         uses: actions/upload-artifact@v4
         with:
           name: reports
-          path: reports\*.png
+          path: reports/*.png
