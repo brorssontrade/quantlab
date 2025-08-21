@@ -90,6 +90,7 @@ def add_common(
     ema_slow_n: int = 50,
     rsi_n: int = 14,
     atr_n: int = 14,
+    **_
 ) -> pd.DataFrame:
     out = df.copy()
 
@@ -186,5 +187,12 @@ def add_common(
     out["ema12"] = ema(out["close"], 12)
     out["ema26"] = ema(out["close"], 26)
     out["ema63"] = ema(out["close"], 63)
+
+    # --- alias för robusthet ---
+    out["rsi14"] = out.get("rsi14", out.get("rsi"))
+    out["ema_12"] = out.get("ema_12", out.get("ema12", out.get("ema_fast")))
+    out["ema_26"] = out.get("ema_26", out.get("ema26", out.get("ema_slow")))
+    out["adx14"] = out.get("adx14", out.get("adx"))
+    out["atr14"] = out.get("atr14", out.get("atr"))
 
     return out

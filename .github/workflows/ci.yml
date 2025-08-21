@@ -53,6 +53,7 @@ jobs:
           python -m pip install -U pip
           pip install -r requirements.txt
           pip install yfinance matplotlib
+          pip install yfinance matplotlib optuna
 
       - name: Install PowerShell-Yaml
         shell: pwsh
@@ -105,6 +106,56 @@ jobs:
           foreach ($t in $cfg.tickers) {
             python -m scripts.backtest_min --symbol $t --days 180
           }
+
+      - name: Optimize baseline params (Optuna or Grid)
+        shell: pwsh
+        run: |
+          $cfg = ConvertFrom-Yaml (Get-Content config\watchlist.yml -Raw)
+          foreach ($t in $cfg.tickers) {
+            python -m scripts.optimize_baseline --symbol $t --days 180 --n_trials 40 --min_trades 8 --use_second_hour_opt
+          }
+
+# --- Optimering (Optuna) ---
+      - name: Optimize baseline (Optuna)
+        shell: pwsh
+        run: |
+          python -m scripts.optimize_baseline `
+            --symbol $env:SYMBOL `
+            --days 540 `
+            --n_trials 60 `
+            --min_trades 8 `
+            --use_second_hour_opt `
+            --oos_walkforward 12,3 `
+            --purge_bars 5
+
+      # --- Kopiera Optuna-output till Pages-mappen ---
+      - name: Copy Optuna outputs into pages
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force pages | Out-Null
+          Copy-Item .\reports\*_optuna_trials.csv -Destination .\pages\ -Force -ErrorAction SilentlyContinue
+          Copy-Item .\reports\*_optuna_best.json  -Destination .\pages\ -Force -ErrorAction SilentlyContinue
+
+      # --- Bygg statisk sida (exemplet du visade) ---
+      - name: Build static page
+        shell: pwsh
+        run: |
+          $h = "<html><body><h1>QuantLab Reports</h1>"
+          $opt  = Get-ChildItem pages -Filter *_optuna_trials.csv -ErrorAction SilentlyContinue
+          if ($opt) {
+            $h += "<h2>Optimization (Optuna/Grid)</h2><ul>"
+            foreach ($o in $opt) { $h += "<li><a href='$($o.Name)'>$($o.Name)</a></li>" }
+            $h += "</ul>"
+          }
+          $best = Get-ChildItem pages -Filter *_optuna_best.json -ErrorAction SilentlyContinue
+          if ($best) {
+            $h += "<h3>Best params (JSON)</h3><ul>"
+            foreach ($b in $best) { $h += "<li><a href='$($b.Name)'>$($b.Name)</a></li>" }
+            $h += "</ul>"
+          }
+          $h += "</body></html>"
+          Set-Content pages\index.html $h -Encoding UTF8
+
 
       - name: Upload all reports
         uses: actions/upload-artifact@v4
