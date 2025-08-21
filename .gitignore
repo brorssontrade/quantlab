@@ -8,3 +8,6 @@ db/
 reports/*.png
 .env
 db/
+
+reports/*.csv
+reports/*_metrics.json
