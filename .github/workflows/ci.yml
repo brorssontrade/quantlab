@@ -27,6 +27,13 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Debug – show HEAD and signals_example
+        shell: pwsh
+        run: |
+          git rev-parse HEAD
+          Write-Host '--- scripts\signals_example.py (head) ---'
+          Get-Content scripts\signals_example.py | Select-Object -First 30
+
       - name: Run tests
         shell: pwsh
         run: |
