@@ -1,4 +1,11 @@
-﻿![CI](https://github.com/brorssontrade/quantlab/actions/workflows/ci.yml/badge.svg)
+﻿[![Charts](https://img.shields.io/badge/Charts-gh--pages-blue)](https://brorssontrade.github.io/quantlab/)
+
+
+[![📊 Live charts](https://img.shields.io/badge/📊%20Live%20charts-gh--pages-blue)](https://brorssontrade.github.io/quantlab/)
+
+
+
+![CI](https://github.com/brorssontrade/quantlab/actions/workflows/ci.yml/badge.svg)
 [![Charts (GitHub Pages)](https://img.shields.io/badge/Charts-LIVE-2ea44f?logo=github)](https://brorssontrade.github.io/quantlab/)
 
 
