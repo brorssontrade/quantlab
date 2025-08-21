@@ -130,7 +130,7 @@ def main():
         print("Inga bars.")
         return
 
-    feats = add_common(bars, symbol=args.symbol)
+    feats = add_common(bars)
     sig = simple_entry(feats)
     eq, trades = run_bt(sig, sl_atr=args.sl_atr, tp_atr=args.tp_atr, fee_bps=args.fee_bps)
 
