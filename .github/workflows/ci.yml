@@ -184,3 +184,6 @@ jobs:
           PYTHONUTF8: "1"
         run: |
           pytest -q
+    env:
+      PYTHONUTF8: "1"
+      PYTHONPATH: ${{ github.workspace }}
