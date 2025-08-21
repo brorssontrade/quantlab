@@ -1,4 +1,4 @@
-# tests/test_features.py
+﻿# tests/test_features.py
 import numpy as np
 import pandas as pd
 
@@ -7,7 +7,7 @@ from engine.features import add_common
 def _make_df(n=400):
     # Tidsaxel (Stockholmstid)
     ts = (
-        pd.date_range("2024-01-01", periods=n, freq="H", tz="UTC")
+        pd.date_range("2024-01-01", periods=n, freq="h", tz="UTC")
         .tz_convert("Europe/Stockholm")
     )
     rng = np.random.default_rng(0)
@@ -73,13 +73,13 @@ def test_indicator_ranges_and_relations():
     assert (ok["keltner_upper"] >= ok["keltner_mid_ema20"]).all()
     assert (ok["keltner_mid_ema20"] >= ok["keltner_lower"]).all()
 
-    # MACD-hist ≈ macd - signal
+    # MACD-hist â‰ˆ macd - signal
     diff = (ok["macd"] - ok["macd_signal"] - ok["macd_hist"]).abs()
     assert (diff < 1e-10).all()
 
-    # ADR20 ≈ mean(high-low, 20)
+    # ADR20 â‰ˆ mean(high-low, 20)
     adr_calc = (out["high"] - out["low"]).rolling(20, min_periods=20).mean()
-    # jämför sista 50 icke-NaN
+    # jÃ¤mfÃ¶r sista 50 icke-NaN
     a = ok["adr20"].tail(50).to_numpy()
     b = adr_calc.reindex(ok.index).tail(50).to_numpy()
     np.testing.assert_allclose(a, b, rtol=1e-10, atol=1e-10)
@@ -93,7 +93,7 @@ def test_indicator_ranges_and_relations():
     ratio = up_vol / down_vol.replace(0, np.nan)
     r = ratio.reindex(ok.index).to_numpy()
     r2 = ok["updownvolratio20"].to_numpy()
-    # de kan vara NaN om down_vol==0; jämför där båda är finite
+    # de kan vara NaN om down_vol==0; jÃ¤mfÃ¶r dÃ¤r bÃ¥da Ã¤r finite
     m = np.isfinite(r) & np.isfinite(r2)
     np.testing.assert_allclose(r[m], r2[m], rtol=1e-10, atol=1e-10)
     assert (ok["updownvolratio20"].dropna() >= 0).all()
@@ -105,8 +105,8 @@ def test_indicator_ranges_and_relations():
 def test_types_and_warmup():
     df = _make_df(250)
     out = add_common(df)
-    # några centrala kolumner ska ha < 50% NaN (dvs. fyllas efter warmup)
+    # nÃ¥gra centrala kolumner ska ha < 50% NaN (dvs. fyllas efter warmup)
     for c in ["ema20","ema50","sma20","sma50","ema12","ema26","macd","macd_signal","rsi14","atr14"]:
         col = c if c in out.columns else {"ema20":"ema_fast","ema50":"ema_slow"}[c]
         frac_nan = out[col].isna().mean()
-        assert frac_nan < 0.5, f"För mycket NaN i {col}: {frac_nan:.2%}"
+        assert frac_nan < 0.5, f"FÃ¶r mycket NaN i {col}: {frac_nan:.2%}"
