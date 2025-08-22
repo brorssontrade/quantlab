@@ -1,0 +1,61 @@
+﻿name: nightly_ingest
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 2 * * *'   # 02:00 UTC
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+
+    env:
+      EODHD_TOKEN: ${{ secrets.EODHD_TOKEN }}
+      ALPHA_VANTAGE_API_KEY: ${{ secrets.ALPHA_VANTAGE_API_KEY }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      PARQUET_DIR: ./storage/parquet
+      DUCKDB_PATH: ./db/quant.duckdb
+      TZ: Europe/Stockholm
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install deps
+        run: |
+          python -m pip install -U pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Preflight (PowerShell)
+        shell: pwsh
+        run: ./scripts/Check-QuantEnv.ps1 -Mode CI -WriteEnvFile
+
+      - name: Run fundamentals ingest
+        shell: bash
+        run: |
+          if [ -f fundamentals_ingest.py ]; then
+            python fundamentals_ingest.py | tee nightly.log
+          elif python -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('quantkit') else 1)"; then
+            python -m quantkit.ingest | tee nightly.log
+          else
+            echo "::error::Hittade inget ingest-entrypoint. Lägg till fundamentals_ingest.py eller modulen quantkit.ingest."
+            exit 1
+          fi
+
+      - name: Upload log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-log
+          path: nightly.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+          
