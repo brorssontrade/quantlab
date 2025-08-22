@@ -27,10 +27,6 @@ jobs:
           cache: 'pip'
           cache-dependency-path: requirements.txt
 
-      - name: Optimize baseline (quick smoke)
-        run: |
-          python -m scripts.optimize_baseline --symbol AAPL --days 250 --n_trials 5 --min_trades 1 --mdd_floor 0.5
-
       - name: Install tooling
         run: |
           python -m pip install --upgrade pip
