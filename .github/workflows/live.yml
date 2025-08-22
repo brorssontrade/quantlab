@@ -1,75 +1,51 @@
-name: Live Alerts
+name: live
 
 on:
   workflow_dispatch:
-    inputs:
-      symbols:
-        description: 'Comma-separated Yahoo tickers (ex: ABB.ST,ERIC-B.ST)'
-        required: true
-        default: 'ABB.ST,ERIC-B.ST'
-      minutes_fetch:
-        description: 'How many minutes of 1m data to fetch (Yahoo 1m ≲ 7d)'
-        required: true
-        default: '1950'
-      use_optuna_best:
-        description: 'Use reports/<sym>_optuna_best.json'
-        required: true
-        default: 'true'
-  schedule:
-    # Kör var 5:e minut på vardagar. OBS! GitHub cron är i UTC.
-    - cron: "*/5 7-16 * * 1-5"
-
-permissions:
-  contents: read
-
-concurrency:
-  group: live-alerts
-  cancel-in-progress: true
+  push:
+    branches: [ main ]
 
 jobs:
-  run:
+  live:
     runs-on: ubuntu-latest
+
     env:
-      SYMBOLS: ${{ github.event.inputs.symbols || 'ABB.ST,ERIC-B.ST' }}
-      MINUTES_FETCH: ${{ github.event.inputs.minutes_fetch || '1950' }}
-      USE_OPTUNA_BEST: ${{ github.event.inputs.use_optuna_best || 'true' }}
-      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      EODHD_TOKEN: ${{ secrets.EODHD_TOKEN }}
+      ALPHA_VANTAGE_API_KEY: ${{ secrets.ALPHA_VANTAGE_API_KEY }}
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-      ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      PARQUET_DIR: ./storage/parquet
+      DUCKDB_PATH: ./db/quant.duckdb
+      TZ: Europe/Stockholm
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: '3.12'
 
-      - name: Install dependencies
+      - name: Install deps
         run: |
           python -m pip install -U pip
-          if [ -f requirements.txt ]; then
-            pip install -r requirements.txt
-          else
-            pip install duckdb requests yfinance pandas numpy
-          fi
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: Ensure folders
-        run: |
-          mkdir -p db state reports pages
+      - name: Preflight (PowerShell)
+        shell: pwsh
+        run: ./scripts/Check-QuantEnv.ps1 -Mode CI -WriteEnvFile
 
-      - name: Run live alerts
+      - name: Run live process
         shell: bash
         run: |
-          python -m scripts.live_alerts \
-            --symbols "${SYMBOLS}" \
-            --source yahoo \
-            $([ "${USE_OPTUNA_BEST}" = "true" ] && echo --use_optuna_best) \
-            --minutes_fetch "${MINUTES_FETCH}" \
-            --slack_webhook "${SLACK_WEBHOOK_URL}" \
-            --tg_token "${TELEGRAM_BOT_TOKEN}" \
-            --tg_chat "${TELEGRAM_CHAT_ID}" \
-            --webhook "${ALERT_WEBHOOK_URL}"
+          if [ -f live.py ]; then
+            python live.py
+          elif python -c "import importlib.util, sys; sys.exit(0 if importlib.util.find_spec('quantkit') else 1)"; then
+            python -m quantkit.live
+          else
+            echo "::warning::Hittade inget live-entrypoint. Lägg till live.py eller modulen quantkit.live."
+          fi
 
-
+          

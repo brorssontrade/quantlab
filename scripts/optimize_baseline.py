@@ -3,6 +3,7 @@ import argparse
 import json
 import math
 import sys, pathlib
+import os
 from datetime import datetime, timezone, timedelta
 
 import numpy as np
@@ -406,7 +407,7 @@ def small_grid_search(
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--symbol", required=True)
+    ap.add_argument("--symbol")
     ap.add_argument("--days", type=int, default=180)
     ap.add_argument("--n_trials", type=int, default=60)
     ap.add_argument("--min_trades", type=int, default=10)

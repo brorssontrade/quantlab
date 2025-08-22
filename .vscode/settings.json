@@ -1,0 +1,5 @@
+﻿{
+  "python.analysis.extraPaths": ["./src"],
+  "python.testing.pytestArgs": ["-q"],
+  "python.defaultInterpreterPath": ".venv/Scripts/python.exe"
+}

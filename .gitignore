@@ -8,6 +8,15 @@ db/
 reports/*.png
 .env
 db/
+state/
+*.duckdb
+*.sqlite
+*.pyc
+storage/
+
 
 reports/*.csv
 reports/*_metrics.json
+reports/*.json
+pages/*.csv
+pages/*.json
