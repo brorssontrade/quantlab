@@ -29,7 +29,13 @@ jobs:
 
       - name: Optimize baseline (quick smoke)
         run: |
-          python -m scripts.optimize_baseline --symbol AAPL --days 250 --n_trials 5 --min_trades 1 --mdd_floor 0.5
+          python -m scripts.optimize_baseline \
+            --symbol AAPL \
+            --days 250 \
+            --n_trials 5 \
+            --min_trades 1 \
+            --mdd_floor 0.5
+
 
       - name: Install tooling
         run: |
