@@ -2,253 +2,82 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
-  schedule:
-    - cron: "0 1 * * *"   # nattligt jobb (UTC)
-  workflow_dispatch:
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 permissions:
-  contents: write   # krävs för att pusha till gh-pages
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build:
-    runs-on: windows-latest
-    env:
-      PYTHONUTF8: "1"
-      PYTHONPATH: ${{ github.workspace }}
-      PYTHONIOENCODING: "utf-8"
-
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
 
-      - name: Debug – show HEAD and signals_example
-        shell: pwsh
+      - name: Optimize baseline (quick smoke)
         run: |
-          git rev-parse HEAD
-          Write-Host '--- scripts\signals_example.py (head) ---'
-          Get-Content scripts\signals_example.py | Select-Object -First 30
+          python -m scripts.optimize_baseline --symbol AAPL --days 250 --n_trials 5 --min_trades 1 --mdd_floor 0.5
+
+      - name: Install tooling
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install ruff mypy
+
+      - name: Ruff (lint)
+        run: ruff check .
+
+      - name: Ruff (format check)
+        run: ruff format --check .
+
+      - name: Mypy (type check)
+        run: mypy .
+
+  test:
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      matrix:
+        python-version: ['3.11', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov
 
       - name: Run tests
-        shell: pwsh
-        run: |
-          python -m pip install -U pip
-          pip install -r requirements.txt
-          pip install pytest
-          pytest -q
+        run: pytest -q --maxfail=1 --disable-warnings --cov=. --cov-report=xml
 
-      - name: Force UTF-8 in PowerShell
-        shell: pwsh
-        run: |
-          [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-
-      - name: Install dependencies
-        shell: pwsh
-        run: |
-          python -m pip install -U pip
-          pip install -r requirements.txt
-          pip install yfinance matplotlib
-          pip install yfinance matplotlib optuna
-
-      - name: Install PowerShell-Yaml
-        shell: pwsh
-        run: |
-          Set-PSRepository PSGallery -InstallationPolicy Trusted
-          Install-Module PowerShell-Yaml -Scope CurrentUser -Force
-
-      - name: Prepare folders
-        shell: pwsh
-        run: |
-          mkdir storage\parquet\raw_1h -ea 0
-          mkdir db -ea 0
-          mkdir reports -ea 0
-
-      - name: List repo contents (debug)
-        shell: pwsh
-        run: |
-          pwd
-          dir
-          dir scripts
-
-      - name: Ingest minute->hour (watchlist)
-        shell: pwsh
-        run: |
-          python -m scripts.ingest_minute_to_hour --days 60
-
-      - name: Init DuckDB
-        run: python .\scripts\init_duckdb.py
-
-      - name: Plot all tickers
-        shell: pwsh
-        run: |
-          $cfg = ConvertFrom-Yaml (Get-Content config\watchlist.yml -Raw)
-          foreach ($t in $cfg.tickers) {
-            python .\scripts\plot_symbol.py --symbol $t --days 60
-          }
-
-      - name: Signals for watchlist
-        shell: pwsh
-        run: |
-          $cfg = ConvertFrom-Yaml (Get-Content config\watchlist.yml -Raw)
-          foreach ($t in $cfg.tickers) {
-            python -m scripts.signals_example --symbol $t --days 120
-          }
-
-      - name: Backtest for watchlist
-        shell: pwsh
-        run: |
-          $cfg = ConvertFrom-Yaml (Get-Content config\watchlist.yml -Raw)
-          foreach ($t in $cfg.tickers) {
-            python -m scripts.backtest_min --symbol $t --days 180
-          }
-
-      - name: Optimize baseline params (Optuna or Grid)
-        shell: pwsh
-        run: |
-          $cfg = ConvertFrom-Yaml (Get-Content config\watchlist.yml -Raw)
-          foreach ($t in $cfg.tickers) {
-            python -m scripts.optimize_baseline --symbol $t --days 180 --n_trials 40 --min_trades 8 --use_second_hour_opt
-          }
-
-# --- Optimering (Optuna) ---
-      - name: Optimize baseline (Optuna)
-        shell: pwsh
-        run: |
-          python -m scripts.optimize_baseline `
-            --symbol $env:SYMBOL `
-            --days 540 `
-            --n_trials 60 `
-            --min_trades 8 `
-            --use_second_hour_opt `
-            --oos_walkforward 12,3 `
-            --purge_bars 5
-
-      # --- Kopiera Optuna-output till Pages-mappen ---
-      - name: Copy Optuna outputs into pages
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force pages | Out-Null
-          Copy-Item .\reports\*_optuna_trials.csv -Destination .\pages\ -Force -ErrorAction SilentlyContinue
-          Copy-Item .\reports\*_optuna_best.json  -Destination .\pages\ -Force -ErrorAction SilentlyContinue
-
-      # --- Bygg statisk sida (exemplet du visade) ---
-      - name: Build static page
-        shell: pwsh
-        run: |
-          $h = "<html><body><h1>QuantLab Reports</h1>"
-          $opt  = Get-ChildItem pages -Filter *_optuna_trials.csv -ErrorAction SilentlyContinue
-          if ($opt) {
-            $h += "<h2>Optimization (Optuna/Grid)</h2><ul>"
-            foreach ($o in $opt) { $h += "<li><a href='$($o.Name)'>$($o.Name)</a></li>" }
-            $h += "</ul>"
-          }
-          $best = Get-ChildItem pages -Filter *_optuna_best.json -ErrorAction SilentlyContinue
-          if ($best) {
-            $h += "<h3>Best params (JSON)</h3><ul>"
-            foreach ($b in $best) { $h += "<li><a href='$($b.Name)'>$($b.Name)</a></li>" }
-            $h += "</ul>"
-          }
-          $h += "</body></html>"
-          Set-Content pages\index.html $h -Encoding UTF8
-
-
-      - name: Upload all reports
+      - name: Upload coverage.xml
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: reports
-          path: |
-            reports/*.png
-            reports/*_equity.csv
-            reports/*_trades.csv
-            reports/*_metrics.json
+          name: coverage-${{ matrix.python-version }}
+          path: coverage.xml
           retention-days: 7
 
-      - name: Build static page
-        shell: pwsh
-        run: |
-          Remove-Item -Recurse -Force pages -ErrorAction SilentlyContinue
-          mkdir pages | Out-Null
-          Copy-Item reports\*.png pages\ -ErrorAction SilentlyContinue
-          Copy-Item reports\*.csv pages\ -ErrorAction SilentlyContinue
-          Copy-Item reports\*_metrics.json pages\ -ErrorAction SilentlyContinue
-
-          $h = @"
-          <html><head><meta charset='utf-8'><title>Quantlab charts</title>
-          <style>
-            body{font-family:Arial,Helvetica,sans-serif;max-width:1280px;margin:20px auto;padding:0 12px}
-            table{border-collapse:collapse;width:100%;margin:16px 0}
-            th,td{border:1px solid #ddd;padding:8px;text-align:right}
-            th{text-align:center;background:#f3f3f3}
-            td.symbol{font-weight:bold;text-align:left}
-            img{max-width:1200px}
-            .muted{color:#666;font-size:12px}
-          </style>
-          </head><body>
-          <h1>Quantlab charts</h1>
-          <p class="muted">Senast genererad: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss") UTC</p>
-          "@
-
-          $metrics = Get-ChildItem pages -Filter *_metrics.json -ErrorAction SilentlyContinue
-          if ($metrics) {
-            $h += "<h2>KPI (senaste backtest)</h2>"
-            $h += "<table><thead><tr><th>Ticker</th><th>CAGR</th><th>Sharpe</th><th>MaxDD</th><th>HitRate</th><th>Trades</th></tr></thead><tbody>"
-            foreach ($m in $metrics) {
-              try {
-                $j = Get-Content $m.FullName -Raw | ConvertFrom-Json
-                $ticker = ($m.BaseName -replace '_metrics$','')
-                $cagr   = "{0:P2}" -f [double]$j.CAGR
-                $sharpe = "{0:N2}" -f [double]$j.Sharpe
-                $maxdd  = "{0:P1}" -f [double]$j.MaxDD
-                $hit    = "{0:P1}" -f [double]$j.HitRate
-                $tr     = [int]$j.Trades
-                $h += "<tr><td class='symbol'>$ticker</td><td>$cagr</td><td>$sharpe</td><td>$maxdd</td><td>$hit</td><td>$tr</td></tr>"
-              } catch {}
-            }
-            $h += "</tbody></table>"
-          }
-
-          if (Test-Path pages\*.csv) {
-            $h += "<h2>Signals & Backtests (CSV)</h2><ul>"
-            Get-ChildItem pages -Filter *.csv | Sort-Object Name | ForEach-Object {
-              $h += "<li><a href='$($_.Name)'>$($_.Name)</a></li>"
-            }
-            $h += "</ul>"
-          }
-
-          Get-ChildItem pages -Filter *.png | Sort-Object Name | ForEach-Object {
-            $n = $_.Name
-            $h += "<h3>$n</h3><img src='$n'><hr/>"
-          }
-
-          $h += "</body></html>"
-          $h | Out-File pages\index.html -Encoding utf8
-          New-Item -ItemType File -Path pages\.nojekyll -Force | Out-Null
-
-      - name: Publish to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: pages
-          publish_branch: gh-pages
-          force_orphan: true
-          commit_message: "Deploy charts: ${{ github.sha }}"
-
-      - name: Install dependencies
-        shell: pwsh
-        run: |
-          python -m pip install -U pip
-          pip install -r requirements.txt
-          pip install yfinance matplotlib pytest
-
-      - name: Run unit tests
-        shell: pwsh
-        env:
-          PYTHONUTF8: "1"
-        run: |
-          pytest -q
-
+          
