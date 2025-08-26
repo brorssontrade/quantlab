@@ -1,0 +1,27 @@
+{
+  "params": {
+    "sma_len": 180,
+    "rvol_len": 16,
+    "rvol_min": 1.2000000000000002,
+    "if_len": 17,
+    "if_alpha": 0.36000000000000004,
+    "sqz_len": 15,
+    "sqz_mult": 4.0,
+    "max_bars": 22
+  },
+  "meta": {
+    "objective": "pp",
+    "score": -0.6,
+    "interval": "EOD",
+    "days": 9000,
+    "min_trades": 8,
+    "attrs": {
+      "n_trades": 0,
+      "win_rate": 0.0,
+      "profit_factor": 0.0,
+      "expectancy": 0.0,
+      "cagr": 0.0,
+      "mdd": 0.0
+    }
+  }
+}
