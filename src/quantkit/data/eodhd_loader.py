@@ -3,305 +3,226 @@ from __future__ import annotations
 import os
 import time
 from pathlib import Path
-from typing import Tuple, List, Dict
+from typing import Iterable
 
 import pandas as pd
 import requests
-from zoneinfo import ZoneInfo
 
 from .cache import read_cache, write_cache, merge_bars
 
-# Försök ladda .env om paketet finns (frivilligt)
-try:
-    from dotenv import load_dotenv  # type: ignore
-    load_dotenv()
-except Exception:
-    pass
-
+# ---------------------------------------------------------------------
+# EODHD loader
+#
+# Mål:
+# - Hämta maximal historik FÖRSTA gången (per symbol/interval)
+# - Därefter endast delta/inkrementella hämtningar
+# - Cacha lokalt via cache-modulen (Parquet)
+# - Robust mot temporära HTTP-fel (retry/backoff) + enkel debug-utskrift
+# ---------------------------------------------------------------------
 
 BASE = "https://eodhd.com/api"
 
+# Hur mycket historik ska hämtas första gången?
+# EOD:   ~9000 dagar ~ 24.6 år (styr via env EODHD_EOD_DAYS)
+# Intra: 10 dagar (styr via env EODHD_INTRA_DAYS)
+EOD_BACKFILL_DAYS = int(os.getenv("EODHD_EOD_DAYS", "9000"))
+INTRA_BACKFILL_DAYS = int(os.getenv("EODHD_INTRA_DAYS", "10"))
 
-# ---------- Hjälpare ----------
+# Minimal paus mellan requests för att inte slå i rate limits
+REQUEST_SLEEP_SEC = float(os.getenv("EODHD_REQ_SLEEP", "0.2"))
 
-def _key() -> str:
-    """
-    Hämta EODHD_API_KEY från miljövariabler.
-    Fallback: secrets/eodhd_key.txt om du vill slippa env i dev.
-    """
+# ---------------------------------------------------------------------
+# Utils
+# ---------------------------------------------------------------------
+
+
+def _api_key() -> str:
     k = os.getenv("EODHD_API_KEY", "").strip()
     if k:
         return k
+
+    # Backup: secrets/eodhd_key.txt
     p = Path("secrets/eodhd_key.txt")
     if p.exists():
         t = p.read_text(encoding="utf-8").strip()
         if t:
             return t
-    raise RuntimeError("EODHD_API_KEY saknas. Sätt t.ex. $env:EODHD_API_KEY = '<din_token>' "
-                       "eller lägg nyckeln i secrets/eodhd_key.txt")
+
+    raise RuntimeError(
+        "EODHD_API_KEY saknas. Sätt t.ex. $env:EODHD_API_KEY = '<din_token>' "
+        "eller lägg nyckeln i secrets/eodhd_key.txt"
+    )
 
 
-def _mask_token(url: str) -> str:
-    """Maska api_token i loggutskrifter."""
-    if "api_token=" not in url:
-        return url
-    try:
-        head, tail = url.split("api_token=", 1)
-        token = tail.split("&", 1)[0]
-        masked = "••••" if token else ""
-        rest = "" if "&" not in tail else "&" + tail.split("&", 1)[1]
-        return f"{head}api_token={masked}{rest}"
-    except Exception:
-        return url
+def _req(url: str, *, retries: int = 3, debug: bool = False) -> list[dict]:
+    last_exc: Exception | None = None
+    for i in range(retries):
+        if debug:
+            print("GET", url)
+        try:
+            r = requests.get(url, timeout=30)
+            if debug:
+                print("STATUS", r.status_code)
+            if r.ok:
+                try:
+                    js = r.json()
+                except Exception as e:
+                    raise RuntimeError(f"JSON parse-fel: {e}. Body head: {r.text[:200]}")
+                time.sleep(REQUEST_SLEEP_SEC)
+                return js if isinstance(js, list) else []
+            else:
+                last_exc = RuntimeError(f"EODHD error {r.status_code}: {r.text[:300]}")
+        except Exception as e:
+            last_exc = e
+        # backoff
+        time.sleep(0.7 * (i + 1))
+    assert last_exc is not None
+    raise last_exc
 
 
-def _req(url: str, debug: bool = False) -> List[Dict]:
-    if debug:
-        print("GET", _mask_token(url))
-    r = requests.get(url, timeout=30)
-    if debug:
-        print("STATUS", r.status_code)
-    if not r.ok:
-        raise RuntimeError(f"EODHD error {r.status_code}: {r.text[:300]}")
-    try:
-        return r.json()
-    except Exception as e:
-        raise RuntimeError(f"JSON parse-fel: {e}. Body head: {r.text[:200]}")
-
-
-def _date_range_days(days: int) -> Tuple[str, str]:
-    """Returnera (start_iso, end_iso) med litet överhäng."""
-    end = pd.Timestamp.utcnow().normalize()
-    start = end - pd.Timedelta(days=days + 5)
-    return start.date().isoformat(), end.date().isoformat()
-
-
-def _unix_range_days(days: int) -> Tuple[int, int]:
-    now = int(time.time())
-    start = int((pd.Timestamp.utcnow() - pd.Timedelta(days=days + 5)).timestamp())
-    return start, now
-
-
-def _to_df(data: List[Dict]) -> pd.DataFrame:
-    """Normalisera EODHD JSON till kolumner: ts, open, high, low, close, volume (ts i UTC)."""
-    df = pd.DataFrame(data or [])
+def _norm_df(data: Iterable[dict]) -> pd.DataFrame:
+    df = pd.DataFrame(list(data) if data else [])
     if df.empty:
         return df
+
     df.rename(columns=str.lower, inplace=True)
 
-    # tidsstämpel → "ts"
+    # Tidsstämpel -> "ts"
     if "timestamp" in df.columns:
         df["ts"] = pd.to_datetime(df["timestamp"], unit="s", utc=True, errors="coerce")
     elif "datetime" in df.columns:
         df["ts"] = pd.to_datetime(df["datetime"], utc=True, errors="coerce")
     else:
-        # EOD har "date"
+        # EOD: "date"
         df["ts"] = pd.to_datetime(df.get("date"), utc=True, errors="coerce")
 
-    # volume alias
+    # Volume alias
     if "volume" not in df.columns and "vol" in df.columns:
         df["volume"] = pd.to_numeric(df["vol"], errors="coerce")
 
-    cols = [c for c in ["ts", "open", "high", "low", "close", "volume"] if c in df.columns]
-    out = df[cols].dropna(subset=["ts"]).sort_values("ts").reset_index(drop=True)
+    have = [c for c in ("ts", "open", "high", "low", "close", "volume") if c in df.columns]
+    out = df[have].dropna(subset=["ts"]).sort_values("ts").reset_index(drop=True)
+
     for c in ("open", "high", "low", "close", "volume"):
         if c in out.columns:
             out[c] = pd.to_numeric(out[c], errors="coerce")
+
     return out
 
 
-# ---------- Marknadstider (enkel gating) ----------
-
-def _guess_market(symbol: str) -> tuple[str, Tuple[int, int], Tuple[int, int]]:
-    """
-    Returnerar (tz, (open_hour, open_min), (close_hour, close_min))
-    Stöd: .US (NYSE/Nasdaq), .ST (Stockholm). Övriga -> 'UTC' = alltid öppet.
-    """
-    if symbol.endswith(".US"):
-        return "America/New_York", (9, 30), (16, 0)
-    if symbol.endswith(".ST"):
-        return "Europe/Stockholm", (9, 0), (17, 30)
-    return "UTC", (0, 0), (23, 59)
+def _date_range_days(days: int) -> tuple[str, str]:
+    end = pd.Timestamp.utcnow().normalize()
+    start = end - pd.Timedelta(days=days + 5)  # liten buffert
+    return start.date().isoformat(), end.date().isoformat()
 
 
-def _market_is_open(symbol: str, now_utc: pd.Timestamp | None = None) -> bool:
-    tz, (oh, om), (ch, cm) = _guess_market(symbol)
-    now_utc = now_utc or pd.Timestamp.utcnow().tz_localize("UTC")
-    now_local = now_utc.tz_convert(ZoneInfo(tz))
-    if tz != "UTC":
-        if now_local.weekday() > 4:  # mån=0..sön=6
-            return False
-    tod = now_local.time()
-    open_ok = (tod >= pd.Timestamp(hour=oh, minute=om).time())
-    close_ok = (tod < pd.Timestamp(hour=ch, minute=cm).time())
-    return open_ok and close_ok
+def _unix_range_days(days: int) -> tuple[int, int]:
+    now = int(time.time())
+    start = int((pd.Timestamp.utcnow() - pd.Timedelta(days=days + 5)).timestamp())
+    return start, now
 
 
-# ---------- EOD (daglig) ----------
+# ---------------------------------------------------------------------
+# EOD (daglig)
+# ---------------------------------------------------------------------
 
-def _fetch_eod_between(symbol: str, start_iso: str, end_iso: str, debug: bool = False) -> pd.DataFrame:
-    url = f"{BASE}/eod/{symbol}?from={start_iso}&to={end_iso}&order=a&fmt=json&api_token={_key()}"
+
+def _fetch_eod(symbol: str, start: str, end: str, *, debug: bool = False) -> pd.DataFrame:
+    url = f"{BASE}/eod/{symbol}?from={start}&to={end}&order=a&fmt=json&api_token={_api_key()}"
     data = _req(url, debug=debug)
-    return _to_df(data)
+    return _norm_df(data)
 
 
-def load_eod(
-    symbol: str,
-    *,
-    days: int = 750,
-    start: str | None = None,
-    end: str | None = None,
-    debug: bool = False
-) -> pd.DataFrame:
+def load_eod(symbol: str, *, days: int | None = None, debug: bool = False) -> pd.DataFrame:
     """
-    Direkt EOD-hämtning (utan disk-cache) för ett intervall eller 'days' bakåt.
-    Wrappern load_bars använder istället ensure_eod_history för cache + delta.
+    Laddar EOD-data till cache och returnerar allt som finns i cachen.
+    - Finns ingen cache: backfillar ~9000 dagar (eller 'days' om angivet).
+    - Finns cache: hämtar endast nya rader (sista ts + 1 dag .. idag).
     """
-    if not start or not end:
-        start, end = _date_range_days(days)
-    df = _fetch_eod_between(symbol, start, end, debug=debug)
-    if df.empty and debug:
-        print(f"[EOD] {symbol}: tomt svar")
-    return df
+    cache = read_cache(symbol, "EOD")
+    if cache is None or cache.empty or "ts" not in cache.columns:
+        # Backfill första gången
+        d = days if days is not None else EOD_BACKFILL_DAYS
+        start, end = _date_range_days(d)
+        fresh = _fetch_eod(symbol, start, end, debug=debug)
+        if not fresh.empty:
+            write_cache(symbol, "EOD", fresh)
+        return fresh
 
-
-def ensure_eod_history(symbol: str, *, days: int, debug: bool = False) -> pd.DataFrame:
-    """
-    Backfilla EOD-historik till minst 'days' och skriv till cache (interval='EOD').
-    Vid senare körningar hämtas endast delta och cachen trimmas till fönstret.
-    """
-    cached = read_cache(symbol, "EOD")
-    today_iso = pd.Timestamp.utcnow().normalize().date().isoformat()
-
-    if cached is None or cached.empty:
-        start_iso, _ = _date_range_days(days)
-        fresh = _fetch_eod_between(symbol, start_iso, today_iso, debug=debug)
-        merged = merge_bars(None, fresh)
-        if merged is not None and not merged.empty:
-            write_cache(symbol, "EOD", merged)
-            if debug:
-                print(f"✔ {symbol} EOD: {len(merged)} rader (full backfill)")
-        return merged if merged is not None else pd.DataFrame()
-
-    # delta framåt
-    last_ts = pd.to_datetime(cached["ts"], utc=True, errors="coerce").max()
-    since = (last_ts + pd.Timedelta(days=1)).date().isoformat()
-    latest = _fetch_eod_between(symbol, since, today_iso, debug=debug)
-    merged = merge_bars(cached, latest)
-
-    if merged is not None and not merged.empty:
-        window_start = pd.Timestamp.utcnow() - pd.Timedelta(days=days + 5)
-        merged = merged[merged["ts"] >= window_start.tz_localize("UTC")]
-        write_cache(symbol, "EOD", merged)
-        if debug:
-            print(f"✔ {symbol} EOD: {len(merged)} rader")
-    return merged if merged is not None else cached
-
-
-# ---------- Intraday (UNIX from/to) ----------
-
-def load_intraday(symbol: str, interval: str, days: int, debug: bool = False) -> pd.DataFrame:
-    """
-    Icke-cachad enkelhämtning (sällan använd direkt – använd load_intraday_cached).
-    """
-    frm, to = _unix_range_days(days)
-    url = f"{BASE}/intraday/{symbol}?interval={interval}&from={frm}&to={to}&fmt=json&api_token={_key()}"
-    data = _req(url, debug=debug)
-    return _to_df(data)
-
-
-def load_intraday_cached(
-    symbol: str,
-    *,
-    interval: str = "5m",
-    days: int = 30,
-    debug: bool = False,
-    respect_market_hours: bool | None = None
-) -> pd.DataFrame:
-    """
-    Cachead intraday-hämtning:
-      - Första körning: backfill upp till 'days' (så långt EODHD tillåter)
-      - Senare körningar: endast delta (från sista ts + 1s → nu)
-      - Marknadsgating: på som default. Styr med env QK_GATE_BY_MARKET_HOURS=0 för att stänga av.
-    """
-    if respect_market_hours is None:
-        respect_market_hours = os.getenv("QK_GATE_BY_MARKET_HOURS", "1") != "0"
-
-    # Om vi inte vill slå mot API när marknaden är stängd
-    if respect_market_hours and not _market_is_open(symbol):
-        cached = read_cache(symbol, interval)
-        if cached is None:
-            return pd.DataFrame(columns=["ts", "open", "high", "low", "close", "volume"])
-        window_start = pd.Timestamp.utcnow() - pd.Timedelta(days=days + 5)
-        cached["ts"] = pd.to_datetime(cached["ts"], utc=True, errors="coerce")
-        out = cached[cached["ts"] >= window_start.tz_localize("UTC")].reset_index(drop=True)
-        if debug:
-            print(f"⏸ {symbol} {interval}: market closed – använder cache ({len(out)} rader)")
-        return out
-
-    cached = read_cache(symbol, interval)
-    window_start = pd.Timestamp.utcnow() - pd.Timedelta(days=days + 5)
-    now_unix = int(pd.Timestamp.utcnow().timestamp())
-
-    if cached is not None and not cached.empty and "ts" in cached.columns:
-        last_ts = pd.to_datetime(cached["ts"], utc=True, errors="coerce").max()
-        unix_from = int(max(last_ts + pd.Timedelta(seconds=1), window_start).timestamp())
-        if debug:
-            start_dt = pd.to_datetime(unix_from, unit="s", utc=True)
-            print(f"Δ {symbol} {interval}: from={start_dt} → now")
-    else:
-        unix_from = int(window_start.timestamp())
-        if debug:
-            print(f"⇣ {symbol} {interval}: initial backfill {days}d")
-
-    url = (
-        f"{BASE}/intraday/{symbol}?interval={interval}"
-        f"&from={unix_from}&to={now_unix}&fmt=json&api_token={_key()}"
-    )
-    data = _req(url, debug=debug)
-    new = _to_df(data)
-    merged = merge_bars(cached, new) if new is not None else cached
-    if merged is None:
-        merged = pd.DataFrame(columns=["ts", "open", "high", "low", "close", "volume"])
-
-    # trimma till fönstret
-    if not merged.empty:
-        merged["ts"] = pd.to_datetime(merged["ts"], utc=True, errors="coerce")
-        merged = merged[merged["ts"] >= window_start.tz_localize("UTC")].reset_index(drop=True)
-
-    write_cache(symbol, interval, merged)
-    if debug:
-        print(f"✔ {symbol} {interval}: {len(merged)} rader")
+    # Delta
+    last_ts = pd.to_datetime(cache["ts"]).dropna().max()
+    start = (last_ts + pd.Timedelta(days=1)).date().isoformat()
+    end = pd.Timestamp.utcnow().date().isoformat()
+    if start > end:
+        # redan uppdaterad
+        return cache
+    fresh = _fetch_eod(symbol, start, end, debug=debug)
+    merged = merge_bars(cache, fresh) if not fresh.empty else cache
+    write_cache(symbol, "EOD", merged)
     return merged
 
 
-# ---------- Enhetlig wrapper ----------
+# ---------------------------------------------------------------------
+# Intraday
+# ---------------------------------------------------------------------
+
+
+def _fetch_intraday(symbol: str, interval: str, unix_from: int, unix_to: int, *, debug: bool = False) -> pd.DataFrame:
+    url = (
+        f"{BASE}/intraday/{symbol}?interval={interval}&from={unix_from}&to={unix_to}"
+        f"&fmt=json&api_token={_api_key()}"
+    )
+    data = _req(url, debug=debug)
+    return _norm_df(data)
+
+
+def load_intraday(symbol: str, *, interval: str = "5m", days: int | None = None, debug: bool = False) -> pd.DataFrame:
+    """
+    Laddar intraday-data till cache och returnerar allt som finns i cachen.
+    - Finns ingen cache: backfillar 'INTRA_BACKFILL_DAYS' (eller 'days' om angivet)
+    - Finns cache: hämtar endast delta från sista ts + 1s
+    """
+    interval = interval.lower()
+    cache = read_cache(symbol, interval)
+
+    unix_to = int(time.time())
+
+    if cache is None or cache.empty or "ts" not in cache.columns:
+        d = days if days is not None else INTRA_BACKFILL_DAYS
+        unix_from, _ = _unix_range_days(d)
+        fresh = _fetch_intraday(symbol, interval, unix_from, unix_to, debug=debug)
+        if not fresh.empty:
+            write_cache(symbol, interval, fresh)
+        return fresh
+
+    last_ts = pd.to_datetime(cache["ts"]).dropna().max()
+    unix_from = int((last_ts.to_pydatetime().timestamp())) + 1
+
+    fresh = _fetch_intraday(symbol, interval, unix_from, unix_to, debug=debug)
+    merged = merge_bars(cache, fresh) if not fresh.empty else cache
+    write_cache(symbol, interval, merged)
+    return merged
+
+
+# ---------------------------------------------------------------------
+# Wrapper
+# ---------------------------------------------------------------------
+
 
 def load_bars(
     symbol: str,
     *,
     interval: str = "EOD",
-    days: int = 750,
+    days: int | None = None,
     debug: bool = False,
-    cached: bool = True,
-    respect_market_hours: bool | None = None
 ) -> pd.DataFrame:
     """
-    Enhetlig ingång:
-      - EOD: ensure_eod_history (full historik en gång, sedan delta)
-      - Intraday: cache + delta + marknadsgating (om aktiverad)
+    Extern API:
+    - interval="EOD"           → daglig data (backfill första gången)
+    - interval="1m|5m|15m|1h"  → intraday (backfill första gången)
+    - days=None                → använd globala defaults (EOD 9000 / intra 10)
     """
     if interval.upper() == "EOD":
-        return ensure_eod_history(symbol, days=days, debug=debug)
-
-    if cached:
-        return load_intraday_cached(
-            symbol,
-            interval=interval.lower(),
-            days=days,
-            debug=debug,
-            respect_market_hours=respect_market_hours,
-        )
-
-    # Ocachead intraday (direkt)
-    return load_intraday(symbol, interval=interval.lower(), days=days, debug=debug)
+        return load_eod(symbol, days=days, debug=debug)
+    else:
+        return load_intraday(symbol, interval=interval, days=days, debug=debug)
