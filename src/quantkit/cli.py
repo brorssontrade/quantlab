@@ -441,9 +441,12 @@ def plot(
 <html><head><meta charset="utf-8"><title>{symbol} {stamp}</title></head>
 <body><h1>{symbol} {stamp}</h1><p>plot stub ok</p></body></html>"""
         target.write_text(html, encoding="utf-8")
+
+        # det här raden krävs av testen:
+        typer.echo(f"Plottar {symbol} (run {stamp})")
+        # och skriv gärna ut var filen landade:
         typer.echo(str(target.resolve()))
     except Exception as e:
-        # Om något galet händer vill vi fortfarande inte spränga testen
         typer.echo(f"plot stub error: {e}")
         raise typer.Exit(1)
 
