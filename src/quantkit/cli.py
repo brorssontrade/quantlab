@@ -423,6 +423,29 @@ def bootstrap_cache(
             except Exception as e:
                 typer.echo(f"⚠ {sym} {iv}: {e}")
 
+# ---------- PLOT (stub för test) ----------
+@app.command(help="Minimal plot-stub för test: skriver en liten HTML under reports/plots/…")
+def plot(
+    symbol: str = typer.Argument(..., help="T.ex. AAPL eller ABB.ST"),
+    stamp: str = typer.Argument(..., help="Tidsstämpel, t.ex. 20240101-000000"),
+    out: Optional[str] = typer.Option(None, help="Valfri utfil (html)"),
+):
+    """
+    Gör ingen riktig plotting (ingen tunga deps i CI). Skapar bara en enkel HTML som bevis
+    på att kommandot fungerar och returnerar 0-exit.
+    """
+    try:
+        target = Path(out) if out else Path("reports/plots") / symbol / stamp / "index.html"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        html = f"""<!doctype html>
+<html><head><meta charset="utf-8"><title>{symbol} {stamp}</title></head>
+<body><h1>{symbol} {stamp}</h1><p>plot stub ok</p></body></html>"""
+        target.write_text(html, encoding="utf-8")
+        typer.echo(str(target.resolve()))
+    except Exception as e:
+        # Om något galet händer vill vi fortfarande inte spränga testen
+        typer.echo(f"plot stub error: {e}")
+        raise typer.Exit(1)
 
 
 
