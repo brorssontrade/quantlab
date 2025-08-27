@@ -32,12 +32,12 @@ jobs:
         run: |
           python -m pip install -U pip
           pip install -r requirements.txt
+          pip install -e .   # <-- gör 'quantkit' importbar
           python - << 'PY'
-          import sys, pandas; print("python", sys.version); print("pandas", pandas.__version__)
+          import sys, pandas
+          print("python", sys.version)
+          print("pandas", pandas.__version__)
           PY
-
-      - name: Ensure folders
-        run: mkdir -p storage/cache/eodhd data/cache/eodhd /tmp/csv_cache
 
       - name: Run intraday sync
         run: |
@@ -47,6 +47,11 @@ jobs:
             --loop-minutes 0 \
             --respect-hours \
             --watchlist watchlist.yaml
+
+
+      - name: Ensure folders
+        run: mkdir -p storage/cache/eodhd data/cache/eodhd /tmp/csv_cache
+
 
       - name: Convert Parquet -> CSV
         shell: python

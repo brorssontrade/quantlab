@@ -53,6 +53,7 @@ jobs:
         python-version: ['3.11', '3.12']
     steps:
       - uses: actions/checkout@v4
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -65,8 +66,18 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pytest pytest-cov
+          pip install -e .   # <-- Viktigt: installera vårt paket
+
+      - name: Show env
+        run: |
+          python -V
+          python -c "import sys,site; print(sys.executable); print(site.getsitepackages())"
+          python -c "import pandas as pd; print('pandas', pd.__version__)"
 
       - name: Run tests
+        env:
+          # inte nödvändigt efter -e ., men ofarligt:
+          PYTHONPATH: ${{ github.workspace }}/src
         run: pytest -q --maxfail=1 --disable-warnings --cov=. --cov-report=xml
 
       - name: Upload coverage.xml
@@ -76,3 +87,4 @@ jobs:
           name: coverage-${{ matrix.python-version }}
           path: coverage.xml
           retention-days: 7
+
