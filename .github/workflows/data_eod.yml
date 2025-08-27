@@ -1,0 +1,65 @@
+name: Data Sync (EOD)
+
+on:
+  schedule:
+    - cron: "35 21 * * 1-5"   # efter US-stäng (justera efter behov, tid i UTC)
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  sync-eod:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: data-sync-eod
+      cancel-in-progress: true
+
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - uses: actions/checkout@v4
+        with:
+          ref: data
+          path: data_branch
+          fetch-depth: 0
+
+      - name: Warm local cache from data branch
+        run: |
+          mkdir -p data/cache/eodhd
+          rsync -a data_branch/data/cache/eodhd/ data/cache/eodhd/ 2>/dev/null || \
+          cp -r data_branch/data/cache/eodhd/* data/cache/eodhd/ 2>/dev/null || true
+
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+
+      - name: Install quantkit
+        run: |
+          python -m pip install -U pip
+          pip install -e .
+
+      - name: Run EOD sync (once)
+        env:
+          EODHD_API_KEY: ${{ secrets.EODHD_API_KEY }}
+        run: |
+          python -m quantkit.cli_data sync \
+            --watchlist watchlist.yaml \
+            --intervals EOD \
+            --eod-days 9000
+
+      - name: Persist cache back to data branch
+        run: |
+          mkdir -p data_branch/data/cache/eodhd
+          rsync -a data/cache/eodhd/ data_branch/data/cache/eodhd/ 2>/dev/null || \
+          (mkdir -p data_branch/data/cache/eodhd && cp -r data/cache/eodhd/* data_branch/data/cache/eodhd/ 2>/dev/null || true)
+          cd data_branch
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No cache changes."
+          else
+            git -c user.name="github-actions[bot]" \
+                -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+                commit -m "EOD cache update ($(date -u +'%Y-%m-%d %H:%M:%S') UTC)"
+            git push origin HEAD:data
+          fi

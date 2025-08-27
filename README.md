@@ -41,3 +41,43 @@ python .\scripts\plot_symbol.py --symbol ABB.ST --days 60
 
 [![Charts (GitHub Pages)](https://img.shields.io/badge/Charts-LIVE-2ea44f?logo=github)](https://brorssontrade.github.io/quantlab/)
 
+
+
+## Köra datasynk i GitHub Actions (cron)
+
+Detta repo har två workflows som sköter datainhämtning automatiskt:
+
+- **Data Sync (intraday)** – körs var 5:e minut på vardagar och hämtar 5-min bars för tickers i `watchlist.yaml`. Respekterar market hours.
+- **Data Sync (EOD)** – körs en gång per vardag efter US-stäng och uppdaterar dagliga bars.
+
+### Hur funkar cachen?
+
+Cachefiler (CSV) ligger under `data/cache/eodhd` men **på en separat branch** som heter `data`.
+Workflows checkar först ut `data`-branchen, läser in cachen, kör inkrementell synk, och pushar tillbaka ändrade CSV:er.
+På så vis blir varje körning snabb och du slipper ladda ner historik igen.
+
+### Kom igång
+
+1. **Lägg in API-nyckeln**
+   - Repo → *Settings* → *Secrets and variables* → *Actions* → *New repository secret*
+   - Name: `EODHD_API_KEY`  
+     Value: *din EODHD token*
+
+2. **Ge GITHUB_TOKEN skriv-rättigheter**
+   - Repo → *Settings* → *Actions* → *General* → *Workflow permissions* → välj **Read and write permissions**.
+   - (Workflown sätter också `permissions: contents: write`, men globala rättigheter måste tillåta skrivning.)
+
+3. **Pusha watchlist och workflows**
+   - Se till att `watchlist.yaml` finns på `main`.
+   - Workflown “Data Sync (intraday)” skapar automatiskt `data`-branch första gången om den saknas.
+
+4. **Manuell körning & felsökning**
+   - Fliken *Actions* → välj workflow → *Run workflow*.
+   - Loggar visar hur många nya rader per symbol.
+   - Cachefiler: växla till branchen **`data`** i GitHub och öppna `data/cache/eodhd/…csv`.
+
+### Vanliga justeringar
+
+- Ändra tidtabeller i `.github/workflows/data_intraday.yml` och `data_eod.yml` (`cron` är i **UTC**).
+- Ändra intervall/dagar genom att uppdatera CLI-flaggorna i *Run … sync*-steget.
+- Lägg till/ta bort tickers i `watchlist.yaml`, ingen annan ändring krävs.

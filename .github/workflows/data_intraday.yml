@@ -1,0 +1,83 @@
+name: Data Sync (intraday)
+
+on:
+  schedule:
+    - cron: "*/5 * * * 1-5"   # var 5:e minut på vardagar (UTC)
+  workflow_dispatch: {}
+
+permissions:
+  contents: write   # vi pushar cache till 'data'-branchen
+
+jobs:
+  sync-intraday:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: data-sync-intraday
+      cancel-in-progress: true
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - name: Ensure 'data' branch exists (one-time bootstrap)
+        run: |
+          if ! git ls-remote --exit-code --heads origin data; then
+            git switch --orphan data
+            git rm -rf . || true
+            mkdir -p data/cache/eodhd
+            echo "(cache)" > data/.gitkeep
+            git add -A
+            git -c user.name="github-actions[bot]" \
+                -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+                commit -m "init data branch for caches"
+            git push origin data
+            git switch -    # tillbaka till main
+          fi
+
+      - name: Checkout data branch into ./data_branch
+        uses: actions/checkout@v4
+        with:
+          ref: data
+          path: data_branch
+          fetch-depth: 0
+
+      - name: Warm local cache from data branch
+        run: |
+          mkdir -p data/cache/eodhd
+          rsync -a data_branch/data/cache/eodhd/ data/cache/eodhd/ 2>/dev/null || \
+          cp -r data_branch/data/cache/eodhd/* data/cache/eodhd/ 2>/dev/null || true
+
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+
+      - name: Install quantkit
+        run: |
+          python -m pip install -U pip
+          pip install -e .
+
+      - name: Run intraday sync (once)
+        env:
+          EODHD_API_KEY: ${{ secrets.EODHD_API_KEY }}
+        run: |
+          python -m quantkit.cli_data sync \
+            --watchlist watchlist.yaml \
+            --intervals 5m \
+            --intra-days 10 \
+            --respect-hours
+
+      - name: Persist cache back to data branch
+        run: |
+          mkdir -p data_branch/data/cache/eodhd
+          rsync -a data/cache/eodhd/ data_branch/data/cache/eodhd/ 2>/dev/null || \
+          (mkdir -p data_branch/data/cache/eodhd && cp -r data/cache/eodhd/* data_branch/data/cache/eodhd/ 2>/dev/null || true)
+          cd data_branch
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No cache changes."
+          else
+            git -c user.name="github-actions[bot]" \
+                -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+                commit -m "intraday cache update ($(date -u +'%Y-%m-%d %H:%M:%S') UTC)"
+            git push origin HEAD:data
+          fi
