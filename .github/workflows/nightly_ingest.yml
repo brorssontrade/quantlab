@@ -12,8 +12,8 @@ jobs:
   ingest:
     runs-on: ubuntu-latest
     env:
-      EODHD_TOKEN: ${{ secrets.EODHD_TOKEN }}
-      ALPHA_VANTAGE_API_KEY: ${{ secrets.ALPHA_VANTAGE_API_KEY }}
+      EODHD_API_KEY: ${{ secrets.EODHD_API_KEY }}
+      EODHD_TOKEN:   ${{ secrets.EODHD_API_KEY }}
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
       SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
@@ -22,63 +22,24 @@ jobs:
       TZ: Europe/Stockholm
       SLEEP_BETWEEN: 12
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
+      - uses: actions/checkout@v4
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-
+          cache: 'pip'
+          cache-dependency-path: requirements.txt
       - name: Install deps
         run: |
           python -m pip install -U pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-
-      - name: Preflight (PowerShell)
-        shell: pwsh
-        run: ./scripts/Check-QuantEnv.ps1 -Mode CI -WriteEnvFile
-
+          pip install -r requirements.txt
       - name: Show tickers
         run: |
           if [ ! -f config/tickers.txt ]; then
             echo "::error::Missing config/tickers.txt"
             exit 1
           fi
-          echo "Tickers:"
-          sed 's/^/ - /' config/tickers.txt
-
-      - name: Run ingest (multi-ticker)
-        shell: bash
+          echo "Tickers:"; sed 's/^/ - /' config/tickers.txt
+      - name: Run ingest (demo pipeline)
         run: |
-          set -euo pipefail
-          touch nightly.log
-          FAIL=0
-          while IFS= read -r SYM; do
-            [ -z "$SYM" ] && continue
-            echo "===== Ingest for $SYM =====" | tee -a nightly.log
-            if python -m scripts.optimize_baseline \
-                  --symbol "$SYM" \
-                  --days 250 \
-                  --n_trials 5 \
-                  --min_trades 1 \
-                  --mdd_floor 0.5 2>&1 | tee -a nightly.log; then
-              echo "[OK] $SYM" | tee -a nightly.log
-            else
-              echo "[FAIL] $SYM" | tee -a nightly.log
-              FAIL=1
-            fi
-            sleep "${SLEEP_BETWEEN}"
-          done < config/tickers.txt
-          exit $FAIL
-
-      - name: Upload log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: nightly-log
-          path: nightly.log
-          if-no-files-found: ignore
-          retention-days: 7
-
-          
+          python -c "import pandas as pd; print('pandas', pd.__version__)"

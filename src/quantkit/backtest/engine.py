@@ -99,11 +99,7 @@ def run_backtest(
     debug: bool = False,
 ) -> Tuple[pd.DataFrame, List[Trade]]:
     """
-    Enkel event-driven motor:
-      - Entry på NÄSTA bar open efter signal.
-      - Exit om exit-signal (nästa open) eller om stop/take träffas intrabar (konservativt: stop före take vid krock).
-      - Kostnader: bps per sida via apply_costs.
-    Returnerar: (equity_df med kolumner ['ts','equity'], trades-lista).
+    Enkel event-driven motor …
     """
     if strategy != "baseline":
         raise ValueError("Just nu stöds strategy='baseline' i denna motor.")
@@ -131,19 +127,15 @@ def run_backtest(
     entry_i = -1
 
     for i in range(1, len(df)):
-        # ENTRY: signal på i-1 -> exekvera på open[i]
         if (not in_pos) and entry_sig[i - 1]:
             in_pos = True
             entry_i = i
             entry_px = o[i] if np.isfinite(o[i]) else c[i]
-            # håll equity konstant vid entry (fill kostnad först vid exit)
             eq_ts.append(ts.iloc[i])
             equity.append(equity[-1])
             continue
 
-        # EXIT
         if in_pos:
-            # stops/takes
             sl = sl_atr * atr[i]
             tp = tp_atr * atr[i]
             stop_px = entry_px - sl if np.isfinite(sl) else None
@@ -156,12 +148,11 @@ def run_backtest(
             exit_px: Optional[float] = None
 
             if hit_stop or hit_take:
-                # konservativt: stop vinner kollision
                 if hit_stop:
-                    exit_px = float(stop_px)  # fill på stop-pris
+                    exit_px = float(stop_px)
                     reason = "SL"
                 else:
-                    exit_px = float(take_px)  # fill på take-pris
+                    exit_px = float(take_px)
                     reason = "TP"
                 exit_i = i
             elif exit_rule[i - 1]:
@@ -173,16 +164,13 @@ def run_backtest(
                 reason = "EOD"
                 exit_i = i
             else:
-                # ingen exit denna bar
                 eq_ts.append(ts.iloc[i])
                 equity.append(equity[-1])
                 continue
 
-            # Kostnader via apply_costs
             orders = pd.DataFrame({"price": [entry_px, exit_px], "qty": [1.0, 1.0]})
             costs = float(apply_costs(orders, bps=float(fee_bps)).sum())
 
-            # Per-trade faktor (normaliserat mot entry_px)
             net_factor = (exit_px - costs) / entry_px
             equity.append(equity[-1] * float(net_factor))
             eq_ts.append(ts.iloc[exit_i])
@@ -202,10 +190,8 @@ def run_backtest(
             entry_i = -1
             continue
 
-        # om vi inte är i position: equity still
         eq_ts.append(ts.iloc[i])
         equity.append(equity[-1])
 
     eq_df = pd.DataFrame({"ts": eq_ts, "equity": equity})
     return eq_df, trades
-

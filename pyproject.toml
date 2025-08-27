@@ -1,9 +1,7 @@
 [tool.ruff]
 target-version = "py311"
 line-length = 100
-# Linta bara det vi vill hålla strikt nu
 src = ["src/quantkit/data", "src/quantkit/cli_data.py"]
-# Slå av vanliga störmoment i legacy-kod (behövs för cli_data ibland också)
 ignore = ["E401","E701","E702","E741","F401","F811","F841"]
 
 [tool.mypy]

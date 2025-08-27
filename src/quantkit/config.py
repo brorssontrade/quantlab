@@ -14,7 +14,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_prefix="APP_",
         case_sensitive=False,
-        extra="ignore",     # <- viktiga raden: ignorera okända env-nycklar
+        extra="ignore",     # ignorera okända env-nycklar
     )
 
 @lru_cache(maxsize=1)

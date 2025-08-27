@@ -1,0 +1,87 @@
+name: data_eod
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "5 2 * * *"   # 02:05 UTC dagligen
+
+permissions:
+  contents: write
+
+concurrency:
+  group: data-eod
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      EODHD_API_KEY: ${{ secrets.EODHD_API_KEY }}
+      EODHD_TOKEN:   ${{ secrets.EODHD_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+
+      - name: Install deps
+        run: |
+          python -m pip install -U pip
+          pip install -r requirements.txt
+          python - << 'PY'
+          import pandas as pd; print("pandas", pd.__version__)
+          PY
+
+      - name: Ensure folders
+        run: mkdir -p storage/cache/eodhd data/cache/eodhd /tmp/csv_cache
+
+      - name: Run EOD sync
+        run: |
+          python -m quantkit.cli_data sync \
+            --intervals "EOD" \
+            --eod-days 9000 \
+            --loop-minutes 0 \
+            --watchlist watchlist.yaml
+
+      - name: Convert Parquet -> CSV
+        shell: python
+        run: |
+          import glob, pandas as pd, pathlib, os
+          os.makedirs("/tmp/csv_cache", exist_ok=True)
+          for f in glob.glob("storage/cache/eodhd/*.parquet"):
+            out = pathlib.Path("/tmp/csv_cache")/pathlib.Path(f).name.replace(".parquet",".csv")
+            pd.read_parquet(f).to_csv(out, index=False)
+
+      - name: Create/switch data branch
+        run: |
+          set -e
+          if ! git ls-remote --exit-code --heads origin data >/dev/null 2>&1; then
+            git switch --orphan data
+            git reset --hard
+            rm -rf .
+            mkdir -p data/cache/eodhd
+            echo "Data branch for caches" > README.md
+            touch data/.gitkeep
+            git add -A
+            git commit -m "init data branch for caches"
+            git push -u origin data
+          else
+            git fetch origin data:data
+            git switch data
+          fi
+
+      - name: Push CSVs
+        run: |
+          mkdir -p data/cache/eodhd
+          cp -f /tmp/csv_cache/*.csv data/cache/eodhd/ 2>/dev/null || true
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No cache changes"
+          else
+            git commit -m "data: update EOD caches"
+            git push origin data
+          fi
