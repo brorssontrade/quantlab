@@ -22,3 +22,7 @@ storage/parquet/
 secrets/
 .env
 .env.*
+*.py[cod]
+storage/
+state/
+pages/
