@@ -1,31 +1,39 @@
+# src/quantkit/data/__init__.py
 from __future__ import annotations
-from pathlib import Path
-import io, os, pandas as pd, requests
-from .eodhd_loader import load_bars
-from .market_hours import is_market_open, next_open_close_utc
 
-__all__ = ["load_bars","is_market_open","next_open_close_utc","load_cached_csv"]
+# Publika exports
+__all__ = [
+    "load_bars",
+    "is_open_stockholm",
+    "is_open_us",
+    "is_market_open",
+    "next_open_close_utc",
+]
 
-def _cache_filename(symbol: str, interval: str) -> str:
-    return f"{symbol.replace('/', '_')}__{interval}.csv"
+# Importera marknadstider
+from .market_hours import (
+    is_open_stockholm,
+    is_open_us,
+    is_market_open,
+    next_open_close_utc,
+)
 
-def load_cached_csv(symbol: str, interval: str, *, prefer_remote: bool = True) -> pd.DataFrame:
-    fn = _cache_filename(symbol, interval)
-    if prefer_remote:
-        base = os.getenv("QK_DATA_BASE", "").strip()
-        if not base:
-            repo = os.getenv("GITHUB_REPOSITORY", "").strip()
-            branch = os.getenv("QK_DATA_BRANCH", "data").strip() or "data"
-            if repo:
-                base = f"https://raw.githubusercontent.com/{repo}/{branch}/data/cache/eodhd"
-        if base:
-            try:
-                r = requests.get(f"{base}/{fn}", timeout=20, headers={"User-Agent":"quantkit/loader"})
-                if r.ok and r.text.strip():
-                    return pd.read_csv(io.StringIO(r.text), parse_dates=["ts"])
-            except Exception:
-                pass
-    p = Path("data/cache/eodhd") / fn
-    if p.exists():
-        return pd.read_csv(p, parse_dates=["ts"])
-    return pd.DataFrame(columns=["ts","open","high","low","close","volume"])
+# Importera den riktiga loadern
+from .eodhd_loader import load_bars as _load_bars  # type: ignore
+
+
+def load_bars(
+    symbol: str,
+    interval: str = "EOD",
+    days: int = 10,
+    debug: bool = False,
+    **kwargs,
+):
+    """
+    Tunn wrapper som gör API:t bakåtkompatibelt: vi accepterar
+    (och ignorerar) borttagna/okända kwargs (t.ex. 'cached').
+    """
+    kwargs.pop("cached", None)  # lugna gamla anrop
+    # Ignorera övriga okända kwargs utan att krascha:
+    # kwargs kan innehålla framtida parametrar – vi skickar dem inte vidare.
+    return _load_bars(symbol, interval=interval, days=days, debug=debug)
