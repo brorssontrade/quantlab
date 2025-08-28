@@ -208,14 +208,18 @@ def load_intraday(symbol: str, *, interval: str = "5m", days: int | None = None,
 # Wrapper
 # ---------------------------------------------------------------------
 
-
 def load_bars(
     symbol: str,
-    *,
     interval: str = "EOD",
-    days: int | None = None,
+    days: int | None = None,   # <– rekommenderar None så docstringen stämmer
     debug: bool = False,
+    **kwargs,
 ) -> pd.DataFrame:
+    # svälj utfasade/okända kwargs (bakåtkompatibelt)
+    kwargs.pop("cached", None)
+    kwargs.pop("use_cache", None)
+    kwargs.pop("source", None)
+
     """
     Extern API:
     - interval="EOD"           → daglig data (backfill första gången)
@@ -226,3 +230,6 @@ def load_bars(
         return load_eod(symbol, days=days, debug=debug)
     else:
         return load_intraday(symbol, interval=interval, days=days, debug=debug)
+
+
+
