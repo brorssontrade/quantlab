@@ -1,7 +1,7 @@
 # src/quantkit/cli_data.py
 from __future__ import annotations
 
-import re, time
+import re, time, sys
 from pathlib import Path
 from typing import List, Optional
 
@@ -11,7 +11,12 @@ import yaml
 from quantkit.data.eodhd_loader import load_bars
 from quantkit.data.market_hours import is_open_us, is_open_stockholm
 
-app = typer.Typer(add_completion=False, help="Data sync CLI för Quantkit")
+# Tillåt okända/extra argument så att vi kan svälja "sync" om någon kör toppnivåvarianten
+app = typer.Typer(
+    add_completion=False,
+    help="Data sync CLI för Quantkit",
+    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
+)
 
 
 def _read_watchlist_yaml(path: Path) -> List[str]:
@@ -80,26 +85,15 @@ def _markets_in_symbols(symbols: List[str]) -> set[str]:
     return m
 
 
-@app.command(help="Synka data för givna tickers och intervall (EOD, 5m, mfl).")
-def sync(
-    tickers: Optional[str] = typer.Option(
-        None, "--tickers", "-t",
-        help="CSV/blankseparerade tickers eller sökväg till fil (txt/csv/yaml). "
-             "Utelämnad ⇒ försöker watchlist.yaml eller config/tickers.txt.",
-    ),
-    interval: str = typer.Option(
-        "EOD,5m", "--interval", "-i",
-        help="Intervall (en eller flera), t.ex. 'EOD,5m'.",
-    ),
-    days: Optional[int] = typer.Option(
-        None, "--days",
-        help="Överskriv dagar för ALLA intervall. Utelämnad ⇒ eod_days/intra_days.",
-    ),
-    eod_days: int = typer.Option(9000, help="Dagar för EOD när --days ej anges."),
-    intra_days: int = typer.Option(10, help="Dagar för intraday när --days ej anges."),
-    gate_hours: bool = typer.Option(True, "--gate-hours/--no-gate-hours", help="Skippa körning om relevanta börser är stängda."),
-    sleep_between: float = typer.Option(0.25, help="Sekunders paus mellan API-anrop per symbol."),
-    debug: bool = typer.Option(False, help="Mer loggning från loadern."),
+def _run_sync(
+    tickers: Optional[str],
+    interval: str,
+    days: Optional[int],
+    eod_days: int,
+    intra_days: int,
+    gate_hours: bool,
+    sleep_between: float,
+    debug: bool,
 ) -> None:
     syms = _parse_tickers(tickers)
     if not syms:
@@ -145,6 +139,54 @@ def sync(
         raise typer.Exit(1)
 
     typer.echo(f"✅ Klart. Lyckade: {ok}, misslyckade: {fail}")
+
+
+@app.command(help="Synka data för givna tickers och intervall (EOD, 5m, mfl).")
+def sync(
+    tickers: Optional[str] = typer.Option(
+        None, "--tickers", "-t",
+        help="CSV/blankseparerade tickers eller sökväg till fil (txt/csv/yaml). "
+             "Utelämnad ⇒ försöker watchlist.yaml eller config/tickers.txt.",
+    ),
+    interval: str = typer.Option(
+        "EOD,5m", "--interval", "-i",
+        help="Intervall (en eller flera), t.ex. 'EOD,5m'.",
+    ),
+    days: Optional[int] = typer.Option(
+        None, "--days",
+        help="Överskriv dagar för ALLA intervall. Utelämnad ⇒ eod_days/intra_days.",
+    ),
+    eod_days: int = typer.Option(9000, help="Dagar för EOD när --days ej anges."),
+    intra_days: int = typer.Option(10, help="Dagar för intraday när --days ej anges."),
+    gate_hours: bool = typer.Option(True, "--gate-hours/--no-gate-hours", help="Skippa körning om relevanta börser är stängda."),
+    sleep_between: float = typer.Option(0.25, help="Sekunders paus mellan API-anrop per symbol."),
+    debug: bool = typer.Option(False, help="Mer loggning från loadern."),
+) -> None:
+    _run_sync(tickers, interval, days, eod_days, intra_days, gate_hours, sleep_between, debug)
+
+
+# Fallback: om någon kör toppnivåvarianten (eller om runner råkar se "sync" som okänt extra-argument)
+@app.callback(invoke_without_command=True)
+def _default(
+    ctx: typer.Context,
+    tickers: Optional[str] = typer.Option(None, "--tickers", "-t"),
+    interval: str = typer.Option("EOD,5m", "--interval", "-i"),
+    days: Optional[int] = typer.Option(None, "--days"),
+    eod_days: int = typer.Option(9000, "--eod-days"),
+    intra_days: int = typer.Option(10, "--intra-days"),
+    gate_hours: bool = typer.Option(True, "--gate-hours/--no-gate-hours"),
+    sleep_between: float = typer.Option(0.25, "--sleep-between"),
+    debug: bool = typer.Option(False, "--debug"),
+):
+    # Svälj ev. kvarvarande "sync" i argv om den dyker upp som "okänd"
+    args = list(ctx.args or [])
+    if args and args[0].lower() == "sync":
+        args.pop(0)
+        # skriv tillbaka rensad args till sys.argv för tydlighet (frivilligt)
+        sys.argv = [sys.argv[0]] + args
+
+    if ctx.invoked_subcommand is None:
+        _run_sync(tickers, interval, days, eod_days, intra_days, gate_hours, sleep_between, debug)
 
 
 if __name__ == "__main__":
