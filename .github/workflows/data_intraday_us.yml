@@ -21,25 +21,11 @@ jobs:
           pip install -e .
           pip install awscli
 
-      - name: Build US ticker list
+        - name: Build US ticker list
         id: build_list
-        shell: bash
         run: |
-          TICKERS=$(python - <<'PY'
-            import yaml
-            from pathlib import Path
-            doc = yaml.safe_load(Path("watchlist.yaml").read_text(encoding="utf-8")) or {}
-            items = doc.get("items", []) or doc.get("tickers", [])
-            codes = []
-            for it in items:
-                c = it if isinstance(it, str) else (it or {}).get("code")
-                if c and c.endswith(".US"):
-                    codes.append(c)
-            print(",".join(sorted(set(codes))))
-            PY
-          )
-          echo "tickers=$TICKERS" >> "$GITHUB_OUTPUT"
-          echo "US tickers: $TICKERS"
+          echo "tickers=$(python .github/scripts/build_tickers.py US)" >> "$GITHUB_OUTPUT"
+          python .github/scripts/build_tickers.py US
 
       - name: Sync intraday US (EOD+5m)
         env:

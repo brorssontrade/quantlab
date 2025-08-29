@@ -23,23 +23,9 @@ jobs:
 
       - name: Build ST ticker list
         id: build_list
-        shell: bash
         run: |
-          TICKERS=$(python - <<'PY'
-          import yaml
-          from pathlib import Path
-          doc = yaml.safe_load(Path("watchlist.yaml").read_text(encoding="utf-8")) or {}
-          items = doc.get("items", []) or doc.get("tickers", [])
-          codes = []
-          for it in items:
-              c = it if isinstance(it, str) else (it or {}).get("code")
-              if c and c.endswith(".ST"):
-                  codes.append(c)
-          print(",".join(sorted(set(codes))))
-          PY
-          )
-          echo "tickers=$TICKERS" >> "$GITHUB_OUTPUT"
-          echo "ST tickers: $TICKERS"
+          echo "tickers=$(python .github/scripts/build_tickers.py ST)" >> "$GITHUB_OUTPUT"
+          python .github/scripts/build_tickers.py ST
 
       - name: Sync intraday ST (EOD+5m)
         env:
