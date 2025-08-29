@@ -13,8 +13,8 @@ __pycache__/
 .ipynb_checkpoints/
 
 # Local data & reports (hålls utanför main)
-storage/
-db/
+/storage/
+/db/
 state/
 reports/
 logs/
