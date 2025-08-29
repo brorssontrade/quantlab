@@ -10,3 +10,7 @@ yfinance>=0.2
 numexpr>=2.8
 matplotlib>=3.8
 optuna>=3.6
+streamlit>=1.49
+s3fs
+boto3
+PyYAML

@@ -81,3 +81,27 @@ På så vis blir varje körning snabb och du slipper ladda ner historik igen.
 - Ändra tidtabeller i `.github/workflows/data_intraday.yml` och `data_eod.yml` (`cron` är i **UTC**).
 - Ändra intervall/dagar genom att uppdatera CLI-flaggorna i *Run … sync*-steget.
 - Lägg till/ta bort tickers i `watchlist.yaml`, ingen annan ändring krävs.
+
+
+
+
+
+## Apps
+
+- 🔥 **Hot Lists** – kortsiktigt momentum, gap, returer, trend/volatilitet.
+- 📊 **Breadth** – adv/dec, 52w highs/lows, enkel marknadsbredd.
+
+Körs som multipage på Streamlit. Startfil: `streamlit_app.py`.
+
+### Data
+EOD och 5m Parquet synkas till S3 av GitHub Actions:
+- `.github/workflows/data_intraday_us.yml`
+- `.github/workflows/data_intraday_st.yml`
+- (valfritt) `data_eod.yml`
+
+Secrets som behövs: `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `S3_BUCKET`.
+
+
+
+## Apps
+- 🔥 **Hot Lists** — [Streamlit](https://<din-app-URL>.streamlit.app)

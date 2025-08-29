@@ -1,192 +1,238 @@
 # src/quantkit/cli_data.py
 from __future__ import annotations
 
-import re, time, sys
+import os
+import sys
+import time
 from pathlib import Path
-from typing import List, Optional
+import typing as T
 
 import typer
 import yaml
 
-from quantkit.data.eodhd_loader import load_bars
-from quantkit.data.market_hours import is_open_us, is_open_stockholm
+try:
+    from quantkit.data import load_bars  # type: ignore
+except Exception:  # pragma: no cover
+    load_bars = None  # type: ignore
 
-# Tillåt okända/extra argument så att vi kan svälja "sync" om någon kör toppnivåvarianten
-app = typer.Typer(
-    add_completion=False,
-    help="Data sync CLI för Quantkit",
-    context_settings={"allow_extra_args": True, "ignore_unknown_options": True},
-)
+from quantkit.data.market_hours import is_open_stockholm, is_open_us
 
+try:
+    import requests  # type: ignore
+except Exception:  # pragma: no cover
+    requests = None  # type: ignore
 
-def _read_watchlist_yaml(path: Path) -> List[str]:
-    if not path.exists():
+app = typer.Typer(add_completion=False, help="Data sync CLI för Quantkit")
+
+# -------- utils --------
+def _read_watchlist_codes(path: str = "watchlist.yaml") -> list[str]:
+    p = Path(path)
+    if not p.exists():
         return []
-    doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    items = doc.get("items") or doc.get("tickers") or doc.get("symbols") or []
-    out: List[str] = []
+    try:
+        doc = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
+    except Exception:
+        return []
+    items = doc.get("items", []) or doc.get("tickers", [])
+    out: list[str] = []
     for it in items:
-        if isinstance(it, dict):
-            code = it.get("code") or it.get("symbol") or it.get("ticker")
+        if isinstance(it, str):
+            code = it
         else:
-            code = str(it)
+            code = (it or {}).get("code")
         if code:
             out.append(str(code).strip())
     return out
 
 
-def _read_any_list_file(path: Path) -> List[str]:
-    if path.suffix.lower() in {".yaml", ".yml"}:
-        return _read_watchlist_yaml(path)
-    txt = path.read_text(encoding="utf-8")
-    return [t.strip() for t in re.split(r"[,\s;]+", txt) if t.strip()]
+def _read_tickers_txt(path: str = "config/tickers.txt") -> list[str]:
+    p = Path(path)
+    if not p.exists():
+        return []
+    return [ln.strip() for ln in p.read_text(encoding="utf-8").splitlines() if ln.strip()]
 
 
-def _parse_tickers(source: Optional[str]) -> List[str]:
-    # 1) Angiven sträng kan vara CSV eller filväg
-    if source and source.strip():
-        s = source.strip()
-        if s.startswith("file:"):
-            s = s[5:]
-        p = Path(s)
-        if ("," not in s) and p.exists():
-            return _read_any_list_file(p)
-        return [t.strip() for t in re.split(r"[,\s;]+", s) if t.strip()]
-
-    # 2) watchlist.yaml
-    wl = Path("watchlist.yaml")
-    if wl.exists():
-        vals = _read_watchlist_yaml(wl)
-        if vals:
-            return vals
-
-    # 3) config/tickers.txt
-    txt = Path("config/tickers.txt")
-    if txt.exists():
-        vals = _read_any_list_file(txt)
-        if vals:
-            return vals
-
-    return []
+def _coerce_list(val: str | None) -> list[str]:
+    if not val:
+        return []
+    return [x.strip() for x in val.split(",") if x.strip()]
 
 
-def _parse_intervals(s: str) -> List[str]:
-    return [x.strip() for x in re.split(r"[,\s;]+", s) if x.strip()]
+def _want_days(interval: str, days: int | None, eod_days: int, intra_days: int) -> int:
+    if days is not None:
+        return int(days)
+    return int(eod_days if interval.upper() == "EOD" else intra_days)
 
 
-def _markets_in_symbols(symbols: List[str]) -> set[str]:
-    m: set[str] = set()
-    for s in symbols:
-        ss = s.upper()
-        if ss.endswith(".US"):
-            m.add("US")
-        if ss.endswith(".ST") or ss.endswith(".SE"):
-            m.add("SE")
-    return m
+def _gate_by_hours(symbol: str) -> bool:
+    if symbol.endswith(".US"):
+        return is_open_us()
+    if symbol.endswith(".ST"):
+        return is_open_stockholm()
+    return True
 
 
+def _load_bars_safe(symbol: str, interval: str, days: int, debug: bool = False):
+    if load_bars is None:
+        raise RuntimeError("quantkit.data.load_bars kunde inte importeras")
+    return load_bars(symbol, interval=interval, days=days, debug=debug)  # type: ignore[call-arg]
+
+
+def _resolve_tickers(explicit: str | None) -> list[str]:
+    tickers = _coerce_list(explicit)
+    if tickers:
+        return tickers
+    tickers = _read_watchlist_codes("watchlist.yaml")
+    if tickers:
+        return tickers
+    tickers = _read_tickers_txt("config/tickers.txt")
+    return tickers
+
+
+# -------- notify helpers --------
+def _run_url() -> str:
+    server = os.getenv("GITHUB_SERVER_URL", "https://github.com").rstrip("/")
+    repo = os.getenv("GITHUB_REPOSITORY", "").strip("/")
+    run_id = os.getenv("GITHUB_RUN_ID", "")
+    if repo and run_id:
+        return f"{server}/{repo}/actions/runs/{run_id}"
+    return ""
+
+
+def _notify(text: str) -> None:
+    sent = False
+    try:
+        if requests is None:
+            raise RuntimeError("requests saknas")
+
+        hook = os.getenv("SLACK_WEBHOOK_URL", "").strip()
+        if hook:
+            try:
+                requests.post(hook, json={"text": text}, timeout=10)
+                sent = True
+            except Exception as e:  # pragma: no cover
+                print(f"[notify] Slack fel: {e}", file=sys.stderr)
+
+        tg_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+        tg_chat = os.getenv("TELEGRAM_CHAT_ID", "").strip()
+        if tg_token and tg_chat:
+            try:
+                url = f"https://api.telegram.org/bot{tg_token}/sendMessage"
+                requests.post(url, data={"chat_id": tg_chat, "text": text}, timeout=10)
+                sent = True
+            except Exception as e:  # pragma: no cover
+                print(f"[notify] Telegram fel: {e}", file=sys.stderr)
+    except Exception as e:  # pragma: no cover
+        print(f"[notify] generellt fel: {e}", file=sys.stderr)
+
+    if not sent:
+        pass
+
+
+# -------- huvudkommando --------
 def _run_sync(
-    tickers: Optional[str],
+    tickers: str | None,
     interval: str,
-    days: Optional[int],
+    days: int | None,
     eod_days: int,
     intra_days: int,
     gate_hours: bool,
     sleep_between: float,
     debug: bool,
-) -> None:
-    syms = _parse_tickers(tickers)
+) -> int:
+    syms = _resolve_tickers(tickers)
     if not syms:
-        typer.echo("❌ Hittade inga tickers (ange --tickers eller lägg watchlist.yaml / config/tickers.txt).")
-        raise typer.Exit(2)
+        typer.echo("❌ Inga tickers (ange --tickers, eller lägg till watchlist.yaml / config/tickers.txt)")
+        return 1
 
-    intervals = _parse_intervals(interval)
-    if not intervals:
-        typer.echo("❌ Inga intervall angivna.")
-        raise typer.Exit(2)
+    wanted = _coerce_list(interval) or ["EOD", "5m"]
 
-    # Gating på öppettider
-    if gate_hours:
-        markets = _markets_in_symbols(syms)
-        us_ok = is_open_us() if "US" in markets else False
-        se_ok = is_open_stockholm() if "SE" in markets else False
-        if markets and not (us_ok or se_ok):
-            typer.echo("⏸ Marknader stängda för dina tickers. Kör igen senare.")
-            raise typer.Exit(0)
+    summarize = os.getenv("NOTIFY_SUMMARY", "").strip() == "1"
+    any_success = False
+    any_error = False
+    any_skip_only = True  # om *allt* blir skippat, ska vi inte faila
 
-    ok = 0
-    fail = 0
-
-    for iv in intervals:
-        iv_upper = iv.upper()
-        dflt_days = eod_days if iv_upper == "EOD" else intra_days
-        d = dflt_days if days is None else int(days)
-
+    for iv in wanted:
+        d = _want_days(iv, days, eod_days, intra_days)
         typer.echo(f"▶ Intervall {iv} (days={d}) på {len(syms)} tickers …")
+
+        ok_count = 0
+        err_count = 0
+        skip_count = 0
+        errors: list[str] = []
+
         for sym in syms:
             try:
-                df = load_bars(sym, interval=iv, days=d, cached=True, debug=debug)
+                if gate_hours and iv.upper() != "EOD" and not _gate_by_hours(sym):
+                    typer.echo(f"⏭ {sym} {iv}: market closed (gated by hours)")
+                    continue
+
+                df = _load_bars_safe(sym, iv, d, debug=debug)
                 n = 0 if df is None else len(df)
-                typer.echo(f"  ✔ {sym} {iv}: {n} rader")
-                ok += 1
+                typer.echo(f"✔ {sym} {iv}: {n} rader")
+                ok_count += 1
+                any_success = True
+                any_skip_only = False
             except Exception as e:
-                typer.echo(f"  ⚠ {sym} {iv}: {e}")
-                fail += 1
-            if sleep_between > 0:
-                time.sleep(float(sleep_between))
+                msg = f"{sym} {iv}: {e}"
+                typer.echo(f"  ⚠ {msg}")
+                errors.append(msg)
+                err_count += 1
+                any_error = True
+                any_skip_only = False
+            time.sleep(float(sleep_between))
 
-    if ok == 0:
-        raise typer.Exit(1)
+        if err_count > 0 or summarize:
+            title = os.getenv("GITHUB_WORKFLOW", "quantkit data sync")
+            run_url = _run_url()
+            head = f"{title}: interval={iv}, days={d}, tickers={len(syms)}"
+            tail = f"ok={ok_count}, errors={err_count}, skipped_closed={skip_count}"
+            lines = [f"{head} → {tail}"]
+            if err_count > 0:
+                for row in errors[:5]:
+                    lines.append(f"- {row}")
+            if run_url:
+                lines.append(run_url)
+            _notify("\n".join(lines))
 
-    typer.echo(f"✅ Klart. Lyckade: {ok}, misslyckade: {fail}")
+    # Exit-kod:
+    # - om vi hade fel => 1
+    # - om allt blev skippat pga stängt => 0 (grön bock i Actions)
+    # - om vi hade minst en lyckad => 0
+    if any_error:
+        return 1
+    return 0
+
+@app.command("sync", help="Synka data för givna tickers och intervall (EOD, 5m, mfl).")
+def sync_cmd(
+    tickers: str | None = typer.Option(None, "--tickers", "-t", help="Komma-separerad lista, ex: AAPL.US,ABB.ST"),
+    interval: str = typer.Option("EOD,5m", "--interval", "-i", help="Ex: EOD,5m"),
+    days: int | None = typer.Option(None, help="Överskriv antal dagar för alla intervall"),
+    eod_days: int = typer.Option(9000, help="Days för EOD om --days ej sätts"),
+    intra_days: int = typer.Option(10, help="Days för intradag om --days ej sätts"),
+    gate_hours: bool = typer.Option(True, "--gate-hours/--no-gate-hours", help="Skippa stängda marknader för intradag"),
+    sleep_between: float = typer.Option(0.25, help="Sömn mellan symboler (sek)"),
+    debug: bool = typer.Option(False, "--debug", help="Verbose loader"),
+):
+    code = _run_sync(tickers, interval, days, eod_days, intra_days, gate_hours, sleep_between, debug)
+    raise typer.Exit(code)
 
 
-@app.command(help="Synka data för givna tickers och intervall (EOD, 5m, mfl).")
-def sync(
-    tickers: Optional[str] = typer.Option(
-        None, "--tickers", "-t",
-        help="CSV/blankseparerade tickers eller sökväg till fil (txt/csv/yaml). "
-             "Utelämnad ⇒ försöker watchlist.yaml eller config/tickers.txt.",
-    ),
-    interval: str = typer.Option(
-        "EOD,5m", "--interval", "-i",
-        help="Intervall (en eller flera), t.ex. 'EOD,5m'.",
-    ),
-    days: Optional[int] = typer.Option(
-        None, "--days",
-        help="Överskriv dagar för ALLA intervall. Utelämnad ⇒ eod_days/intra_days.",
-    ),
-    eod_days: int = typer.Option(9000, help="Dagar för EOD när --days ej anges."),
-    intra_days: int = typer.Option(10, help="Dagar för intraday när --days ej anges."),
-    gate_hours: bool = typer.Option(True, "--gate-hours/--no-gate-hours", help="Skippa körning om relevanta börser är stängda."),
-    sleep_between: float = typer.Option(0.25, help="Sekunders paus mellan API-anrop per symbol."),
-    debug: bool = typer.Option(False, help="Mer loggning från loadern."),
-) -> None:
-    _run_sync(tickers, interval, days, eod_days, intra_days, gate_hours, sleep_between, debug)
-
-
-# Fallback: om någon kör toppnivåvarianten (eller om runner råkar se "sync" som okänt extra-argument)
 @app.callback(invoke_without_command=True)
-def _default(
+def main(
     ctx: typer.Context,
-    tickers: Optional[str] = typer.Option(None, "--tickers", "-t"),
+    tickers: str | None = typer.Option(None, "--tickers", "-t"),
     interval: str = typer.Option("EOD,5m", "--interval", "-i"),
-    days: Optional[int] = typer.Option(None, "--days"),
-    eod_days: int = typer.Option(9000, "--eod-days"),
-    intra_days: int = typer.Option(10, "--intra-days"),
+    days: int | None = typer.Option(None),
+    eod_days: int = typer.Option(9000),
+    intra_days: int = typer.Option(10),
     gate_hours: bool = typer.Option(True, "--gate-hours/--no-gate-hours"),
-    sleep_between: float = typer.Option(0.25, "--sleep-between"),
+    sleep_between: float = typer.Option(0.25),
     debug: bool = typer.Option(False, "--debug"),
 ):
-    # Svälj ev. kvarvarande "sync" i argv om den dyker upp som "okänd"
-    args = list(ctx.args or [])
-    if args and args[0].lower() == "sync":
-        args.pop(0)
-        # skriv tillbaka rensad args till sys.argv för tydlighet (frivilligt)
-        sys.argv = [sys.argv[0]] + args
-
     if ctx.invoked_subcommand is None:
-        _run_sync(tickers, interval, days, eod_days, intra_days, gate_hours, sleep_between, debug)
+        code = _run_sync(tickers, interval, days, eod_days, intra_days, gate_hours, sleep_between, debug)
+        raise typer.Exit(code)
 
 
 if __name__ == "__main__":

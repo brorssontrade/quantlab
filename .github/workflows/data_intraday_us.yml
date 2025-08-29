@@ -2,7 +2,7 @@ name: data_intraday_us
 
 on:
   schedule:
-    - cron: "*/5 * * * 1-5"   # var 5e minut, vardagar
+    - cron: "*/5 * * * 1-5"
   workflow_dispatch: {}
 
 jobs:
@@ -11,35 +11,42 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: Install deps
         run: |
-          python -m pip install --upgrade pip
+          python -m pip install -U pip
           pip install -e .
           pip install awscli
+
+      - name: Build US ticker list
+        id: build_list
+        shell: bash
+        run: |
+          TICKERS=$(python - <<'PY'
+            import yaml
+            from pathlib import Path
+            doc = yaml.safe_load(Path("watchlist.yaml").read_text(encoding="utf-8")) or {}
+            items = doc.get("items", []) or doc.get("tickers", [])
+            codes = []
+            for it in items:
+                c = it if isinstance(it, str) else (it or {}).get("code")
+                if c and c.endswith(".US"):
+                    codes.append(c)
+            print(",".join(sorted(set(codes))))
+            PY
+          )
+          echo "tickers=$TICKERS" >> "$GITHUB_OUTPUT"
+          echo "US tickers: $TICKERS"
 
       - name: Sync intraday US (EOD+5m)
         env:
           EODHD_API_KEY: ${{ secrets.EODHD_API_KEY }}
         run: |
-          # bygg en kommaseparerad US-lista från watchlist.yaml
-          TICKERS=$(python - <<'PY'
-            import yaml, sys; from pathlib import Path
-            doc=yaml.safe_load(Path("watchlist.yaml").read_text()) or {}
-            items=doc.get("items",[]) or doc.get("tickers",[])
-            codes=[]
-            for it in items:
-                c=it if isinstance(it,str) else (it or {}).get("code")
-                if c and c.endswith(".US"): codes.append(c)
-            print(",".join(codes))
-            PY
-            )
-          echo "US tickers: $TICKERS"
-          python -m quantkit.cli_data --interval "EOD,5m" --intra-days 10 --tickers "$TICKERS"
+          python -m quantkit.cli_data --interval "EOD,5m" --intra-days 10 \
+            --tickers "${{ steps.build_list.outputs.tickers }}"
 
       - name: Push to S3
         env:

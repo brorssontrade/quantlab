@@ -141,3 +141,19 @@ def run_signals(
     equity = pd.Series(eq, index=ts, name="equity")
     trades_df = pd.DataFrame(trades)
     return RunResult(equity=equity, trades=trades_df)
+
+
+# exempel: src/quantkit/engine.py (eller var du har din strategi)
+from quantkit.notify import notify_signal
+
+def on_signal(symbol: str, side: str, price: float, ts_iso: str, strategy: str, chart_url: str | None = None):
+    # ... din ordinarie logik (loggning, order, persistence) ...
+    notify_signal(
+        symbol=symbol,
+        side=side,                 # "BUY", "SELL", "EXIT" osv
+        price=price,
+        ts_iso=ts_iso,             # ex: pd.Timestamp.utcnow().isoformat()
+        strategy=strategy,         # "RSI-2", "Breakout-ATR", etc
+        note="Köpsignal enligt regel X",
+        chart_url=chart_url,
+    )

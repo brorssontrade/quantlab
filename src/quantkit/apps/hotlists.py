@@ -23,7 +23,7 @@ S3_PREFIX = os.getenv("S3_PREFIX", f"s3://{S3_BUCKET}" if S3_BUCKET else "").rst
 
 def _s3_opts() -> dict:
     opts: dict = {}
-    region = os.getenv("AWS_REGION")
+    region = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION")
     if region:
         opts.setdefault("client_kwargs", {})["region_name"] = region
     if os.getenv("AWS_ACCESS_KEY_ID") and os.getenv("AWS_SECRET_ACCESS_KEY"):
@@ -118,19 +118,46 @@ def _last_safe(series: pd.Series) -> Optional[float]:
 
 
 def _pct(a: Optional[float], b: Optional[float]) -> Optional[float]:
-    if a is None or b is None or b == 0:
+    if a is None or b is None or not b:
         return None
     return (a / b - 1.0) * 100.0
 
 
-def _session_slice_local(df: pd.DataFrame, symbol: str) -> pd.DataFrame:
-    """Senaste handelsdag (lokal tidzon)."""
-    if df is None or df.empty or "ts" not in df.columns:
+# --- ersätt i src/quantkit/apps/hotlists.py ---
+
+def _empty_like(df) -> pd.DataFrame:
+    if isinstance(df, pd.DataFrame):
         return df.iloc[0:0]
+    return pd.DataFrame(columns=["ts","open","high","low","close","volume"])
+
+def _session_slice_local(df: pd.DataFrame | None, symbol: str) -> pd.DataFrame:
+    """Senaste handelsdag (lokal tz). Robust mot None/tom df."""
+    if df is None or not isinstance(df, pd.DataFrame) or df.empty or "ts" not in df.columns:
+        return pd.DataFrame()
     tz = _tz_for(symbol)
     local = df["ts"].dt.tz_convert(tz)
     last_day = local.dt.date.max()
     return df.loc[local.dt.date == last_day]
+
+def _today_pct_vs_open(intra5: pd.DataFrame | None, symbol: str) -> Optional[float]:
+    sess = _session_slice_local(intra5, symbol)
+    if sess.empty:
+        return None
+    o = float(sess["open"].iloc[0])
+    last = float(sess["close"].iloc[-1])
+    return _pct(last, o)
+
+def _today_range_pct(intra5: pd.DataFrame | None, symbol: str) -> Optional[float]:
+    sess = _session_slice_local(intra5, symbol)
+    if sess.empty:
+        return None
+    hi = float(sess["high"].max()); lo = float(sess["low"].min()); o = float(sess["open"].iloc[0])
+    if o == 0:
+        return None
+    return ((hi - lo) / o) * 100.0
+
+
+
 
 
 def _n_days_ret(eod: pd.DataFrame, n: int) -> Optional[float]:
@@ -155,27 +182,6 @@ def _rise_minutes_pct(intra5: pd.DataFrame, minutes: int) -> Optional[float]:
     ref = float(prev.iloc[-1])
     last = float(intra5["close"].iloc[-1])
     return _pct(last, ref)
-
-
-def _today_pct_vs_open(intra5: pd.DataFrame, symbol: str) -> Optional[float]:
-    sess = _session_slice_local(intra5, symbol)
-    if sess.empty:
-        return None
-    o = float(sess["open"].iloc[0])
-    last = float(sess["close"].iloc[-1])
-    return _pct(last, o)
-
-
-def _today_range_pct(intra5: pd.DataFrame, symbol: str) -> Optional[float]:
-    sess = _session_slice_local(intra5, symbol)
-    if sess.empty:
-        return None
-    hi = float(sess["high"].max())
-    lo = float(sess["low"].min())
-    o = float(sess["open"].iloc[0])
-    if o == 0:
-        return None
-    return ((hi - lo) / o) * 100.0
 
 
 def _gap_pct(symbol: str, intra5: pd.DataFrame, eod: pd.DataFrame) -> Optional[float]:
@@ -238,15 +244,6 @@ def _atr14(eod: pd.DataFrame) -> Tuple[Optional[float], Optional[float]]:
     return float(atr), (None if atrpct is None or pd.isna(atrpct) else float(atrpct))
 
 
-def _roll_52w_metrics(eod: pd.DataFrame) -> tuple[Optional[float], Optional[float]]:
-    if eod is None or eod.empty or "close" not in eod.columns:
-        return None, None
-    tail = eod["close"].dropna().tail(252)
-    if tail.empty:
-        return None, None
-    return float(tail.max()), float(tail.min())
-
-
 def _assemble_row(symbol: str) -> dict:
     ex = _exchange_for(symbol)
 
@@ -277,40 +274,43 @@ def _assemble_row(symbol: str) -> dict:
     netchg = None if last is None or prev_close is None else last - prev_close
     netpct = _pct(last, prev_close)
 
-    # Nya intradag / idag-mått
-    rise5 = _rise_minutes_pct(intra, 5)
+    # Intraday / idag-mått
+    rise5  = _rise_minutes_pct(intra, 5)
     rise15 = _rise_minutes_pct(intra, 15)
+    rise30 = _rise_minutes_pct(intra, 30)
     rise60 = _rise_minutes_pct(intra, 60)
-    today_pct = _today_pct_vs_open(intra, symbol)
-    today_rng = _today_range_pct(intra, symbol)
+
+    from_open = _pct(last, day_open) if (last is not None and day_open is not None) else None
+    range_pct = None
+    range_pos = None
+    if day_high is not None and day_low is not None and day_open is not None and day_high > day_low:
+        range_pct = ((day_high - day_low) / day_open) * 100.0
+        if last is not None:
+            range_pos = ((last - day_low) / (day_high - day_low)) * 100.0  # 0=vid low, 100=vid high
+
+    # 30d snittvolym (EOD) vs dagens volym
+    vol_surge = None
+    if vol_tot is not None and isinstance(eod, pd.DataFrame) and "volume" in eod.columns:
+        avg30 = eod["volume"].dropna().tail(30).mean()
+        if avg30 and avg30 > 0:
+            vol_surge = (vol_tot / avg30) * 100.0
 
     # Fler EOD-returer
-    ret1 = _n_days_ret(eod, 1)
-    ret5 = _n_days_ret(eod, 5)
+    ret1  = _n_days_ret(eod, 1)
+    ret5  = _n_days_ret(eod, 5)
     ret10 = _n_days_ret(eod, 10)
     ret20 = _n_days_ret(eod, 20)
     ret30 = _n_days_ret(eod, 30)
     ret60 = _n_days_ret(eod, 60)
 
-    # Gap
+    # Gap & trend/volatilitet
     gap = _gap_pct(symbol, intra, eod)
-
-    # 52w
-    hi52, lo52 = _roll_52w_metrics(eod)
-    above52 = None if hi52 is None or last is None or last <= hi52 else _pct(last, hi52)
-    below52 = None if lo52 is None or last is None or last >= lo52 else _pct(last, lo52)
-    near_hi = None if hi52 is None or last is None else _pct(last, hi52)
-    near_lo = None if lo52 is None or last is None else _pct(last, lo52)
-
-    # MA-distanser
     ma20 = _sma(eod["close"] if isinstance(eod, pd.DataFrame) else None, 20)
     ma50 = _sma(eod["close"] if isinstance(eod, pd.DataFrame) else None, 50)
     ma200 = _sma(eod["close"] if isinstance(eod, pd.DataFrame) else None, 200)
     ma20pct = _pct(last, ma20) if ma20 else None
     ma50pct = _pct(last, ma50) if ma50 else None
     ma200pct = _pct(last, ma200) if ma200 else None
-
-    # RSI / ATR
     rsi14 = _rsi14(eod)
     _, atrpct = _atr14(eod)
 
@@ -319,36 +319,23 @@ def _assemble_row(symbol: str) -> dict:
         "Exchange": ex,
         "Last": last,
         "LastTs": last_ts_local,
+
         "NetChg": netchg,
         "NetPct": netpct,
-        "Open": day_open,
-        "High": day_high,
-        "Low": day_low,
-        "Close": day_close,
-        "VolTot": vol_tot,
-        "Trades": "-",
-        "Rise5mPct": rise5,
-        "Rise15mPct": rise15,
-        "Rise30mPct": _rise_minutes_pct(intra, 30),
-        "Rise60mPct": rise60,
-        "TodayPct": today_pct,
-        "TodayRangePct": today_rng,
+
+        "Open": day_open, "High": day_high, "Low": day_low, "Close": day_close,
+        "VolTot": vol_tot, "Trades": "-",
+
+        "Rise5mPct": rise5, "Rise15mPct": rise15, "Rise30mPct": rise30, "Rise60mPct": rise60,
+        "FromOpenPct": from_open, "RangePct": range_pct, "RangePosPct": range_pos, "VolSurgePct": vol_surge,
+
         "GapPct": gap,
-        "Ret1D": ret1,
-        "Ret5D": ret5,
-        "Ret10D": ret10,
-        "Ret20D": ret20,
-        "Ret30D": ret30,
-        "Ret60D": ret60,
-        "Above52wPct": above52,
-        "Below52wPct": below52,
-        "Near52wHighPct": near_hi,
-        "Near52wLowPct": near_lo,
-        "MA20Pct": ma20pct,
-        "MA50Pct": ma50pct,
-        "MA200Pct": ma200pct,
-        "RSI14": rsi14,
-        "ATRpct": atrpct,
+
+        "Ret1D": ret1, "Ret5D": ret5, "Ret10D": ret10, "Ret20D": ret20, "Ret30D": ret30, "Ret60D": ret60,
+
+        "MA20Pct": ma20pct, "MA50Pct": ma50pct, "MA200Pct": ma200pct,
+        "RSI14": rsi14, "ATRpct": atrpct,
+
         "_has_intra": intra is not None,
         "_has_eod": eod is not None,
     }
@@ -367,9 +354,12 @@ ACTIVITIES = {
     "Rapidly Rising (60m %)": ("Rise60mPct", True),
     "Rapidly Falling (60m %)": ("Rise60mPct", False),
 
-    # Dagens utveckling
-    "Today % vs Open": ("TodayPct", True),
-    "Range Today %": ("TodayRangePct", True),
+    # Dagens
+    "Today % vs Open": ("FromOpenPct", True),
+    "Range Today % (wide first)": ("RangePct", True),
+    "Near High (RangePos %)": ("RangePosPct", True),
+    "Near Low (RangePos %)": ("RangePosPct", False),
+    "Volume Surge % (vs 30d avg)": ("VolSurgePct", True),
 
     # Klassiska returer
     "% Gainers (1 Day)": ("Ret1D", True),
@@ -388,12 +378,6 @@ ACTIVITIES = {
     # Gap
     "Gap Up % (vs prev close)": ("GapPct", True),
     "Gap Down % (vs prev close)": ("GapPct", False),
-
-    # 52w
-    "Break Above 52w High %": ("Above52wPct", True),
-    "Break Below 52w Low %": ("Below52wPct", False),
-    "Approaching 52w High %": ("Near52wHighPct", True),
-    "Approaching 52w Low %": ("Near52wLowPct", False),
 
     # Trend/volatilitet
     "Above MA20 %": ("MA20Pct", True),
@@ -463,12 +447,11 @@ df = df.sort_values("_rank_metric", ascending=not desc_order, na_position="last"
 df.insert(0, "#", range(1, len(df) + 1))
 col_order = [
     "#", "Symbol", metric, "Exchange", "Last", "LastTs", "NetChg", "NetPct",
+    "FromOpenPct", "RangePct", "RangePosPct", "VolSurgePct",
     "Open", "High", "Low", "Close", "VolTot", "Trades",
     "Rise5mPct", "Rise15mPct", "Rise30mPct", "Rise60mPct",
-    "TodayPct", "TodayRangePct",
     "GapPct",
     "Ret1D", "Ret5D", "Ret10D", "Ret20D", "Ret30D", "Ret60D",
-    "Above52wPct", "Below52wPct", "Near52wHighPct", "Near52wLowPct",
     "MA20Pct", "MA50Pct", "MA200Pct",
     "RSI14", "ATRpct",
 ]
@@ -516,8 +499,7 @@ styler = styler.format(fmt_map, na_rep="None")
 
 st.subheader(act_label)
 st.dataframe(styler, height=650, width="stretch")
-st.caption("Tips: EU-volym kan vara 0 i realtid med vissa källor. 52w baseras på ~252 EOD-dagar.")
-
+st.caption("Tips: `LastTs` visar senaste datapunkt (lokal tid). Om gammal → S3 fylls inte just nu.")
 # Auto-refresh
 if every and every > 0:
     time.sleep(float(every))
