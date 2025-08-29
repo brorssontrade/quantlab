@@ -130,14 +130,15 @@ def _empty_like(df) -> pd.DataFrame:
         return df.iloc[0:0]
     return pd.DataFrame(columns=["ts","open","high","low","close","volume"])
 
-def _session_slice_local(df: pd.DataFrame | None, symbol: str) -> pd.DataFrame:
-    """Senaste handelsdag (lokal tz). Robust mot None/tom df."""
+def _session_slice_local(df: pd.DataFrame, symbol: str) -> pd.DataFrame:
+    """Senaste handelsdag (lokal tidzon)."""
     if df is None or not isinstance(df, pd.DataFrame) or df.empty or "ts" not in df.columns:
-        return pd.DataFrame()
+        # returnera en tom DataFrame istället för df.iloc[0:0] (som kraschar när df=None)
+        return pd.DataFrame(columns=["ts","open","high","low","close","volume"]).iloc[0:0]
     tz = _tz_for(symbol)
     local = df["ts"].dt.tz_convert(tz)
     last_day = local.dt.date.max()
-    return df.loc[local.dt.date == last_day]
+    return df[local.dt.date == last_day]
 
 def _today_pct_vs_open(intra5: pd.DataFrame | None, symbol: str) -> Optional[float]:
     sess = _session_slice_local(intra5, symbol)
