@@ -1,37 +1,33 @@
 name: data_eod
 
 on:
-  workflow_dispatch:
   schedule:
-    - cron: "15 21 * * 1-5"   # ca efter US close (21:15 UTC), mån-fre
-
-permissions:
-  contents: read
+    - cron: "5 20 * * 1-5"  # ca efter US close (justera vid behov)
+    - cron: "5 16 * * 1-5"  # ca efter Stockholm close
+  workflow_dispatch: {}
 
 jobs:
-  sync:
+  eod:
     runs-on: ubuntu-latest
-    env:
-      EODHD_TOKEN: ${{ secrets.EODHD_TOKEN }}
-      EODHD_API_KEY: ${{ secrets.EODHD_API_KEY }}
-      ALPHA_VANTAGE_API_KEY: ${{ secrets.ALPHA_VANTAGE_API_KEY }}
-      PARQUET_DIR: ./storage/parquet
-      DUCKDB_PATH: ./db/quant.duckdb
-      TZ: Europe/Stockholm
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+        with: { python-version: "3.12" }
       - name: Install deps
         run: |
-          python -m pip install -U pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          python -m pip install --upgrade pip
           pip install -e .
-      - name: Sync EOD
+          pip install awscli
+      - name: Sync EOD for all
+        env:
+          EODHD_API_KEY: ${{ secrets.EODHD_API_KEY }}
         run: |
-          python -m quantkit.cli_data sync \
-            --interval "EOD" \
-            --eod-days 9000 \
-            --sleep-between 0.1 \
-            --no-gate-hours
+          python -m quantkit.cli_data --interval "EOD" --eod-days 9000
+      - name: Push to S3
+        env:
+          AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION:            ${{ secrets.AWS_REGION }}
+          S3_BUCKET:             ${{ secrets.S3_BUCKET }}
+        run: |
+          aws s3 sync storage "s3://${S3_BUCKET}" --delete
