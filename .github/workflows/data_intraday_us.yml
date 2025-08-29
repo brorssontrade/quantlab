@@ -18,10 +18,11 @@ jobs:
       - name: Install deps
         run: |
           python -m pip install -U pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install -e .
           pip install awscli
 
-        - name: Build US ticker list
+      - name: Build US ticker list
         id: build_list
         run: |
           echo "tickers=$(python .github/scripts/build_tickers.py US)" >> "$GITHUB_OUTPUT"
@@ -31,7 +32,9 @@ jobs:
         env:
           EODHD_API_KEY: ${{ secrets.EODHD_API_KEY }}
         run: |
-          python -m quantkit.cli_data --interval "EOD,5m" --intra-days 10 \
+          python -m quantkit.cli_data sync \
+            --interval "EOD,5m" \
+            --intra-days 10 \
             --tickers "${{ steps.build_list.outputs.tickers }}"
 
       - name: Push to S3
