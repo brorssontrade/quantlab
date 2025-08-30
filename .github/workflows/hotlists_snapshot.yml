@@ -33,16 +33,20 @@ jobs:
           python -m pip install -U pip
           pip install -r requirements.txt
           pip install -e .
-      
+
       - name: Verify import
-        run: python - <<'PY'
-          import sys, pkgutil
-          print("python", sys.version)
-          print("quantkit importable?", pkgutil.find_loader("quantkit") is not None)
-          PY
+        env:
+          PYTHONPATH: ${{ github.workspace }}/src
+        run: |
+          python - <<'PY'
+            import sys, pkgutil
+            print("sys.path[0]:", sys.path[0])
+            print("quantkit importable?", pkgutil.find_loader("quantkit") is not None)
+            PY
 
       - name: Build hotlists snapshot
         env:
+          PYTHONPATH: ${{ github.workspace }}/src
           S3_PREFIX: ${{ secrets.S3_PREFIX }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
