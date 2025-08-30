@@ -3,7 +3,7 @@ name: breadth_eod_snapshot
 on:
   workflow_dispatch:
   schedule:
-    - cron: "15 22 * * 1-5"   # runt US-stängning (UTC)
+    - cron: "15 22 * * 1-5"
 
 permissions:
   contents: read
@@ -18,11 +18,9 @@ jobs:
     env:
       TZ: Europe/Stockholm
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: "pip"
@@ -34,7 +32,7 @@ jobs:
           pip install -r requirements.txt
           pip install -e .
 
-      - name: Verify import
+      - name: Verify import path
         env:
           PYTHONPATH: ${{ github.workspace }}/src
         run: |

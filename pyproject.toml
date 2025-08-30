@@ -1,10 +1,12 @@
 [build-system]
 requires = ["setuptools>=61.0"]
+requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "quantkit"
 version = "0.0.1"
+requires-python = ">=3.10"
 requires-python = ">=3.11"
 description = "Quantlab/Quantkit"
 readme = "README.md"
@@ -13,6 +15,7 @@ dependencies = []
 
 [tool.setuptools]
 package-dir = { "" = "src" }
+packages = ["quantkit"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -26,3 +29,8 @@ ignore = ["E401","E701","E702","E741","F401","F811","F841"]
 
 [tool.mypy]
 ignore_errors = true
+
+
+[tool.setuptools.package-data]
+# om du har datafiler i paketet kan du lägga in globbar här
+quantkit = []

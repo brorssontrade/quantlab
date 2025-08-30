@@ -3,7 +3,7 @@ name: hotlists_snapshot
 on:
   workflow_dispatch:
   schedule:
-    - cron: "*/10 * * * 1-5"   # var 10:e minut, mån–fre (UTC)
+    - cron: "*/10 * * * 1-5"
 
 permissions:
   contents: read
@@ -18,11 +18,9 @@ jobs:
     env:
       TZ: Europe/Stockholm
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: "pip"
@@ -34,15 +32,15 @@ jobs:
           pip install -r requirements.txt
           pip install -e .
 
-      - name: Verify import
+      - name: Verify import path
         env:
           PYTHONPATH: ${{ github.workspace }}/src
         run: |
           python - <<'PY'
-            import sys, pkgutil
-            print("sys.path[0]:", sys.path[0])
-            print("quantkit importable?", pkgutil.find_loader("quantkit") is not None)
-            PY
+          import sys, pkgutil
+          print("sys.path[0]:", sys.path[0])
+          print("quantkit importable?", pkgutil.find_loader("quantkit") is not None)
+          PY
 
       - name: Build hotlists snapshot
         env:
