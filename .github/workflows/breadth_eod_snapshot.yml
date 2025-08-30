@@ -37,10 +37,23 @@ jobs:
           fi
           echo "OUT_PREFIX=${OUT_PREFIX}" >> $GITHUB_ENV
 
-      - name: Build Breadth snapshot (EOD)
+      - name: Build breadth snapshot
         env:
+          PYTHONPATH: ${{ github.workspace }}/src
+          S3_PREFIX: ${{ secrets.S3_PREFIX }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: ${{ vars.AWS_DEFAULT_REGION }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
         run: |
-          python -m quantkit.snapshots.breadth_snapshot --out "${OUT_PREFIX}/snapshots/breadth/latest.parquet"
+          OUT_PREFIX="${S3_PREFIX:-storage}"
+          python -m quantkit.snapshots.breadth_snapshot build \
+            --out-sym "${OUT_PREFIX}/snapshots/breadth/symbols/latest.parquet" \
+            --out-agg "${OUT_PREFIX}/snapshots/breadth/latest.parquet"
+                  
+      - name: Verify import path
+        env:
+          PYTHONPATH: ${{ github.workspace }}/src
+        run: |
+          python -c "import sys, importlib.util; print('sys.path[0]:', sys.path[0]); print('quantkit importable?', importlib.util.find_spec('quantkit') is not None)"
+
+
