@@ -3,7 +3,7 @@ name: hotlists_snapshot
 on:
   workflow_dispatch:
   schedule:
-    - cron: "*/10 * * * 1-5" # var 10:e minut på vardagar
+    - cron: "*/5 * * * 1-5"  # minst 5 min på GitHub-hostade runners
 
 permissions:
   contents: read
@@ -11,12 +11,17 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      TZ: Europe/Stockholm
+      PYTHONPATH: ${{ github.workspace }}/src  # gör src/ importabelt i alla steg
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
 
       - name: Install deps + package (editable)
         run: |
@@ -24,37 +29,31 @@ jobs:
           pip install -r requirements.txt
           pip install -e .
 
+      - name: Verify import path
+        run: |
+          python - <<'PY'
+          import sys, importlib.util
+          print("sys.path[0]:", sys.path[0])
+          print("quantkit importable?", importlib.util.find_spec("quantkit") is not None)
+          PY
+
       - name: Compute OUT_PREFIX
         shell: bash
         run: |
-          # Läs ev. repo-variabel
-          if [[ -z "${S3_PREFIX}" && -n "${{ vars.S3_PREFIX }}" ]]; then
-            export S3_PREFIX="${{ vars.S3_PREFIX }}"
-          fi
-          # Fallback till lokal mapp
-          if [[ -z "${S3_PREFIX}" ]]; then
-            OUT_PREFIX="storage"
+          if [[ -n "${{ secrets.S3_PREFIX }}" ]]; then
+            OUT_PREFIX="${{ secrets.S3_PREFIX }}"
+          elif [[ -n "${{ vars.S3_PREFIX }}" ]]; then
+            OUT_PREFIX="${{ vars.S3_PREFIX }}"
           else
-            OUT_PREFIX="${S3_PREFIX}"
+            OUT_PREFIX="storage"
           fi
           echo "OUT_PREFIX=${OUT_PREFIX}" >> $GITHUB_ENV
 
       - name: Build hotlists snapshot
         env:
-          PYTHONPATH: ${{ github.workspace }}/src
-          S3_PREFIX: ${{ secrets.S3_PREFIX }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
         run: |
-          OUT_PREFIX="${S3_PREFIX:-storage}"
           python -m quantkit.snapshots.hotlists_snapshot \
             --out "${OUT_PREFIX}/snapshots/hotlists/latest.parquet"
-
-                  
-      - name: Verify import path
-        env:
-          PYTHONPATH: ${{ github.workspace }}/src
-        run: |
-          python -c "import sys, importlib.util; print('sys.path[0]:', sys.path[0]); print('quantkit importable?', importlib.util.find_spec('quantkit') is not None)"
-
