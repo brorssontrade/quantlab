@@ -1,32 +1,53 @@
 name: breadth_eod_snapshot
+
 on:
   workflow_dispatch:
   schedule:
-    - cron: "5 17 * * 1-5"  # ST efter close
-    - cron: "5 22 * * 1-5"  # US efter close
-permissions: { contents: read }
+    - cron: "15 22 * * 1-5"   # ca efter US-stängning (UTC)
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      S3_BUCKET: ${{ secrets.S3_BUCKET }}
-      S3_PREFIX: ${{ secrets.S3_PREFIX }}
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_REGION: ${{ secrets.AWS_REGION }}
+      TZ: Europe/Stockholm
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: '3.12', cache: 'pip', cache-dependency-path: requirements.txt }
-      - name: Install deps
-        run: |
-          python -m pip install -U pip
-          pip install -r requirements.txt
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+
       - name: Install package (editable)
         run: |
           python -m pip install -U pip
           pip install -r requirements.txt
           pip install -e .
-      - name: Build EOD snapshot -> S3
+
+      - name: Verify import
+        run: python - <<'PY'
+            import sys, pkgutil
+            print("python", sys.version)
+            print("quantkit importable?", pkgutil.find_loader("quantkit") is not None)
+            PY
+
+      - name: Build breadth snapshots (EOD)
+        env:
+          S3_PREFIX: ${{ secrets.S3_PREFIX }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
         run: |
-          python -m quantkit.snapshots.breadth_snapshot --out "${S3_PREFIX}/snapshots/breadth/latest.parquet"
+          python -m quantkit.snapshots.breadth_snapshot build \
+            --out-sym "${S3_PREFIX}/snapshots/breadth/by_symbol.parquet" \
+            --out-agg "${S3_PREFIX}/snapshots/breadth/agg.parquet"
