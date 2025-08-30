@@ -1,0 +1,27 @@
+name: breadth_eod_snapshot
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "5 17 * * 1-5"  # ST efter close
+    - cron: "5 22 * * 1-5"  # US efter close
+permissions: { contents: read }
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      S3_BUCKET: ${{ secrets.S3_BUCKET }}
+      S3_PREFIX: ${{ secrets.S3_PREFIX }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12', cache: 'pip', cache-dependency-path: requirements.txt }
+      - name: Install deps
+        run: |
+          python -m pip install -U pip
+          pip install -r requirements.txt
+      - name: Build EOD snapshot -> S3
+        run: |
+          python -m quantkit.snapshots.breadth_snapshot --out "${S3_PREFIX}/snapshots/breadth/latest.parquet"
