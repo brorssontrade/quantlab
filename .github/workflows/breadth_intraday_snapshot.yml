@@ -3,53 +3,44 @@ name: breadth_intraday_snapshot
 on:
   workflow_dispatch:
   schedule:
-    - cron: "*/15 * * * 1-5"
+    - cron: "*/15 * * * 1-5" # var 15:e minut på vardagar
 
 permissions:
   contents: read
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      TZ: Europe/Stockholm
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-          cache: "pip"
-          cache-dependency-path: requirements.txt
 
-      - name: Install package (editable)
+      - name: Install deps + package (editable)
         run: |
           python -m pip install -U pip
           pip install -r requirements.txt
           pip install -e .
 
-      - name: Verify import path
-        env:
-          PYTHONPATH: ${{ github.workspace }}/src
+      - name: Compute OUT_PREFIX
+        shell: bash
         run: |
-          python - <<'PY'
-            import sys, pkgutil
-            print("sys.path[0]:", sys.path[0])
-            print("quantkit importable?", pkgutil.find_loader("quantkit") is not None)
-            PY
+          if [[ -z "${S3_PREFIX}" && -n "${{ vars.S3_PREFIX }}" ]]; then
+            export S3_PREFIX="${{ vars.S3_PREFIX }}"
+          fi
+          if [[ -z "${S3_PREFIX}" ]]; then
+            OUT_PREFIX="storage"
+          else
+            OUT_PREFIX="${S3_PREFIX}"
+          fi
+          echo "OUT_PREFIX=${OUT_PREFIX}" >> $GITHUB_ENV
 
-      - name: Build breadth snapshots (intraday)
+      - name: Build Breadth snapshot (intraday)
         env:
-          PYTHONPATH: ${{ github.workspace }}/src
-          S3_PREFIX: ${{ secrets.S3_PREFIX }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ${{ secrets.AWS_REGION }}
+          AWS_DEFAULT_REGION: ${{ vars.AWS_DEFAULT_REGION }}
         run: |
-          python -m quantkit.snapshots.breadth_snapshot build \
-            --out-sym "${S3_PREFIX}/snapshots/breadth/by_symbol.parquet" \
-            --out-agg "${S3_PREFIX}/snapshots/breadth/agg.parquet"
+          python -m quantkit.snapshots.breadth_snapshot --out "${OUT_PREFIX}/snapshots/breadth/latest.parquet"
