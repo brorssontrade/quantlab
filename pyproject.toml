@@ -1,36 +1,17 @@
 [build-system]
-requires = ["setuptools>=61.0"]
 requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "quantkit"
+name = "quantlab"
 version = "0.0.1"
-requires-python = ">=3.10"
-requires-python = ">=3.11"
-description = "Quantlab/Quantkit"
+description = "Quant toolkit"
 readme = "README.md"
-authors = [{ name = "Viktor Brorsson" }]
-dependencies = []
+requires-python = ">=3.10"
 
 [tool.setuptools]
-package-dir = { "" = "src" }
-packages = ["quantkit"]
+package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
-
-# --- Befintlig lint/typing-konfig ---
-[tool.ruff]
-target-version = "py311"
-line-length = 100
-src = ["src/quantkit/data", "src/quantkit/cli_data.py"]
-ignore = ["E401","E701","E702","E741","F401","F811","F841"]
-
-[tool.mypy]
-ignore_errors = true
-
-
-[tool.setuptools.package-data]
-# om du har datafiler i paketet kan du lägga in globbar här
-quantkit = []
+include = ["quantkit*"]
