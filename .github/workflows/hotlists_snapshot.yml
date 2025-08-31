@@ -3,17 +3,21 @@ name: hotlists_snapshot
 on:
   workflow_dispatch:
   schedule:
-    - cron: "*/5 * * * 1-5"  # minst 5 min på GitHub-hostade runners
+    - cron: "*/10 * * * 1-5" # var 10:e minut på vardagar
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
     env:
+      PYTHONPATH: ${{ github.workspace }}/src
       TZ: Europe/Stockholm
-      PYTHONPATH: ${{ github.workspace }}/src  # gör src/ importabelt i alla steg
     steps:
       - uses: actions/checkout@v4
 
@@ -32,16 +36,19 @@ jobs:
       - name: Verify import path
         run: |
           python - <<'PY'
-          import sys, importlib.util
+          import importlib.util, sys, os
           print("sys.path[0]:", sys.path[0])
-          print("quantkit importable?", importlib.util.find_spec("quantkit") is not None)
+          assert importlib.util.find_spec("quantkit") is not None, "quantkit not importable"
+          print("OK: quantkit importable")
           PY
 
       - name: Compute OUT_PREFIX
         shell: bash
         run: |
+          # 1) Secrets tar prio
           if [[ -n "${{ secrets.S3_PREFIX }}" ]]; then
             OUT_PREFIX="${{ secrets.S3_PREFIX }}"
+          # 2) Repo variables som fallback
           elif [[ -n "${{ vars.S3_PREFIX }}" ]]; then
             OUT_PREFIX="${{ vars.S3_PREFIX }}"
           else
