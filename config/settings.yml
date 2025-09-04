@@ -1,4 +1,5 @@
-﻿items:
+watchlist:
+items:
   # ————— US megacaps (intraday OK) —————
   - name: NVIDIA
     code: NVDA.US
@@ -132,8 +133,6 @@
     code: CORE-B.ST
   - name: BioArctic B
     code: BIOA-B.ST
-
-  # ————— Index (EOD fungerar bäst; intraday kan saknas/delay) —————
   - name: S&P 500
     code: ^GSPC
   - name: S&P 100 (OEX)
@@ -150,3 +149,21 @@
     code: ^OMXS30
   - name: OMXSPI
     code: ^OMXSPI
+
+
+ingest:
+  timeframe: "5m"
+  hours:
+    stockholm:
+      start_local: "09:00"
+      end_local: "17:30"
+  ttl_minutes: 0
+
+backtest:
+  capital: 100000
+  fee_per_trade: 0.0
+  slippage_bps: 0
+
+alerts:
+  min_signal_strength: 0.0
+  rate_limit_minutes: 15

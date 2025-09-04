@@ -1,2 +1,7 @@
-# pages/01_Hot_Lists.py
-import src.quantkit.apps.hotlists
+import sys
+from pathlib import Path
+SRC = Path(__file__).resolve().parents[1] / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
+
+import quantkit.apps.hotlists  # kör sidan via top-level i modulen
