@@ -87,6 +87,26 @@ def build_hotlists_snapshot(
             day_high   = float(day.get("high", day.get("close")).max())
             day_low    = float(day.get("low",  day.get("close")).min())
 
+
+            # Hämta föregående dags close (1d-serie)
+            prev_close = np.nan
+            try:
+                d1 = fetch_timeseries(symbol, timeframe="1d", api_key=api_key, force=False)
+                if not d1.empty:
+                    # näst sista raden = föregående session (om sista är idag)
+                    if len(d1) >= 2:
+                        prev_close = float(d1["close"].iloc[-2])
+                    else:
+                        prev_close = float(d1["close"].iloc[-1])
+            except Exception:
+                pass
+
+            gap_pct = np.nan
+            if prev_close and prev_close > 0 and not pd.isna(prev_close):
+                gap_pct = (day_open / prev_close - 1.0) * 100.0
+
+
+
             # Rise över 1/3/6/12 "bars" inom den sessionens index
             day_idx = day.index
             def rp(n: int) -> float:
