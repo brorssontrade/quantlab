@@ -1,27 +1,46 @@
-name: hotlists_snapshot
+name: Snapshot Hotlists
+
 on:
-  workflow_dispatch:
   schedule:
-    - cron: "*/5 7-17 * * 1-5"   # ST intraday
-    - cron: "*/5 13-22 * * 1-5"  # US intraday
-permissions: { contents: read }
+    - cron: "*/5 7-17 * * 1-5"
+  workflow_dispatch: {}
+
 jobs:
-  build:
+  run:
     runs-on: ubuntu-latest
     env:
-      S3_BUCKET: ${{ secrets.S3_BUCKET }}
+      EODHD_API_KEY: ${{ secrets.EODHD_API_KEY }}
+      # Lämna tomt för att hoppa över S3-steget
       S3_PREFIX: ${{ secrets.S3_PREFIX }}
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      AWS_REGION: ${{ secrets.AWS_REGION }}
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
-        with: { python-version: '3.12', cache: 'pip', cache-dependency-path: requirements.txt }
-      - name: Install deps
+        with:
+          python-version: "3.12"
+
+      - name: Install
         run: |
           python -m pip install -U pip
           pip install -r requirements.txt
-      - name: Build snapshot -> S3
+          pip install -e .
+          echo "PYTHONPATH=$GITHUB_WORKSPACE/src" >> $GITHUB_ENV
+
+      - name: Build snapshot (5m)
+        run: python -m quantkit snapshot-hotlists --timeframe 5m --force
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hotlists-latest.parquet
+          path: storage/snapshots/hotlists/latest.parquet
+
+      - name: Upload to S3 (optional)
+        if: env.S3_PREFIX != ''
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
         run: |
-          python -m quantkit.snapshots.hotlists_snapshot --out "${S3_PREFIX}/snapshots/hotlists/latest.parquet"
+          pip install awscli
+          aws s3 cp storage/snapshots/hotlists/latest.parquet "${S3_PREFIX}/snapshots/hotlists/latest.parquet" --only-show-errors
