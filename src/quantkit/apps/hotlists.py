@@ -12,8 +12,10 @@ st.set_page_config(page_title="Hot Lists", layout="wide")
 
 PATH = os.environ.get("HOTLISTS_PATH", "storage/snapshots/hotlists/latest.parquet")
 
-@st.cache_data(ttl=10)
-def load_df(path: str) -> pd.DataFrame:
+
+# Cachea på filens mtime så att cachen invalidieras när parquet skrivs om
+@st.cache_data
+def _load_df_with_mtime(path: str, mtime: float) -> pd.DataFrame:
     if not os.path.exists(path):
         return pd.DataFrame()
     df = pd.read_parquet(path)
@@ -21,10 +23,19 @@ def load_df(path: str) -> pd.DataFrame:
     for c in df.columns:
         if c.endswith("Pct"):
             df[c] = pd.to_numeric(df[c], errors="coerce")
+    # se till att tidskolumner är tidszonssatta
+    for tcol in ("LastTs", "SnapshotAt"):
+        if tcol in df.columns:
+            df[tcol] = pd.to_datetime(df[tcol], utc=True, errors="coerce")
     return df
+
+mtime = os.path.getmtime(PATH) if os.path.exists(PATH) else 0.0
+df = _load_df_with_mtime(PATH, mtime)
+
 
 def pct_fmt(x):
     return None if pd.isna(x) else f"{x:,.2f}%"
+
 
 def color_cell(v):
     if pd.isna(v):
@@ -34,7 +45,6 @@ def color_cell(v):
     except Exception:
         return ""
 
-df = load_df(PATH)
 
 st.title("Hot Lists")
 
@@ -43,10 +53,10 @@ with st.sidebar:
     st.header("Filter")
 
     # Autorefresh
-    col_af = st.columns([1,1.2])
-    with col_af[0]:
+    cols = st.columns([1, 1.2])
+    with cols[0]:
         af = st.checkbox("Auto-refresh", value=False)
-    with col_af[1]:
+    with cols[1]:
         interval = st.slider("Intervall (sek)", 5, 120, 15)
     if af and st_autorefresh is not None:
         st_autorefresh(interval=interval * 1000, key="hotlists_autorefresh")
@@ -91,7 +101,7 @@ with st.sidebar:
             thr_dn   = st.number_input("Max FromOpen %", value=0.0, step=0.1)
             near_lo  = st.number_input("Near Low: max pos (%)",  value=30.0, step=1.0)
 
-# Om ingen snapshot – visa info och avbryt
+# Ingen snapshot?
 if df.empty:
     st.info("Ingen snapshot hittades ännu. Kör: `python -m quantkit snapshot-hotlists --timeframe 5m --force`")
     st.stop()
@@ -110,27 +120,27 @@ def apply_activity(d: pd.DataFrame) -> pd.DataFrame:
     if act == "Alla":
         return d
     m = d
-    if act == "Rapidly Rising (5m %)":   m = m.sort_values("Rise5mPct", ascending=False)
+    if act == "Rapidly Rising (5m %)":    m = m.sort_values("Rise5mPct", ascending=False)
     elif act == "Rapidly Falling (5m %)": m = m.sort_values("Rise5mPct", ascending=True)
     elif act == "Rapidly Rising (15m %)": m = m.sort_values("Rise15mPct", ascending=False)
-    elif act == "Rapidly Falling (15m %)": m = m.sort_values("Rise15mPct", ascending=True)
+    elif act == "Rapidly Falling (15m %)":m = m.sort_values("Rise15mPct", ascending=True)
     elif act == "Rapidly Rising (30m %)": m = m.sort_values("Rise30mPct", ascending=False)
-    elif act == "Rapidly Falling (30m %)": m = m.sort_values("Rise30mPct", ascending=True)
+    elif act == "Rapidly Falling (30m %)":m = m.sort_values("Rise30mPct", ascending=True)
     elif act == "Rapidly Rising (60m %)": m = m.sort_values("Rise60mPct", ascending=False)
-    elif act == "Rapidly Falling (60m %)": m = m.sort_values("Rise60mPct", ascending=True)
-    elif act == "Near Day High":           m = m.sort_values("RangePosPct", ascending=False)
-    elif act == "Near Day Low":            m = m.sort_values("RangePosPct", ascending=True)
-    elif act == "From Open Up":            m = m.sort_values("FromOpenPct", ascending=False)
-    elif act == "From Open Down":          m = m.sort_values("FromOpenPct", ascending=True)
-    elif act == "Top Gainers (1D %)":      m = m.sort_values("NetPct", ascending=False)
-    elif act == "Top Losers (1D %)":       m = m.sort_values("NetPct", ascending=True)
-    elif act == "Gap Up (1D %)":           m = m.sort_values("GapPct", ascending=False)
-    elif act == "Gap Down (1D %)":         m = m.sort_values("GapPct", ascending=True)
+    elif act == "Rapidly Falling (60m %)":m = m.sort_values("Rise60mPct", ascending=True)
+    elif act == "Near Day High":          m = m.sort_values("RangePosPct", ascending=False)
+    elif act == "Near Day Low":           m = m.sort_values("RangePosPct", ascending=True)
+    elif act == "From Open Up":           m = m.sort_values("FromOpenPct", ascending=False)
+    elif act == "From Open Down":         m = m.sort_values("FromOpenPct", ascending=True)
+    elif act == "Top Gainers (1D %)":     m = m.sort_values("NetPct", ascending=False)
+    elif act == "Top Losers (1D %)":      m = m.sort_values("NetPct", ascending=True)
+    elif act == "Gap Up (1D %)":          m = m.sort_values("GapPct", ascending=False)
+    elif act == "Gap Down (1D %)":        m = m.sort_values("GapPct", ascending=True)
     return m
 
 show = apply_activity(show)
 
-# Advanced filter ovanpå aktivitet
+# Advanced-filter ovanpå aktivitet
 if 'enable_adv' in st.session_state and st.session_state.enable_adv:
     if "FromOpenPct" in show and thr_up != 0.0:
         show = show[show["FromOpenPct"] >= thr_up]
@@ -139,7 +149,7 @@ if 'enable_adv' in st.session_state and st.session_state.enable_adv:
     if "RangePosPct" in show:
         show = show[(show["RangePosPct"] >= near_hi) | (show["RangePosPct"] <= near_lo)]
 
-# slutlig sortering & topp N
+# Slutlig sortering & topp N
 if sort_by in show:
     show = show.sort_values(sort_by, ascending=False)
 show = show.head(n).reset_index(drop=True)
@@ -154,9 +164,11 @@ if "SnapshotAt" in show and not show["SnapshotAt"].isna().all():
     except Exception:
         last_snap = None
 
-st.caption(f"Rows={len(show)} · Senast: {(last_snap.strftime('%Y-%m-%d %H:%M:%S UTC') if last_snap else pd.Timestamp.now(tz=timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC'))}")
+stamp = (last_snap.strftime("%Y-%m-%d %H:%M:%S UTC")
+         if last_snap else pd.Timestamp.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"))
+st.caption(f"Rows={len(show)} · Senast: {stamp}")
 
-# Visa tabell (robust mot Styler-ändringar)
+# Visa tabell
 try:
     styler = show.style.format(fmt).map(color_cell, subset=pd.IndexSlice[:, pct_cols])
     st.dataframe(styler, width="stretch")
