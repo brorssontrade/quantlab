@@ -1,4 +1,8 @@
-from .eodhd_loader import load_bars  # noqa: F401
-from .market_hours import is_open_stockholm, is_open_us  # noqa: F401
+from __future__ import annotations
 
-__all__ = ["load_bars", "is_open_stockholm", "is_open_us"]
+__all__ = ["load_bars"]
+
+def load_bars(*args, **kwargs):
+    # Lazy import för att undvika import-time beroenden i runner/lokalt
+    from .eodhd_loader import load_bars as _load_bars
+    return _load_bars(*args, **kwargs)

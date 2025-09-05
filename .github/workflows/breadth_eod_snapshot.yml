@@ -29,6 +29,12 @@ jobs:
           pip install -r requirements.txt
           pip install -e .
 
+      - name: "Guard - no placeholders committed"
+        run: |
+          if git grep -nE '(<PASTE|^<from )' -- 'src/**/*.py'; then
+            echo "Placeholder/angle-start line detected. Fix sources."; exit 1
+          fi
+
       - name: Verify import path
         run: |
           python - <<'PY'

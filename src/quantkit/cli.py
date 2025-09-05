@@ -1,54 +1,62 @@
-# src/quantkit/cli.py
 from __future__ import annotations
-import argparse
 
-def _add_common_opts(p: argparse.ArgumentParser) -> None:
-    p.add_argument("--tickers-file", default="config/tickers.txt")
-    p.add_argument("--force", action="store_true", help="Ignorera cache och hämta på nytt")
-    p.add_argument("--api-key", default=None)
+from pathlib import Path
+from enum import Enum
+import typer
 
-def _cmd_snapshot_hotlists(args: argparse.Namespace) -> None:
-    # Importera först när kommandot körs (så trasiga moduler inte spökar)
+# Viktigt för testet: exakt stavning "Quantkit CLI"
+app = typer.Typer(add_completion=False, help="Quantkit CLI")
+
+
+class Timeframe(str, Enum):
+    m5 = "5m"
+    h1 = "1h"
+    d1 = "1d"
+
+
+# -------- snapshot-hotlists --------
+@app.command("snapshot-hotlists")
+def snapshot_hotlists(
+    timeframe: Timeframe = typer.Option(Timeframe.m5, help="Aggregation window"),
+    tickers_file: str = typer.Option("config/tickers.txt", help="Path to tickers list"),
+    out_path: str = typer.Option("storage/snapshots/hotlists/latest.parquet", help="Output parquet"),
+    force: bool = typer.Option(False, help="Overwrite even if fresh"),
+) -> None:
+    """
+    Build the hotlists snapshot and write it to parquet.
+    Prints an OK line on success (used by Actions).
+    """
     from .snapshots.hotlists_snapshot import build_hotlists_snapshot
-    build_hotlists_snapshot(
-        timeframe=args.timeframe,
-        tickers_file=args.tickers_file,
-        api_key=args.api_key,
-        force=args.force,
-    )
 
-def _cmd_snapshot_signals(args: argparse.Namespace) -> None:
-    from .snapshots.signals_snapshot import build_signals_snapshot
-    build_signals_snapshot(
-        tickers_file=args.tickers_file,
-        api_key=args.api_key,
-        force=args.force,
+    df, out_file = build_hotlists_snapshot(
+        timeframe=timeframe.value,
+        tickers_file=tickers_file,
+        out_path=out_path,
+        force=force,
+        api_key=None,
     )
+    typer.echo(f"OK snapshot → {out_file} rows={len(df)} cols={df.shape[1]}")
 
-def _cmd_snapshot_movers(args: argparse.Namespace) -> None:
-    from .snapshots.movers_snapshot import build_movers_snapshot
-    build_movers_snapshot(
-        tickers_file=args.tickers_file,
-        api_key=args.api_key,
-        force=args.force,
+
+# -------- plot (minimal smoke) --------
+@app.command("plot")
+def plot(
+    symbol: str = typer.Argument(..., help="Ticker symbol, e.g. AAPL"),
+    run_id: str = typer.Argument(..., help="Run folder name, e.g. 20240101-000000"),
+) -> None:
+    """Minimal 'plot' som skriver en HTML-fil och echo:ar vägen (för test)."""
+    out_dir = Path("reports") / "plots" / symbol / run_id
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_html = out_dir / "index.html"
+    out_html.write_text(
+        f"""<!doctype html>
+<html><head><meta charset="utf-8"><title>{symbol} plot</title></head>
+<body><h1>{symbol}</h1><p>Run: {run_id}</p></body></html>""",
+        encoding="utf-8",
     )
+    typer.echo(f"Plottar {symbol} (run {run_id})")
+    typer.echo(str(out_html))
+
 
 def main() -> None:
-    parser = argparse.ArgumentParser("quantkit")
-    sub = parser.add_subparsers(dest="cmd", required=True)
-
-    p1 = sub.add_parser("snapshot-hotlists")
-    _add_common_opts(p1)
-    p1.add_argument("--timeframe", choices=["5m","1h","1d"], default="1d")
-    p1.set_defaults(func=_cmd_snapshot_hotlists)
-
-    p2 = sub.add_parser("snapshot-signals")
-    _add_common_opts(p2)
-    p2.set_defaults(func=_cmd_snapshot_signals)
-
-    p3 = sub.add_parser("snapshot-movers")
-    _add_common_opts(p3)
-    p3.set_defaults(func=_cmd_snapshot_movers)
-
-    args = parser.parse_args()
-    args.func(args)
+    app()

@@ -12,7 +12,6 @@ st.set_page_config(page_title="Hot Lists", layout="wide")
 
 PATH = os.environ.get("HOTLISTS_PATH", "storage/snapshots/hotlists/latest.parquet")
 
-
 # Cachea på filens mtime så att cachen invalidieras när parquet skrivs om
 @st.cache_data
 def _load_df_with_mtime(path: str, mtime: float) -> pd.DataFrame:
@@ -23,7 +22,7 @@ def _load_df_with_mtime(path: str, mtime: float) -> pd.DataFrame:
     for c in df.columns:
         if c.endswith("Pct"):
             df[c] = pd.to_numeric(df[c], errors="coerce")
-    # se till att tidskolumner är tidszonssatta
+    # tidskolumner med UTC
     for tcol in ("LastTs", "SnapshotAt"):
         if tcol in df.columns:
             df[tcol] = pd.to_datetime(df[tcol], utc=True, errors="coerce")
@@ -32,10 +31,8 @@ def _load_df_with_mtime(path: str, mtime: float) -> pd.DataFrame:
 mtime = os.path.getmtime(PATH) if os.path.exists(PATH) else 0.0
 df = _load_df_with_mtime(PATH, mtime)
 
-
 def pct_fmt(x):
     return None if pd.isna(x) else f"{x:,.2f}%"
-
 
 def color_cell(v):
     if pd.isna(v):
@@ -45,14 +42,12 @@ def color_cell(v):
     except Exception:
         return ""
 
-
 st.title("Hot Lists")
 
 # ---- Sidebar
 with st.sidebar:
     st.header("Filter")
 
-    # Autorefresh
     cols = st.columns([1, 1.2])
     with cols[0]:
         af = st.checkbox("Auto-refresh", value=False)
@@ -66,7 +61,6 @@ with st.sidebar:
 
     symq = st.text_input("Sök symbol", "")
 
-    # Dynamiska aktiviteter
     activities = []
     has = lambda c: c in df.columns
     if has("Rise5mPct"):  activities += ["Rapidly Rising (5m %)", "Rapidly Falling (5m %)"]
@@ -168,7 +162,6 @@ stamp = (last_snap.strftime("%Y-%m-%d %H:%M:%S UTC")
          if last_snap else pd.Timestamp.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"))
 st.caption(f"Rows={len(show)} · Senast: {stamp}")
 
-# Visa tabell
 try:
     styler = show.style.format(fmt).map(color_cell, subset=pd.IndexSlice[:, pct_cols])
     st.dataframe(styler, width="stretch")

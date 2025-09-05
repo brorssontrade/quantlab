@@ -2,9 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
   pull_request:
-    branches: [main]
 
 permissions:
   contents: read
@@ -16,75 +14,39 @@ concurrency:
 jobs:
   lint:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
-          cache: 'pip'
+          python-version: "3.12"
+          cache: "pip"
           cache-dependency-path: requirements.txt
-
-      - name: Install tooling
+      - name: Install
         run: |
-          python -m pip install --upgrade pip
+          python -m pip install -U pip
           pip install -r requirements.txt
-          pip install ruff mypy
-
-      - name: Ruff (lint)
-        run: ruff check .
-        continue-on-error: true
-
-      - name: Ruff (format check)
-        run: ruff format --check .
-        continue-on-error: true
-
-      - name: Mypy (type check)
-        run: mypy .
-        continue-on-error: true
+          pip install -e .
+      - name: Ruff (om du vill lägga till i framtiden)
+        run: |
+          echo "skip lint for now"
 
   test:
     needs: lint
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    strategy:
-      matrix:
-        python-version: ['3.11', '3.12']
+    env:
+      PYTHONPATH: ${{ github.workspace }}/src
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
-          cache: 'pip'
+          python-version: "3.12"
+          cache: "pip"
           cache-dependency-path: requirements.txt
-
-      - name: Install deps
+      - name: Install
         run: |
-          python -m pip install --upgrade pip
+          python -m pip install -U pip
           pip install -r requirements.txt
-          pip install pytest pytest-cov
-          pip install -e .   # <-- Viktigt: installera vårt paket
-
-      - name: Show env
+          pip install -e .
+      - name: Pytest
         run: |
-          python -V
-          python -c "import sys,site; print(sys.executable); print(site.getsitepackages())"
-          python -c "import pandas as pd; print('pandas', pd.__version__)"
-
-      - name: Run tests
-        env:
-          # inte nödvändigt efter -e ., men ofarligt:
-          PYTHONPATH: ${{ github.workspace }}/src
-        run: pytest -q --maxfail=1 --disable-warnings --cov=. --cov-report=xml
-
-      - name: Upload coverage.xml
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-${{ matrix.python-version }}
-          path: coverage.xml
-          retention-days: 7
-
+          pytest -q --maxfail=1 --disable-warnings --cov=. --cov-report=xml

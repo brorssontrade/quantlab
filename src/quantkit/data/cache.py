@@ -1,49 +1,80 @@
-# src/quantkit/data/cache.py
 from __future__ import annotations
+
 from pathlib import Path
 import pandas as pd
 
-# Om du vill: centralisera standard-cachekatalogen
 try:
-    from ..paths import CACHE_EODHD_DIR
-except Exception:
-    CACHE_EODHD_DIR = Path("storage/cache/eodhd")
+    import pyarrow as pa  # noqa: F401
+    import pyarrow.parquet as pq
+except Exception as exc:  # pragma: no cover
+    pq = None
+    _IMPORT_ERROR = exc
+else:
+    _IMPORT_ERROR = None
 
-def _ensure_parent(p: Path) -> None:
+
+def _ensure_parent(path: str | Path) -> Path:
+    p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
+    return p
+
 
 def has_file(path: str | Path) -> bool:
-    return Path(path).exists()
+    return Path(path).is_file()
+
 
 def parquet_read(path: str | Path) -> pd.DataFrame:
-    """Läs Parquet om den finns, annars tom DF (ingen exception)."""
+    if _IMPORT_ERROR is not None:
+        raise RuntimeError(f"pyarrow is not available: {_IMPORT_ERROR}")
     p = Path(path)
-    if not p.exists():
+    if not p.is_file():
         return pd.DataFrame()
-    return pd.read_parquet(p)
+    table = pq.read_table(p)
+    return table.to_pandas(types_mapper=None)
+
 
 def parquet_write(df: pd.DataFrame, path: str | Path) -> None:
-    """Skriv Parquet och skapa kataloger vid behov."""
-    p = Path(path)
-    _ensure_parent(p)
-    df.to_parquet(p, index=False)
+    if _IMPORT_ERROR is not None:
+        raise RuntimeError(f"pyarrow is not available: {_IMPORT_ERROR}")
+    p = _ensure_parent(path)
+    table = pa.Table.from_pandas(df)
+    pq.write_table(table, p)
 
-def cache_path(symbol: str, timeframe: str) -> Path:
-    """Standardnamn i cachekatalogen, t.ex. AAPL.US__5m.parquet."""
-    return Path(CACHE_EODHD_DIR) / f"{symbol}__{timeframe}.parquet"
 
-def append_unique_on_ts(df_new: pd.DataFrame, path: str | Path, ts_col: str = "ts") -> pd.DataFrame:
+# ---- Back-compat för äldre moduler som importerar dessa namn
+def read_cache(path: str | Path, *args, **kwargs) -> pd.DataFrame:
     """
-    Append df_new till Parquet på 'path', men endast rader med ts > max(ts) i befintlig fil.
-    Returnerar DF:en som skrevs (gamla + nya).
+    Back-compat shim. Ignorerar extra argument som äldre kod ibland skickar.
     """
-    df_old = parquet_read(path)
-    if df_old.empty:
-        out = df_new.copy()
-    else:
-        if ts_col in df_old.columns and ts_col in df_new.columns:
-            last_ts = pd.to_datetime(df_old[ts_col]).max()
-            df_new = df_new[pd.to_datetime(df_new[ts_col]) > last_ts]
-        out = pd.concat([df_old, df_new], ignore_index=True) if not df_new.empty else df_old
-    parquet_write(out, path)
-    return out
+    return parquet_read(path)
+
+
+def write_cache(df: pd.DataFrame, path: str | Path, *args, **kwargs) -> None:
+    """
+    Back-compat shim. Ignorerar extra argument som t.ex. compression/engine.
+    """
+    parquet_write(df, path)
+
+
+def merge_bars(
+    df_new: pd.DataFrame,
+    path: str | Path,
+    key_cols: tuple[str, ...] = ("Date", "Symbol"),
+) -> pd.DataFrame:
+    """
+    Merga nya bar-rader med existerande parquet på `path` via nyckelkolumner.
+    Behåller senaste per nyckel.
+    """
+    if has_file(path):
+        df_old = parquet_read(path)
+        if not df_old.empty:
+            cols = sorted(set(df_old.columns) | set(df_new.columns))
+            df_old = df_old.reindex(columns=cols)
+            df_new = df_new.reindex(columns=cols)
+            out = pd.concat([df_old, df_new], ignore_index=True)
+            out = out.drop_duplicates(subset=list(key_cols), keep="last")
+            out = out.sort_values(list(key_cols))
+            parquet_write(out, path)
+            return out
+    parquet_write(df_new, path)
+    return df_new
