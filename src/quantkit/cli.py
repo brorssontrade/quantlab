@@ -1,4 +1,4 @@
-<from __future__ import annotations
+from __future__ import annotations
 
 from pathlib import Path
 from typing import Literal
@@ -56,4 +56,4 @@ def plot(
 
 def main() -> None:
     app()
->
+

@@ -1,4 +1,4 @@
-<from __future__ import annotations
+from __future__ import annotations
 
 from pathlib import Path
 import pandas as pd
@@ -72,4 +72,4 @@ def merge_bars(
             return out
     parquet_write(df_new, path)
     return df_new
->
+
