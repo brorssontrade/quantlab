@@ -47,3 +47,30 @@ def append_unique_on_ts(df_new: pd.DataFrame, path: str | Path, ts_col: str = "t
         out = pd.concat([df_old, df_new], ignore_index=True) if not df_new.empty else df_old
     parquet_write(out, path)
     return out
+
+# ---- Back-compat for older modules expecting read_cache/write_cache/merge_bars
+def read_cache(path):
+    return parquet_read(path)
+
+def write_cache(df, path):
+    parquet_write(df, path)
+
+def merge_bars(df_new, path, key_cols=("Date", "Symbol")):
+    """
+    Merge new bar rows with existing parquet on `path` using key columns.
+    Keeps the last occurrence per key and writes the result back.
+    """
+    import pandas as pd
+    if has_file(path):
+        df_old = parquet_read(path)
+        if not df_old.empty:
+            cols = sorted(set(df_old.columns) | set(df_new.columns))
+            df_old = df_old.reindex(columns=cols)
+            df_new = df_new.reindex(columns=cols)
+            out = pd.concat([df_old, df_new], ignore_index=True)
+            out = out.drop_duplicates(subset=list(key_cols), keep="last")
+            out = out.sort_values(list(key_cols))
+            parquet_write(out, path)
+            return out
+    parquet_write(df_new, path)
+    return df_new
