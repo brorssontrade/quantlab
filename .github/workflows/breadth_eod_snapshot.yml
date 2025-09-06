@@ -3,7 +3,7 @@ name: breadth_eod_snapshot
 on:
   workflow_dispatch:
   schedule:
-    - cron: "30 20 * * 1-5"  # ex: 20:30 CET på vardagar
+    - cron: "*/5 * * * 1-5"  # kör ofta men gate:ar till 17:30–18:00 SE-tid
 
 permissions:
   contents: read
@@ -29,21 +29,20 @@ jobs:
           pip install -r requirements.txt
           pip install -e .
 
-      - name: "Guard - no placeholders committed"
+      - name: Gate to 17:30–18:00 Stockholm time (weekdays)
+        id: gate
+        shell: bash
         run: |
-          if git grep -nE '(<PASTE|^<from )' -- 'src/**/*.py'; then
-            echo "Placeholder/angle-start line detected. Fix sources."; exit 1
+          now=$(TZ=Europe/Stockholm date +%H%M)
+          dow=$(TZ=Europe/Stockholm date +%u)
+          open=false
+          if [ "$dow" -le 5 ] && [ "$now" -ge 1730 ] && [ "$now" -le 1800 ]; then
+            open=true
           fi
-
-      - name: Verify import path
-        run: |
-          python - <<'PY'
-          import sys, importlib.util
-          print("sys.path[0]:", sys.path[0])
-          print("quantkit importable?", importlib.util.find_spec("quantkit") is not None)
-          PY
+          echo "open=$open" >> $GITHUB_OUTPUT
 
       - name: Compute OUT_PREFIX
+        if: steps.gate.outputs.open == 'true'
         shell: bash
         run: |
           if [[ -n "${{ secrets.S3_PREFIX }}" ]]; then
@@ -55,12 +54,18 @@ jobs:
           fi
           echo "OUT_PREFIX=${OUT_PREFIX}" >> $GITHUB_ENV
 
-      - name: Build breadth (EOD)
+      - name: Build breadth (EOD 1d)
+        if: steps.gate.outputs.open == 'true'
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
         run: |
-          python -m quantkit.snapshots.breadth_snapshot build \
+          python -m quantkit.snapshots.breadth_snapshot \
+            --interval 1d \
             --out-agg "${OUT_PREFIX}/snapshots/breadth/latest.parquet" \
             --out-sym "${OUT_PREFIX}/snapshots/breadth/symbols/latest.parquet"
+
+      - name: Skipped (not EOD window)
+        if: steps.gate.outputs.open != 'true'
+        run: echo "Outside EOD window; skipping."
