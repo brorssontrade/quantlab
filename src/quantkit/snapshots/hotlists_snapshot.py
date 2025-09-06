@@ -1,4 +1,3 @@
-# src/quantkit/snapshots/hotlists_snapshot.py
 from __future__ import annotations
 from pathlib import Path
 from typing import Tuple, Literal
@@ -39,14 +38,12 @@ def _to_utc(ts_like) -> pd.Timestamp:
     return ts.tz_convert("UTC")
 
 def _prev_close(symbol: str, api_key: str, force: bool) -> float:
-    """Hämta föregående dags close för GapPct."""
     try:
-        daily = fetch_timeseries(symbol, timeframe="1d", api_key=api_key, force=force)
-        if len(daily) >= 2:
-            # Ta näst sista barens close
-            return float(daily["close"].iloc[-2])
-        elif len(daily) == 1:
-            return float(daily["close"].iloc[-1])
+        d1 = fetch_timeseries(symbol, timeframe="1d", api_key=api_key, force=force)
+        if len(d1) >= 2:
+            return float(d1["close"].iloc[-2])
+        elif len(d1) == 1:
+            return float(d1["close"].iloc[-1])
     except Exception:
         pass
     return np.nan
@@ -71,7 +68,6 @@ def build_hotlists_snapshot(
                 print(f"[hotlists] skip {symbol}: tomt svar")
                 continue
 
-            # Välj SENASTE tillgängliga session i datat
             df["ts"] = pd.to_datetime(df["ts"], utc=True, errors="coerce")
             session_date = df["ts"].dt.date.max()
             day = df[df["ts"].dt.date == session_date].copy()
@@ -79,7 +75,7 @@ def build_hotlists_snapshot(
                 print(f"[hotlists] skip {symbol}: inga barer i senaste sessionen")
                 continue
 
-            close_series = (df["close"] if "close" in df.columns else df["open"]).astype(float)
+            close_series = (df.get("close", df.get("open"))).astype(float)
 
             last_ts = _to_utc(day["ts"].iloc[-1])
             last_close = float((day.get("close", day.get("open"))).iloc[-1])
@@ -87,43 +83,19 @@ def build_hotlists_snapshot(
             day_high   = float(day.get("high", day.get("close")).max())
             day_low    = float(day.get("low",  day.get("close")).min())
 
-
-            # Hämta föregående dags close (1d-serie)
-            prev_close = np.nan
-            try:
-                d1 = fetch_timeseries(symbol, timeframe="1d", api_key=api_key, force=False)
-                if not d1.empty:
-                    # näst sista raden = föregående session (om sista är idag)
-                    if len(d1) >= 2:
-                        prev_close = float(d1["close"].iloc[-2])
-                    else:
-                        prev_close = float(d1["close"].iloc[-1])
-            except Exception:
-                pass
-
-            gap_pct = np.nan
-            if prev_close and prev_close > 0 and not pd.isna(prev_close):
-                gap_pct = (day_open / prev_close - 1.0) * 100.0
-
-
-
-            # Rise över 1/3/6/12 "bars" inom den sessionens index
+            # Rise 1/3/6/12 bars inom sessionen
             day_idx = day.index
             def rp(n: int) -> float:
                 s = close_series.loc[day_idx]
                 return _last_n_pct(s, n)
-
             rise5, rise15, rise30, rise60 = rp(1), rp(3), rp(6), rp(12)
 
             net_pct = _pct(last_close, day_open)
             range_pct = _pct(day_high, day_low) if day_low != 0 else np.nan
-            range_pos_pct = np.nan
-            if day_high > day_low:
-                range_pos_pct = (last_close - day_low) / (day_high - day_low) * 100.0
-
+            range_pos_pct = ((last_close - day_low) / (day_high - day_low) * 100.0) if day_high > day_low else np.nan
             from_open_pct = _pct(last_close, day_open)
-            dist_to_high_pct = _pct(day_high, last_close)  # hur långt upp till high
-            dist_to_low_pct  = _pct(last_close, day_low)   # hur långt ned till low
+            dist_to_high_pct = _pct(day_high, last_close)
+            dist_to_low_pct  = _pct(last_close, day_low)
 
             prev_close = _prev_close(symbol, api_key, force=False)
             gap_pct = _pct(day_open, prev_close) if not pd.isna(prev_close) else np.nan
@@ -131,26 +103,15 @@ def build_hotlists_snapshot(
             exchange = symbol.split(".")[-1] if "." in symbol else ""
 
             rows.append(dict(
-                Symbol=symbol,
-                Exchange=exchange,
-                Last=last_close,
-                NetPct=net_pct,
-                Rise5mPct=rise5,
-                Rise15mPct=rise15,
-                Rise30mPct=rise30,
-                Rise60mPct=rise60,
-                RangePct=range_pct,
-                RangePosPct=range_pos_pct,
-                FromOpenPct=from_open_pct,
-                DistToHighPct=dist_to_high_pct,
-                DistToLowPct=dist_to_low_pct,
+                Symbol=symbol, Exchange=exchange,
+                Last=last_close, NetPct=net_pct,
+                Rise5mPct=rise5, Rise15mPct=rise15, Rise30mPct=rise30, Rise60mPct=rise60,
+                RangePct=range_pct, RangePosPct=range_pos_pct,
+                FromOpenPct=from_open_pct, DistToHighPct=dist_to_high_pct, DistToLowPct=dist_to_low_pct,
                 GapPct=gap_pct,
-                Open=day_open,
-                High=day_high,
-                Low=day_low,
+                Open=day_open, High=day_high, Low=day_low,
                 VolTot=float(day.get("volume", pd.Series(dtype=float)).sum()) if "volume" in day else 0.0,
-                LastTs=last_ts,
-                SnapshotAt=now_utc,
+                LastTs=last_ts, SnapshotAt=now_utc,
             ))
         except Exception as e:
             print(f"[hotlists] skip {symbol}: {e}")

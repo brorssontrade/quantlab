@@ -1,46 +1,51 @@
-name: Snapshot Hotlists
+name: hotlists_snapshot
 
 on:
+  workflow_dispatch:
   schedule:
-    - cron: "*/5 7-17 * * 1-5"
-  workflow_dispatch: {}
+    - cron: "*/5 * * * 1-5"
 
 jobs:
-  run:
+  build:
     runs-on: ubuntu-latest
     env:
-      EODHD_API_KEY: ${{ secrets.EODHD_API_KEY }}
-      # Lämna tomt för att hoppa över S3-steget
-      S3_PREFIX: ${{ secrets.S3_PREFIX }}
+      TZ: Europe/Stockholm
+      PYTHONPATH: ${{ github.workspace }}/src
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
 
-      - name: Install
+      - name: Install deps + package
         run: |
           python -m pip install -U pip
           pip install -r requirements.txt
           pip install -e .
-          echo "PYTHONPATH=$GITHUB_WORKSPACE/src" >> $GITHUB_ENV
 
-      - name: Build snapshot (5m)
-        run: python -m quantkit snapshot-hotlists --timeframe 5m --force
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: hotlists-latest.parquet
-          path: storage/snapshots/hotlists/latest.parquet
-
-      - name: Upload to S3 (optional)
-        if: env.S3_PREFIX != ''
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ${{ secrets.AWS_REGION }}
+      - name: Gate by open hours (SE 09:00–17:35, US 15:30–22:05)
+        id: gate
+        shell: bash
         run: |
-          pip install awscli
-          aws s3 cp storage/snapshots/hotlists/latest.parquet "${S3_PREFIX}/snapshots/hotlists/latest.parquet" --only-show-errors
+          now=$(TZ=Europe/Stockholm date +%H%M)
+          dow=$(TZ=Europe/Stockholm date +%u)
+          open=false
+          if [ "$dow" -le 5 ]; then
+            if [ "$now" -ge 0900 ] && [ "$now" -le 1735 ]; then open=true; fi
+            if [ "$now" -ge 1530 ] && [ "$now" -le 2205 ]; then open=true; fi
+          fi
+          echo "open=$open" >> $GITHUB_OUTPUT
+
+      - name: OUT_PREFIX
+        if: steps.gate.outputs.open == 'true'
+        shell: bash
+        run: |
+          if [[ -n "${{ secrets.S3_PREFIX }}" ]]; then OUT_PREFIX="${{ secrets.S3_PREFIX }}"; else OUT_PREFIX="storage"; fi
+          echo "OUT_PREFIX=${OUT_PREFIX}" >> $GITHUB_ENV
+
+      - name: Build hotlists (5m)
+        if: steps.gate.outputs.open == 'true'
+        run: |
+          python -m quantkit snapshot-hotlists --timeframe 5m --force

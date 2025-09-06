@@ -1,507 +1,169 @@
-# src/quantkit/apps/hotlists.py
-from __future__ import annotations
-
 import os
-import time
-from pathlib import Path
-from typing import Optional, Tuple
-
 import pandas as pd
 import streamlit as st
-import yaml
-
-TITLE = "🔥 Hot Lists"
-
-DATA_ROOT = Path("storage")
-PARQ_A_DIR = DATA_ROOT / "parquet"          # storage/parquet/<SYM>/{5m,EOD}.parquet
-PARQ_B_DIR = DATA_ROOT / "cache" / "eodhd"  # storage/cache/eodhd/<SYM>__{5m,EOD}.parquet
-
-# --- S3-konfig ---
-S3_BUCKET = os.getenv("S3_BUCKET", "").strip()
-S3_PREFIX = os.getenv("S3_PREFIX", f"s3://{S3_BUCKET}" if S3_BUCKET else "").rstrip("/")
-
-
-def _s3_opts() -> dict:
-    opts: dict = {}
-    region = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION")
-    if region:
-        opts.setdefault("client_kwargs", {})["region_name"] = region
-    if os.getenv("AWS_ACCESS_KEY_ID") and os.getenv("AWS_SECRET_ACCESS_KEY"):
-        opts["key"] = os.getenv("AWS_ACCESS_KEY_ID")
-        opts["secret"] = os.getenv("AWS_SECRET_ACCESS_KEY")
-    return opts
-
-
-# ----------------------- helpers -----------------------
-
-def _read_watchlist_codes(path: str = "watchlist.yaml") -> list[str]:
-    p = Path(path)
-    if not p.exists():
-        return []
-    try:
-        doc = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
-    except Exception:
-        return []
-    items = doc.get("items", []) or doc.get("tickers", [])
-    out: list[str] = []
-    for it in items:
-        code = it if isinstance(it, str) else (it or {}).get("code")
-        if code:
-            out.append(str(code).strip())
-    return out
-
-
-def _exchange_for(sym: str) -> str:
-    if sym.endswith(".US"):
-        return "US"
-    if sym.endswith(".ST"):
-        return "ST"
-    return "OTHER"
-
-
-def _tz_for(sym: str) -> str:
-    ex = _exchange_for(sym)
-    if ex == "US":
-        return "America/New_York"
-    if ex == "ST":
-        return "Europe/Stockholm"
-    return "UTC"
-
-
-def _path_candidates_local(symbol: str, interval: str) -> list[Path]:
-    a = PARQ_A_DIR / symbol / f"{interval}.parquet"
-    b = PARQ_B_DIR / f"{symbol}__{interval}.parquet"
-    return [a, b]
-
-
-def _path_candidates_s3(symbol: str, interval: str) -> list[str]:
-    if not S3_PREFIX:
-        return []
-    return [
-        f"{S3_PREFIX}/parquet/{symbol}/{interval}.parquet",
-        f"{S3_PREFIX}/cache/eodhd/{symbol}__{interval}.parquet",
-    ]
-
-
-def _read_parquet_uri(uri: str) -> Optional[pd.DataFrame]:
-    try:
-        storage_options = _s3_opts() if uri.startswith("s3://") else None
-        df = pd.read_parquet(uri, storage_options=storage_options)
-    except Exception:
-        return None
-    if "ts" in df.columns:
-        df["ts"] = pd.to_datetime(df["ts"], utc=True, errors="coerce")
-    for c in ("open", "high", "low", "close", "volume"):
-        if c in df.columns:
-            df[c] = pd.to_numeric(df[c], errors="coerce")
-    return df.sort_values("ts").reset_index(drop=True)
-
-
-def _read_parquet_if_exists(symbol: str, interval: str) -> Optional[pd.DataFrame]:
-    for uri in _path_candidates_s3(symbol, interval):
-        df = _read_parquet_uri(uri)
-        if df is not None:
-            return df
-    for p in _path_candidates_local(symbol, interval):
-        if p.exists():
-            df = _read_parquet_uri(str(p))
-            if df is not None:
-                return df
-    return None
-
-
-def _last_safe(series: pd.Series) -> Optional[float]:
-    if series is None or series.empty:
-        return None
-    v = series.iloc[-1]
-    return None if pd.isna(v) else float(v)
-
-
-def _pct(a: Optional[float], b: Optional[float]) -> Optional[float]:
-    if a is None or b is None or not b:
-        return None
-    return (a / b - 1.0) * 100.0
-
-
-# --- ersätt i src/quantkit/apps/hotlists.py ---
-
-def _empty_like(df) -> pd.DataFrame:
-    if isinstance(df, pd.DataFrame):
-        return df.iloc[0:0]
-    return pd.DataFrame(columns=["ts","open","high","low","close","volume"])
-
-def _session_slice_local(df: pd.DataFrame, symbol: str) -> pd.DataFrame:
-    """Senaste handelsdag (lokal tidzon)."""
-    if df is None or not isinstance(df, pd.DataFrame) or df.empty or "ts" not in df.columns:
-        # returnera en tom DataFrame istället för df.iloc[0:0] (som kraschar när df=None)
-        return pd.DataFrame(columns=["ts","open","high","low","close","volume"]).iloc[0:0]
-    tz = _tz_for(symbol)
-    local = df["ts"].dt.tz_convert(tz)
-    last_day = local.dt.date.max()
-    return df[local.dt.date == last_day]
-
-def _today_pct_vs_open(intra5: pd.DataFrame | None, symbol: str) -> Optional[float]:
-    sess = _session_slice_local(intra5, symbol)
-    if sess.empty:
-        return None
-    o = float(sess["open"].iloc[0])
-    last = float(sess["close"].iloc[-1])
-    return _pct(last, o)
-
-def _today_range_pct(intra5: pd.DataFrame | None, symbol: str) -> Optional[float]:
-    sess = _session_slice_local(intra5, symbol)
-    if sess.empty:
-        return None
-    hi = float(sess["high"].max()); lo = float(sess["low"].min()); o = float(sess["open"].iloc[0])
-    if o == 0:
-        return None
-    return ((hi - lo) / o) * 100.0
-
-
-
-
-
-def _n_days_ret(eod: pd.DataFrame, n: int) -> Optional[float]:
-    if eod is None or eod.empty or "close" not in eod.columns:
-        return None
-    closes = eod["close"].dropna()
-    if len(closes) <= n:
-        return None
-    last = float(closes.iloc[-1])
-    prev = float(closes.iloc[-1 - n])
-    return _pct(last, prev)
-
-
-def _rise_minutes_pct(intra5: pd.DataFrame, minutes: int) -> Optional[float]:
-    if intra5 is None or intra5.empty:
-        return None
-    last_ts = intra5["ts"].iloc[-1]
-    cutoff = last_ts - pd.Timedelta(minutes=minutes)
-    prev = intra5.loc[intra5["ts"] <= cutoff, "close"]
-    if prev.empty:
-        return None
-    ref = float(prev.iloc[-1])
-    last = float(intra5["close"].iloc[-1])
-    return _pct(last, ref)
-
-
-def _gap_pct(symbol: str, intra5: pd.DataFrame, eod: pd.DataFrame) -> Optional[float]:
-    if eod is None or eod.empty or intra5 is None or intra5.empty:
-        return None
-    eodc = eod["close"].dropna()
-    if len(eodc) < 2:
-        return None
-    prev_close = float(eodc.iloc[-2])
-    sess = _session_slice_local(intra5, symbol)
-    if sess.empty or "open" not in sess.columns:
-        return None
-    day_open = float(sess["open"].iloc[0])
-    return _pct(day_open, prev_close)
-
-
-def _sma(series: pd.Series, n: int) -> Optional[float]:
-    if series is None:
-        return None
-    s = pd.to_numeric(series, errors="coerce").dropna().tail(n)
-    if len(s) < n:
-        return None
-    return float(s.mean())
-
-
-def _rsi14(eod: pd.DataFrame) -> Optional[float]:
-    if eod is None or eod.empty or "close" not in eod.columns:
-        return None
-    c = pd.to_numeric(eod["close"], errors="coerce").dropna()
-    if len(c) < 15:
-        return None
-    diff = c.diff()
-    gain = diff.clip(lower=0.0)
-    loss = -diff.clip(upper=0.0)
-    avg_gain = gain.rolling(14).mean()
-    avg_loss = loss.rolling(14).mean()
-    rs = avg_gain / avg_loss.replace(0, pd.NA)
-    rsi = 100 - (100 / (1 + rs))
-    val = rsi.iloc[-1]
-    return None if pd.isna(val) else float(val)
-
-
-def _atr14(eod: pd.DataFrame) -> Tuple[Optional[float], Optional[float]]:
-    """Returnerar ATR och ATR%."""
-    cols_ok = all(c in (eod.columns if eod is not None else []) for c in ("high", "low", "close"))
-    if not cols_ok:
-        return None, None
-    df = eod[["high", "low", "close"]].dropna().copy()
-    if len(df) < 15:
-        return None, None
-    prev_close = df["close"].shift(1)
-    tr = pd.concat([
-        df["high"] - df["low"],
-        (df["high"] - prev_close).abs(),
-        (df["low"] - prev_close).abs(),
-    ], axis=1).max(axis=1)
-    atr = tr.rolling(14).mean().iloc[-1]
-    last_close = df["close"].iloc[-1]
-    atrpct = (atr / last_close) * 100.0 if last_close else None
-    return float(atr), (None if atrpct is None or pd.isna(atrpct) else float(atrpct))
-
-
-def _assemble_row(symbol: str) -> dict:
-    ex = _exchange_for(symbol)
-
-    intra = _read_parquet_if_exists(symbol, "5m")
-    eod = _read_parquet_if_exists(symbol, "EOD")
-
-    last = _last_safe(intra["close"]) if isinstance(intra, pd.DataFrame) and "close" in intra else None
-    if last is None:
-        last = _last_safe(eod["close"]) if isinstance(eod, pd.DataFrame) and "close" in eod else None
-
-    tz = _tz_for(symbol)
-    last_ts_local = None
-    if isinstance(intra, pd.DataFrame) and not intra.empty:
-        last_ts_local = intra["ts"].iloc[-1].tz_convert(tz).strftime("%Y-%m-%d %H:%M")
-    elif isinstance(eod, pd.DataFrame) and not eod.empty:
-        last_ts_local = eod["ts"].iloc[-1].tz_convert(tz).strftime("%Y-%m-%d %H:%M")
-
-    sess = _session_slice_local(intra, symbol) if isinstance(intra, pd.DataFrame) else None
-    day_open = _last_safe(sess["open"]) if isinstance(sess, pd.DataFrame) and not sess.empty else None
-    day_high = None if sess is None or sess.empty else float(sess["high"].max())
-    day_low = None if sess is None or sess.empty else float(sess["low"].min())
-    day_close = last if sess is not None and not sess.empty else None
-    vol_tot = None if sess is None or sess.empty or "volume" not in sess.columns else float(sess["volume"].sum())
-
-    prev_close = None
-    if isinstance(eod, pd.DataFrame) and not eod.empty and "close" in eod.columns and len(eod["close"].dropna()) >= 2:
-        prev_close = float(eod["close"].dropna().iloc[-2])
-    netchg = None if last is None or prev_close is None else last - prev_close
-    netpct = _pct(last, prev_close)
-
-    # Intraday / idag-mått
-    rise5  = _rise_minutes_pct(intra, 5)
-    rise15 = _rise_minutes_pct(intra, 15)
-    rise30 = _rise_minutes_pct(intra, 30)
-    rise60 = _rise_minutes_pct(intra, 60)
-
-    from_open = _pct(last, day_open) if (last is not None and day_open is not None) else None
-    range_pct = None
-    range_pos = None
-    if day_high is not None and day_low is not None and day_open is not None and day_high > day_low:
-        range_pct = ((day_high - day_low) / day_open) * 100.0
-        if last is not None:
-            range_pos = ((last - day_low) / (day_high - day_low)) * 100.0  # 0=vid low, 100=vid high
-
-    # 30d snittvolym (EOD) vs dagens volym
-    vol_surge = None
-    if vol_tot is not None and isinstance(eod, pd.DataFrame) and "volume" in eod.columns:
-        avg30 = eod["volume"].dropna().tail(30).mean()
-        if avg30 and avg30 > 0:
-            vol_surge = (vol_tot / avg30) * 100.0
-
-    # Fler EOD-returer
-    ret1  = _n_days_ret(eod, 1)
-    ret5  = _n_days_ret(eod, 5)
-    ret10 = _n_days_ret(eod, 10)
-    ret20 = _n_days_ret(eod, 20)
-    ret30 = _n_days_ret(eod, 30)
-    ret60 = _n_days_ret(eod, 60)
-
-    # Gap & trend/volatilitet
-    gap = _gap_pct(symbol, intra, eod)
-    ma20 = _sma(eod["close"] if isinstance(eod, pd.DataFrame) else None, 20)
-    ma50 = _sma(eod["close"] if isinstance(eod, pd.DataFrame) else None, 50)
-    ma200 = _sma(eod["close"] if isinstance(eod, pd.DataFrame) else None, 200)
-    ma20pct = _pct(last, ma20) if ma20 else None
-    ma50pct = _pct(last, ma50) if ma50 else None
-    ma200pct = _pct(last, ma200) if ma200 else None
-    rsi14 = _rsi14(eod)
-    _, atrpct = _atr14(eod)
-
-    return {
-        "Symbol": symbol,
-        "Exchange": ex,
-        "Last": last,
-        "LastTs": last_ts_local,
-
-        "NetChg": netchg,
-        "NetPct": netpct,
-
-        "Open": day_open, "High": day_high, "Low": day_low, "Close": day_close,
-        "VolTot": vol_tot, "Trades": "-",
-
-        "Rise5mPct": rise5, "Rise15mPct": rise15, "Rise30mPct": rise30, "Rise60mPct": rise60,
-        "FromOpenPct": from_open, "RangePct": range_pct, "RangePosPct": range_pos, "VolSurgePct": vol_surge,
-
-        "GapPct": gap,
-
-        "Ret1D": ret1, "Ret5D": ret5, "Ret10D": ret10, "Ret20D": ret20, "Ret30D": ret30, "Ret60D": ret60,
-
-        "MA20Pct": ma20pct, "MA50Pct": ma50pct, "MA200Pct": ma200pct,
-        "RSI14": rsi14, "ATRpct": atrpct,
-
-        "_has_intra": intra is not None,
-        "_has_eod": eod is not None,
-    }
-
-
-# ----------------------- UI -----------------------
-
-ACTIVITIES = {
-    # Intraday momentum
-    "Rapidly Rising (5m %)": ("Rise5mPct", True),
-    "Rapidly Falling (5m %)": ("Rise5mPct", False),
-    "Rapidly Rising (15m %)": ("Rise15mPct", True),
-    "Rapidly Falling (15m %)": ("Rise15mPct", False),
-    "Rapidly Rising (30m %)": ("Rise30mPct", True),
-    "Rapidly Falling (30m %)": ("Rise30mPct", False),
-    "Rapidly Rising (60m %)": ("Rise60mPct", True),
-    "Rapidly Falling (60m %)": ("Rise60mPct", False),
-
-    # Dagens
-    "Today % vs Open": ("FromOpenPct", True),
-    "Range Today % (wide first)": ("RangePct", True),
-    "Near High (RangePos %)": ("RangePosPct", True),
-    "Near Low (RangePos %)": ("RangePosPct", False),
-    "Volume Surge % (vs 30d avg)": ("VolSurgePct", True),
-
-    # Klassiska returer
-    "% Gainers (1 Day)": ("Ret1D", True),
-    "% Losers (1 Day)": ("Ret1D", False),
-    "% Gainers (5 Days)": ("Ret5D", True),
-    "% Losers (5 Days)": ("Ret5D", False),
-    "% Gainers (10 Days)": ("Ret10D", True),
-    "% Losers (10 Days)": ("Ret10D", False),
-    "% Gainers (20 Days)": ("Ret20D", True),
-    "% Losers (20 Days)": ("Ret20D", False),
-    "% Gainers (30 Days)": ("Ret30D", True),
-    "% Losers (30 Days)": ("Ret30D", False),
-    "% Gainers (60 Days)": ("Ret60D", True),
-    "% Losers (60 Days)": ("Ret60D", False),
-
-    # Gap
-    "Gap Up % (vs prev close)": ("GapPct", True),
-    "Gap Down % (vs prev close)": ("GapPct", False),
-
-    # Trend/volatilitet
-    "Above MA20 %": ("MA20Pct", True),
-    "Below MA20 %": ("MA20Pct", False),
-    "Above MA50 %": ("MA50Pct", True),
-    "Below MA50 %": ("MA50Pct", False),
-    "Above MA200 %": ("MA200Pct", True),
-    "Below MA200 %": ("MA200Pct", False),
-    "RSI(14) Highest": ("RSI14", True),
-    "RSI(14) Lowest": ("RSI14", False),
-    "ATR% (14) Highest": ("ATRpct", True),
-    "ATR% (14) Lowest": ("ATRpct", False),
-}
+from datetime import timezone
+
+try:
+    from streamlit_autorefresh import st_autorefresh
+except Exception:
+    st_autorefresh = None
 
 st.set_page_config(page_title="Hot Lists", layout="wide")
 
-# Sidebar
-st.sidebar.subheader("Uppdatering")
-every = st.sidebar.number_input("Auto-refresh (sek)", min_value=10, max_value=600, value=60, step=5)
-st.sidebar.caption("Sidan laddas om automatiskt.")
+PATH = os.environ.get("HOTLISTS_PATH", "storage/snapshots/hotlists/latest.parquet")
 
-st.title(TITLE)
-src_label = "S3 (EOD/5m)" if S3_PREFIX else "lokala Parquet (EOD/5m)"
-st.caption(f"Datakälla: {src_label} uppdaterade via dina GitHub Actions eller lokala körningar.")
+# Cachea på filens mtime så att cachen invalidieras när parquet skrivs om
+@st.cache_data
+def _load_df_with_mtime(path: str, mtime: float) -> pd.DataFrame:
+    if not os.path.exists(path):
+        return pd.DataFrame()
+    df = pd.read_parquet(path)
+    # normalisera procentkolumner till float
+    for c in df.columns:
+        if c.endswith("Pct"):
+            df[c] = pd.to_numeric(df[c], errors="coerce")
+    # tidskolumner med UTC
+    for tcol in ("LastTs", "SnapshotAt"):
+        if tcol in df.columns:
+            df[tcol] = pd.to_datetime(df[tcol], utc=True, errors="coerce")
+    return df
 
-ex_choice = st.sidebar.selectbox("Exchange", ["ALL", "US", "ST"], index=0)
+mtime = os.path.getmtime(PATH) if os.path.exists(PATH) else 0.0
+df = _load_df_with_mtime(PATH, mtime)
 
-all_syms = _read_watchlist_codes()
-if not all_syms:
-    st.warning("Hittade ingen `watchlist.yaml`. Lägg in dina tickers där.")
-    st.stop()
+def pct_fmt(x):
+    return None if pd.isna(x) else f"{x:,.2f}%"
 
-if ex_choice != "ALL":
-    all_syms = [s for s in all_syms if _exchange_for(s) == ex_choice]
-
-pick = st.sidebar.multiselect("Tickers (valfritt)", options=all_syms, default=[])
-syms = pick if pick else all_syms
-
-act_label = st.sidebar.selectbox("Activity", list(ACTIVITIES.keys()), index=0)
-metric, desc_order = ACTIVITIES[act_label]
-topn = int(st.sidebar.slider("Results", min_value=10, max_value=200, value=60, step=5))
-
-# ----------------------- data build -----------------------
-
-rows = []
-missing = 0
-for s in syms:
-    row = _assemble_row(s)
-    if not row["_has_intra"] and not row["_has_eod"]:
-        missing += 1
-    rows.append(row)
-
-if missing:
-    st.caption(f"Obs: saknar data för **{missing}** tickers (visar `None`). Fyll på via CLI eller låt Actions tugga.")
-
-df = pd.DataFrame(rows)
-if df.empty:
-    st.info("Ingen symbol matchade filtret.")
-    st.stop()
-
-# rank & sortering på vald aktivitet
-sort_series = pd.to_numeric(df[metric], errors="coerce") if metric in df.columns else pd.Series([None]*len(df))
-df = df.assign(_rank_metric=sort_series)
-df = df.sort_values("_rank_metric", ascending=not desc_order, na_position="last").head(topn)
-
-# Kolumnordning: rank + aktivitet direkt efter Symbol
-df.insert(0, "#", range(1, len(df) + 1))
-col_order = [
-    "#", "Symbol", metric, "Exchange", "Last", "LastTs", "NetChg", "NetPct",
-    "FromOpenPct", "RangePct", "RangePosPct", "VolSurgePct",
-    "Open", "High", "Low", "Close", "VolTot", "Trades",
-    "Rise5mPct", "Rise15mPct", "Rise30mPct", "Rise60mPct",
-    "GapPct",
-    "Ret1D", "Ret5D", "Ret10D", "Ret20D", "Ret30D", "Ret60D",
-    "MA20Pct", "MA50Pct", "MA200Pct",
-    "RSI14", "ATRpct",
-]
-col_order = [c for c in col_order if c in df.columns]
-df = df[col_order]
-
-# Gör kolumnnamn unika för Styler.map
-df = df.loc[:, ~pd.Index(df.columns).duplicated()].reset_index(drop=True)
-
-# styling/format
-pct_cols = [c for c in df.columns if c.endswith("Pct") or c.startswith("Ret")]
-chg_cols = [c for c in ["NetChg"] if c in df.columns]
-num_cols = [c for c in ["Last", "Open", "High", "Low", "Close"] if c in df.columns]
-vol_cols = [c for c in ["VolTot"] if c in df.columns]
-
-def _color_posneg(v):
+def color_cell(v):
+    if pd.isna(v):
+        return ""
     try:
-        x = float(v)
+        return "color: red" if float(v) < 0 else "color: green"
     except Exception:
         return ""
-    if pd.isna(x):
-        return ""
-    if x > 0:
-        return "color: #0a7d32; font-weight: 600;"
-    if x < 0:
-        return "color: #c92a2a; font-weight: 600;"
-    return ""
 
-styler = df.style
-if pct_cols:
-    styler = styler.map(_color_posneg, subset=pd.IndexSlice[:, pct_cols])
-if chg_cols:
-    styler = styler.map(_color_posneg, subset=pd.IndexSlice[:, chg_cols])
+st.title("Hot Lists")
 
-fmt_map = {}
-for c in pct_cols:
-    fmt_map[c] = "{:+.2f}%"
-for c in chg_cols:
-    fmt_map[c] = "{:+,.2f}"
-for c in num_cols:
-    fmt_map[c] = "{:,.2f}"
-for c in vol_cols:
-    fmt_map[c] = "{:,.0f}"
-styler = styler.format(fmt_map, na_rep="None")
+# ---- Sidebar
+with st.sidebar:
+    st.header("Filter")
 
-st.subheader(act_label)
-st.dataframe(styler, height=650, width="stretch")
-st.caption("Tips: `LastTs` visar senaste datapunkt (lokal tid). Om gammal → S3 fylls inte just nu.")
-# Auto-refresh
-if every and every > 0:
-    time.sleep(float(every))
-    st.rerun()
+    cols = st.columns([1, 1.2])
+    with cols[0]:
+        af = st.checkbox("Auto-refresh", value=False)
+    with cols[1]:
+        interval = st.slider("Intervall (sek)", 5, 120, 15)
+    if af and st_autorefresh is not None:
+        st_autorefresh(interval=interval * 1000, key="hotlists_autorefresh")
+
+    ex_vals = sorted([x for x in df.get("Exchange", pd.Series(dtype=str)).dropna().unique()])
+    ex = st.selectbox("Exchange", options=["ALL"] + ex_vals, index=0)
+
+    symq = st.text_input("Sök symbol", "")
+
+    activities = []
+    has = lambda c: c in df.columns
+    if has("Rise5mPct"):  activities += ["Rapidly Rising (5m %)", "Rapidly Falling (5m %)"]
+    if has("Rise15mPct"): activities += ["Rapidly Rising (15m %)", "Rapidly Falling (15m %)"]
+    if has("Rise30mPct"): activities += ["Rapidly Rising (30m %)", "Rapidly Falling (30m %)"]
+    if has("Rise60mPct"): activities += ["Rapidly Rising (60m %)", "Rapidly Falling (60m %)"]
+    if has("RangePosPct"): activities += ["Near Day High", "Near Day Low"]
+    if has("FromOpenPct"): activities += ["From Open Up", "From Open Down"]
+    if has("NetPct"):      activities += ["Top Gainers (1D %)", "Top Losers (1D %)"]
+    if has("GapPct"):      activities += ["Gap Up (1D %)", "Gap Down (1D %)"]
+
+    act = st.selectbox("Aktivitet", options=["Alla"] + activities, index=0)
+
+    sort_options = [
+        "Rise5mPct","Rise15mPct","Rise30mPct","Rise60mPct",
+        "RangePosPct","FromOpenPct","NetPct","GapPct","VolTot","Last"
+    ]
+    sort_options = [c for c in sort_options if c in df.columns]
+    sort_by = st.selectbox("Sortera på", options=sort_options, index=0)
+
+    n = st.slider("Antal rader", 10, 200, min(60, max(10, len(df))))
+
+    st.divider()
+    with st.expander("Advanced", expanded=False):
+        st.caption("Finjustera egna trösklar (tillämpas ovanpå vald aktivitet).")
+        enable_adv = st.checkbox("Aktivera Advanced-filter", value=False)
+        col1, col2 = st.columns(2)
+        with col1:
+            thr_up   = st.number_input("Min FromOpen %", value=0.0, step=0.1)
+            near_hi  = st.number_input("Near High: minst pos (%)", value=70.0, step=1.0)
+        with col2:
+            thr_dn   = st.number_input("Max FromOpen %", value=0.0, step=0.1)
+            near_lo  = st.number_input("Near Low: max pos (%)",  value=30.0, step=1.0)
+
+# Ingen snapshot?
+if df.empty:
+    st.info("Ingen snapshot hittades ännu. Kör: `python -m quantkit snapshot-hotlists --timeframe 5m --force`")
+    st.stop()
+
+# ---- Filtrering
+show = df.copy()
+
+if ex != "ALL" and "Exchange" in show:
+    show = show[show["Exchange"] == ex]
+
+if symq.strip() and "Symbol" in show:
+    q = symq.strip().upper()
+    show = show[show["Symbol"].str.contains(q, case=False, na=False)]
+
+def apply_activity(d: pd.DataFrame) -> pd.DataFrame:
+    if act == "Alla":
+        return d
+    m = d
+    if act == "Rapidly Rising (5m %)":    m = m.sort_values("Rise5mPct", ascending=False)
+    elif act == "Rapidly Falling (5m %)": m = m.sort_values("Rise5mPct", ascending=True)
+    elif act == "Rapidly Rising (15m %)": m = m.sort_values("Rise15mPct", ascending=False)
+    elif act == "Rapidly Falling (15m %)":m = m.sort_values("Rise15mPct", ascending=True)
+    elif act == "Rapidly Rising (30m %)": m = m.sort_values("Rise30mPct", ascending=False)
+    elif act == "Rapidly Falling (30m %)":m = m.sort_values("Rise30mPct", ascending=True)
+    elif act == "Rapidly Rising (60m %)": m = m.sort_values("Rise60mPct", ascending=False)
+    elif act == "Rapidly Falling (60m %)":m = m.sort_values("Rise60mPct", ascending=True)
+    elif act == "Near Day High":          m = m.sort_values("RangePosPct", ascending=False)
+    elif act == "Near Day Low":           m = m.sort_values("RangePosPct", ascending=True)
+    elif act == "From Open Up":           m = m.sort_values("FromOpenPct", ascending=False)
+    elif act == "From Open Down":         m = m.sort_values("FromOpenPct", ascending=True)
+    elif act == "Top Gainers (1D %)":     m = m.sort_values("NetPct", ascending=False)
+    elif act == "Top Losers (1D %)":      m = m.sort_values("NetPct", ascending=True)
+    elif act == "Gap Up (1D %)":          m = m.sort_values("GapPct", ascending=False)
+    elif act == "Gap Down (1D %)":        m = m.sort_values("GapPct", ascending=True)
+    return m
+
+show = apply_activity(show)
+
+# Advanced-filter ovanpå aktivitet
+if 'enable_adv' in st.session_state and st.session_state.enable_adv:
+    if "FromOpenPct" in show and thr_up != 0.0:
+        show = show[show["FromOpenPct"] >= thr_up]
+    if "FromOpenPct" in show and thr_dn != 0.0:
+        show = show[show["FromOpenPct"] <= thr_dn]
+    if "RangePosPct" in show:
+        show = show[(show["RangePosPct"] >= near_hi) | (show["RangePosPct"] <= near_lo)]
+
+# Slutlig sortering & topp N
+if sort_by in show:
+    show = show.sort_values(sort_by, ascending=False)
+show = show.head(n).reset_index(drop=True)
+
+pct_cols = [c for c in show.columns if c.endswith("Pct")]
+fmt = {c: pct_fmt for c in pct_cols}
+
+last_snap = None
+if "SnapshotAt" in show and not show["SnapshotAt"].isna().all():
+    try:
+        last_snap = pd.to_datetime(show["SnapshotAt"], utc=True).max().tz_convert("UTC")
+    except Exception:
+        last_snap = None
+
+stamp = (last_snap.strftime("%Y-%m-%d %H:%M:%S UTC")
+         if last_snap else pd.Timestamp.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"))
+st.caption(f"Rows={len(show)} · Senast: {stamp}")
+
+try:
+    styler = show.style.format(fmt).map(color_cell, subset=pd.IndexSlice[:, pct_cols])
+    st.dataframe(styler, width="stretch")
+except Exception:
+    st.dataframe(show, width="stretch")

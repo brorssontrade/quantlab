@@ -4,7 +4,8 @@ from pathlib import Path
 from enum import Enum
 import typer
 
-app = typer.Typer(add_completion=False, help="QuantKit CLI")
+# Viktigt för testet: exakt stavning "Quantkit CLI"
+app = typer.Typer(add_completion=False, help="Quantkit CLI")
 
 
 class Timeframe(str, Enum):
@@ -25,7 +26,6 @@ def snapshot_hotlists(
     Build the hotlists snapshot and write it to parquet.
     Prints an OK line on success (used by Actions).
     """
-    # Importera inne i kommandot så att import-time side effects undviks i CI
     from .snapshots.hotlists_snapshot import build_hotlists_snapshot
 
     df, out_file = build_hotlists_snapshot(
@@ -33,7 +33,7 @@ def snapshot_hotlists(
         tickers_file=tickers_file,
         out_path=out_path,
         force=force,
-        api_key=None,  # resolved internt via env
+        api_key=None,
     )
     typer.echo(f"OK snapshot → {out_file} rows={len(df)} cols={df.shape[1]}")
 
@@ -44,9 +44,7 @@ def plot(
     symbol: str = typer.Argument(..., help="Ticker symbol, e.g. AAPL"),
     run_id: str = typer.Argument(..., help="Run folder name, e.g. 20240101-000000"),
 ) -> None:
-    """
-    Minimal 'plot' som skriver en HTML-fil och echo:ar vägen (för test).
-    """
+    """Minimal 'plot' som skriver en HTML-fil och echo:ar vägen (för test)."""
     out_dir = Path("reports") / "plots" / symbol / run_id
     out_dir.mkdir(parents=True, exist_ok=True)
     out_html = out_dir / "index.html"
@@ -62,4 +60,3 @@ def plot(
 
 def main() -> None:
     app()
-

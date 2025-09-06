@@ -78,4 +78,3 @@ def merge_bars(
             return out
     parquet_write(df_new, path)
     return df_new
-
