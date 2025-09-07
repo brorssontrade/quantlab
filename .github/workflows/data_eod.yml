@@ -2,41 +2,87 @@ name: data_eod
 
 on:
   schedule:
-    - cron: "30 21 * * 1-5" # 21:30 UTC vardagar (efter US stängt)
+    - cron: "30 21 * * 1-5"   # 21:30 UTC vardagar (efter US stängt)
   workflow_dispatch:
+
+concurrency:
+  group: data-eod-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   eod:
     runs-on: ubuntu-latest
+    env:
+      TZ: Europe/Stockholm
+      PYTHONPATH: ${{ github.workspace }}/src
+      EODHD_API_KEY: ${{ secrets.EODHD_API_KEY }}
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Installera
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+
+      - name: Install deps + package
         run: |
           python -m pip install -U pip
-          pip install -e . awscli
-      - name: Kör EOD för alla i watchlist
-        env:
-          EODHD_API_KEY: ${{ secrets.EODHD_API_KEY }}
+          pip install -r requirements.txt
+          pip install -e .
+          pip install "typer==0.17.3" awscli
+
+      - name: Run EOD for watchlist
         run: |
           python - <<'PY'
-          import yaml,subprocess,shlex
-          doc=yaml.safe_load(open('watchlist.yaml','r',encoding='utf-8')) or {}
-          items=doc.get('items',[]) or doc.get('tickers',[])
-          def code(x): return x if isinstance(x,str) else (x or {}).get('code')
-          syms=[code(i) for i in items if code(i)]
-          if syms:
-              cmd=f"python -m quantkit.cli_data --interval EOD --tickers {','.join(syms)}"
-              print(cmd)
-              subprocess.check_call(shlex.split(cmd))
+          import os, yaml, subprocess, shlex, pathlib as p
+
+          # Hitta en watchlist (pröva flera vägar)
+          candidates = [
+              "config/settings.yml",
+              "config/watchlist.yml",
+              "watchlist.yaml",
+              "watchlist.yml",
+          ]
+          path = next((c for c in candidates if p.Path(c).is_file()), None)
+          if not path:
+              raise SystemExit("No watchlist file found (tried: " + ", ".join(candidates) + ")")
+
+          doc = yaml.safe_load(open(path, "r", encoding="utf-8")) or {}
+
+          items = []
+          if "watchlist" in doc and isinstance(doc["watchlist"], dict):
+              items = doc["watchlist"].get("items", []) or []
+          elif "items" in doc:
+              items = doc["items"] or []
+          elif "tickers" in doc:
+              items = [{"code": c} if isinstance(c, str) else c for c in doc["tickers"]]
+
+          def code(x):
+              if isinstance(x, str): return x
+              if isinstance(x, dict): return x.get("code") or x.get("symbol")
+              return None
+
+          syms = [code(it) for it in items if code(it)]
+          if not syms:
+              raise SystemExit("Watchlist is empty in " + path)
+
+          cmd = f"python -m quantkit.cli_data --interval EOD --tickers {','.join(syms)}"
+          print("RUN:", cmd)
+          subprocess.check_call(shlex.split(cmd))
           PY
-      - name: Sync till S3
+
+      - name: Sync to S3 (optional)
+        if: ${{ env.S3_BUCKET != '' }}
         env:
           AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION:            ${{ secrets.AWS_REGION }}
           S3_BUCKET:             ${{ secrets.S3_BUCKET }}
         run: |
-          aws s3 sync storage "s3://${S3_BUCKET}" --delete
+          if [ -n "${S3_BUCKET}" ]; then
+            aws s3 sync storage "s3://${S3_BUCKET}" --delete
+          else
+            echo "S3_BUCKET not set; skipping sync."
+          fi
+
