@@ -60,15 +60,16 @@ jobs:
         if: steps.gate.outputs.open == 'true'
         shell: bash
         run: |
-          PREF="${{ secrets.S3_PREFIX }}"
-          if [ -n "$PREF" ]; then
-            # Normalisera vanliga fel: s3:/bucket -> s3://bucket
-            PREF="${PREF/s3:\//s3://}"
-            if [[ "$PREF" != s3://* ]]; then PREF="s3://$PREF"; fi
-            echo "OUT_PREFIX=$PREF" >> $GITHUB_ENV
+          PREF_RAW="${{ secrets.S3_PREFIX }}"
+          if [ -n "$PREF_RAW" ]; then
+            # Ta bort schema och överflödiga slash i början
+            PREF=$(printf '%s' "$PREF_RAW" | sed -E 's#^s3:/+##')
+            PREF="${PREF#/}"  # inga ledande /
+            echo "OUT_PREFIX=s3://$PREF" >> $GITHUB_ENV
           else
             echo "OUT_PREFIX=storage" >> $GITHUB_ENV
           fi
+
 
       - name: Run breadth ${{ matrix.interval }}
         if: steps.gate.outputs.open == 'true'
