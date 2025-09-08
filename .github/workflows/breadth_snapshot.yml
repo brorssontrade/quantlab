@@ -16,6 +16,10 @@ jobs:
       TZ: Europe/Stockholm
       PYTHONPATH: ${{ github.workspace }}/src
       EODHD_API_KEY: ${{ secrets.EODHD_API_KEY }}
+      # AWS (ofarligt att sätta även när S3 ej används)
+      AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION:            ${{ secrets.AWS_REGION }}
 
     strategy:
       fail-fast: false
@@ -35,7 +39,7 @@ jobs:
           python -m pip install -U pip
           pip install -r requirements.txt
           pip install -e .
-          pip install "typer==0.17.3" requests pandas pyarrow pyyaml
+          pip install "typer==0.17.3" requests pandas pyarrow pyyaml s3fs
 
       - name: Gate by market hours (SE + US)
         id: gate
@@ -56,8 +60,12 @@ jobs:
         if: steps.gate.outputs.open == 'true'
         shell: bash
         run: |
-          if [[ -n "${{ secrets.S3_PREFIX }}" ]]; then
-            echo "OUT_PREFIX=${{ secrets.S3_PREFIX }}" >> $GITHUB_ENV
+          PREF="${{ secrets.S3_PREFIX }}"
+          if [ -n "$PREF" ]; then
+            # Normalisera vanliga fel: s3:/bucket -> s3://bucket
+            PREF="${PREF/s3:\//s3://}"
+            if [[ "$PREF" != s3://* ]]; then PREF="s3://$PREF"; fi
+            echo "OUT_PREFIX=$PREF" >> $GITHUB_ENV
           else
             echo "OUT_PREFIX=storage" >> $GITHUB_ENV
           fi
