@@ -81,3 +81,4 @@ jobs:
             --out-agg "${OUT_PREFIX}/snapshots/breadth/latest.parquet" \
             --out-sym "${OUT_PREFIX}/snapshots/breadth/symbols/latest.parquet"
 
+
