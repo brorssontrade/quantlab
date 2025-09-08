@@ -16,7 +16,6 @@ jobs:
       TZ: Europe/Stockholm
       PYTHONPATH: ${{ github.workspace }}/src
       EODHD_API_KEY: ${{ secrets.EODHD_API_KEY }}
-      EODHD_API_TOKEN: ${{ secrets.EODHD_API_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -30,6 +29,7 @@ jobs:
           python -m pip install -U pip
           pip install -r requirements.txt
           pip install -e .
+          pip install requests pyarrow pandas
 
       - name: Gate (US open 15:30–22:05)
         id: gate
@@ -45,6 +45,51 @@ jobs:
 
       - name: Run intraday ingest (US 1m)
         if: steps.gate.outputs.open == 'true'
+        env:
+          TICKERS_FILE: config/tickers_intraday_us.txt
         run: |
-          python -m quantkit data-intraday --timeframe 1m --tickers-file config/tickers_intraday_us.txt --force
-
+          # 1) Försök Typer-kommandot om det finns
+          python - <<'PY' || true
+          import subprocess, shlex
+          cmd = "python -m quantkit data-intraday --timeframe 1m --tickers-file ${TICKERS_FILE} --force"
+          try:
+              subprocess.check_call(shlex.split(cmd))
+              raise SystemExit(0)
+          except Exception:
+              raise SystemExit(1)
+          PY
+          # 2) Fallback: direkt EODHD-fetch -> Parquet
+          python - <<'PY'
+          import os, pathlib as p, pandas as pd, requests, sys, time
+          api = os.environ.get("EODHD_API_KEY")
+          if not api: raise SystemExit("EODHD_API_KEY saknas")
+          tf  = os.environ.get("TICKERS_FILE","config/tickers_intraday_us.txt")
+          syms = [s.strip() for s in open(tf, encoding="utf-8").read().splitlines() if s.strip() and not s.startswith("#")]
+          out = p.Path("storage/cache/eodhd"); out.mkdir(parents=True, exist_ok=True)
+          def fetch(sym):
+              u = f"https://eodhd.com/api/intraday/{sym}"
+              r = requests.get(u, params={"api_token":api,"interval":"1m","range":"1d","fmt":"json"}, timeout=30); r.raise_for_status()
+              js = r.json()
+              if not isinstance(js, list): return pd.DataFrame(columns=["ts","open","high","low","close","volume"])
+              df = pd.DataFrame(js)
+              ren = {"timestamp":"ts","date":"ts"}
+              df = df.rename(columns=ren)
+              if "ts" not in df.columns:
+                  if "time" in df.columns: df["ts"]=pd.to_datetime(df["time"], unit="s", utc=True)
+                  else: df["ts"]=pd.NaT
+              else:
+                  df["ts"]=pd.to_datetime(df["ts"], utc=True, errors="coerce")
+              keep=[c for c in ["ts","open","high","low","close","volume"] if c in df.columns]
+              df=df[keep].dropna(subset=["ts"]).sort_values("ts")
+              for c in ["open","high","low","close","volume"]:
+                  if c in df: df[c]=pd.to_numeric(df[c], errors="coerce")
+              return df
+          ok=fail=0
+          for s in syms:
+              try:
+                  df=fetch(s); fp=out/f"{s}__1m.parquet"; df.to_parquet(fp, index=False)
+                  print(f"✓ {s} -> {fp} ({len(df)} rows)"); ok+=1; time.sleep(0.15)
+              except Exception as e:
+                  print(f"⚠ {s}: {e}", file=sys.stderr); fail+=1
+          print(f"US 1m done OK={ok} FAIL={fail}")
+          PY

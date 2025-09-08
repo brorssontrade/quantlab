@@ -1,103 +1,74 @@
-import os
-import pandas as pd
-import streamlit as st
+name: snapshots
 
-st.set_page_config(page_title="Breadth", layout="wide")
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "* * * * 1-5"   # varje minut vardagar
 
-AGG = "storage/snapshots/breadth/latest.parquet"
-SYM = "storage/snapshots/breadth/symbols/latest.parquet"
+concurrency:
+  group: snapshots-${{ github.ref }}
+  cancel-in-progress: true
 
-st.title("Breadth")
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      TZ: Europe/Stockholm
+      PYTHONPATH: ${{ github.workspace }}/src
+      EODHD_API_KEY: ${{ secrets.EODHD_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
 
-if not os.path.exists(AGG):
-    st.info("Ingen breadth-snapshot hittades ännu.")
-    st.stop()
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
 
-agg = pd.read_parquet(AGG)
-if agg.empty:
-    st.warning("Agg-breadth är tom.")
-    st.stop()
+      - name: Install deps + package
+        run: |
+          python -m pip install -U pip
+          pip install -r requirements.txt
+          pip install -e .
+          pip install "typer==0.17.3"
 
-# ---- Normalisera numeriska procentkolumner
-agg = agg.copy()
-for c in ["PctAdv", "PctDec", "PctAboveMA20", "PctAboveMA50", "PctAboveMA200"]:
-    if c in agg.columns:
-        agg[c] = pd.to_numeric(agg[c], errors="coerce")
+      - name: Gate by open hours (SE 09:00–17:35, US 15:30–22:05)
+        id: gate
+        shell: bash
+        run: |
+          now=$(TZ=Europe/Stockholm date +%H%M)
+          dow=$(TZ=Europe/Stockholm date +%u)
+          open=false
+          if [ "$dow" -le 5 ]; then
+            if [ "$now" -ge 0900 ] && [ "$now" -le 1735 ]; then open=true; fi
+            if [ "$now" -ge 1530 ] && [ "$now" -le 2205 ]; then open=true; fi
+          fi
+          echo "open=$open" >> $GITHUB_OUTPUT
 
-# ---- Sidebar
-with st.sidebar:
-    st.header("Filter")
-    exch = sorted(agg.get("Exchange", pd.Series(dtype=str)).dropna().unique().tolist()) \
-        if "Exchange" in agg.columns else []
-    exch_sel = st.multiselect("Exchange", exch, default=[])
+      - name: Decide OUT_PREFIX (S3 or local)
+        if: steps.gate.outputs.open == 'true'
+        shell: bash
+        run: |
+          if [[ -n "${{ secrets.S3_PREFIX }}" ]]; then OUT_PREFIX="${{ secrets.S3_PREFIX }}"; else OUT_PREFIX="storage"; fi
+          echo "OUT_PREFIX=${OUT_PREFIX}" >> $GITHUB_ENV
 
-    try:
-        from streamlit_autorefresh import st_autorefresh
-        if st.checkbox("Auto-refresh (30s)", False):
-            st_autorefresh(interval=30_000, key="breadth_autoref")
-    except Exception:
-        pass
+      # --- Hotlists (Typer-kommandot finns hos dig och funkar) ---
+      - name: Build hotlists (5m)
+        if: steps.gate.outputs.open == 'true'
+        run: |
+          python -m quantkit snapshot-hotlists --timeframe 5m --force || \
+          python -m quantkit.snapshots.hotlists_snapshot --timeframe 5m --force
 
-# ---- Filter
-flt = agg.copy()
-if exch_sel and "Exchange" in flt.columns:
-    flt = flt[flt["Exchange"].isin(exch_sel)]
+      # --- Signals (modul-entrypoint) ---
+      - name: Build signals
+        if: steps.gate.outputs.open == 'true'
+        run: |
+          python -m quantkit.snapshots.signals_snapshot --force || \
+          echo "signals_snapshot module missing" 1>&2
 
-# ---- Aggregat-tabell
-st.subheader("Aggregat")
-cols = [c for c in [
-    "Ts", "Exchange", "Adv", "Dec", "Unch", "N", "PctAdv", "PctDec",
-    "ADLine", "PctAboveMA20", "PctAboveMA50", "PctAboveMA200"
-] if c in flt.columns]
-show = flt[cols].sort_values("Ts").copy()
-
-fmt = {c: "{:.1f}%" for c in
-       ["PctAdv", "PctDec", "PctAboveMA20", "PctAboveMA50", "PctAboveMA200"]
-       if c in show.columns}
-st.dataframe(show.style.format(fmt), use_container_width=True)
-
-# ---- Liten ADLine-graf om finns
-if {"Ts", "ADLine"}.issubset(show.columns):
-    st.subheader("ADLine")
-    st.line_chart(show.set_index("Ts")[["ADLine"]])
-
-# ---- Per-symbol-del (om finns)
-if os.path.exists(SYM):
-    sym = pd.read_parquet(SYM)
-    if not sym.empty:
-        st.subheader("Per symbol – snabblista")
-        keep = [c for c in [
-            "Ts", "Symbol", "Exchange", "ChangePct", "State", "RSI14",
-            "MA20Pct", "MA50Pct", "MA200Pct"
-        ] if c in sym.columns]
-        st.dataframe(sym[keep].sort_values("Ts", ascending=False),
-                     use_container_width=True)
-
-# ---- As-of + “stale” varningar (SE & US)
-def _is_se_open_local(ts_local: pd.Timestamp) -> bool:
-    dow = ts_local.weekday() + 1  # 1–5 = mån–fre
-    hm  = int(ts_local.strftime("%H%M"))
-    return (1 <= dow <= 5) and (900 <= hm <= 1735)
-
-def _is_us_open_local(ts_local: pd.Timestamp) -> bool:
-    dow = ts_local.weekday() + 1
-    hm  = int(ts_local.strftime("%H%M"))
-    return (1 <= dow <= 5) and (1530 <= hm <= 2205)
-
-try:
-    if "Ts" in show.columns and not show["Ts"].isna().all():
-        last_utc   = pd.to_datetime(show["Ts"], utc=True).max()
-        last_local = last_utc.tz_convert("Europe/Stockholm")
-        now_local  = pd.Timestamp.now(tz="Europe/Stockholm")
-        age_min    = (now_local - last_local).total_seconds() / 60.0
-
-        # Varningar – mjuka trösklar
-        if _is_se_open_local(now_local) and age_min > 15:
-            st.warning(f"SE-data kan vara gammal ({age_min:.0f} min bakom).", icon="⏱️")
-        if _is_us_open_local(now_local) and age_min > 5:
-            st.warning(f"US-data kan vara gammal ({age_min:.0f} min bakom).", icon="⏱️")
-
-        st.caption(f"As of {last_local:%Y-%m-%d %H:%M} (local)")
-except Exception:
-    pass
-
+      # --- Movers (modul-entrypoint) ---
+      - name: Build movers
+        if: steps.gate.outputs.open == 'true'
+        run: |
+          python -m quantkit.snapshots.movers_snapshot --force || \
+          echo "movers_snapshot module missing" 1>&2
