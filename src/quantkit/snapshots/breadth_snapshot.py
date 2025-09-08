@@ -1,3 +1,4 @@
+# src/quantkit/snapshots/breadth_snapshot.py
 from __future__ import annotations
 
 import os
@@ -10,6 +11,11 @@ import pandas as pd
 import requests
 import typer
 import yaml
+
+from quantkit.data.eodhd_client import (
+    load_index_map,
+    resolve_symbol_for_eodhd,
+)
 
 app = typer.Typer(add_completion=False)
 
@@ -62,7 +68,9 @@ def _exchange_from_symbol(sym: str) -> str:
 
 def _fetch_eod(symbol: str, api_key: str, days_back: int = 420) -> pd.DataFrame:
     """Hämta dagliga EOD-bars från EODHD."""
-    url = f"https://eodhd.com/api/eod/{symbol}"
+    from urllib.parse import quote
+
+    url = f"https://eodhd.com/api/eod/{quote(symbol, safe='')}"
     frm = (pd.Timestamp.utcnow().date() - pd.Timedelta(days=days_back)).isoformat()
     params = {"api_token": api_key, "fmt": "json", "period": "d", "from": frm}
     r = requests.get(url, params=params, timeout=30)
@@ -176,13 +184,30 @@ def main(
     interval: str = typer.Option("1d", "--interval", help="1d eller 1m. (1m används mest för symbol-listan; aggregerar på senaste bar.)"),
     out_agg: str = typer.Option("storage/snapshots/breadth/latest.parquet", "--out-agg"),
     out_sym: str = typer.Option("storage/snapshots/breadth/symbols/latest.parquet", "--out-sym"),
+    index_handling: str = typer.Option("map", "--index-handling", "-I", help="Hur index hanteras: 'map' (mappa till .INDX), 'skip' (filtrera bort), 'keep' (behåll).", case_sensitive=False),
+    index_map: str = typer.Option("config/ticker_index_map.yml", "--index-map", help="Sökväg till YAML-map för indexsymboler."),
 ):
     """Bygger breadth-snapshots enbart med EODHD."""
     api = os.environ.get("EODHD_API_KEY") or os.environ.get("EODHD_API_TOKEN")
     if not api:
         raise SystemExit("EODHD_API_KEY saknas.")
 
-    syms = _load_symbols()
+    # Läs tickers och för-normalisera enligt flaggor/map
+    raw_syms = _load_symbols()
+    idx_map = load_index_map(index_map)
+    syms: List[str] = []
+    skipped_idx: List[str] = []
+
+    for s in raw_syms:
+        s2, is_idx = resolve_symbol_for_eodhd(s, index_handling=index_handling, index_map=idx_map)
+        if s2 is None and is_idx:
+            skipped_idx.append(s)
+            continue
+        syms.append(s2 or s)
+
+    if skipped_idx:
+        print(f"ℹ Skipping {len(skipped_idx)} index tickers via index_handling='{index_handling}': {skipped_idx}")
+
     rows = []
     for i, sym in enumerate(syms, 1):
         try:
@@ -199,20 +224,19 @@ def main(
     agg_df = _aggregate(sym_df)
 
     def _to_parquet_smart(df, target: str):
-        t = str(target)
-        if t.startswith("s3://"):
-            # Låt pandas/pyarrow + s3fs hantera S3 direkt
-            df.to_parquet(t, index=False)
+        if target.startswith("s3://"):
+            # s3fs + pyarrow sköter resten när det är en vanlig str-URI
+            df.to_parquet(target, index=False)
         else:
-            out_p = p.Path(t)
-            out_p.parent.mkdir(parents=True, exist_ok=True)
-            df.to_parquet(str(out_p), index=False)
+            target_p = p.Path(target)
+            target_p.parent.mkdir(parents=True, exist_ok=True)
+            df.to_parquet(target_p, index=False)
 
     _to_parquet_smart(agg_df, out_agg)
     _to_parquet_smart(sym_df, out_sym)
 
-    print(f"✓ Wrote {len(agg_df)} agg rows -> {out_agg_p}")
-    print(f"✓ Wrote {len(sym_df)} symbol rows -> {out_sym_p}")
+    print(f"✓ Wrote {len(agg_df)} agg rows -> {out_agg}")
+    print(f"✓ Wrote {len(sym_df)} sym rows -> {out_sym}")
 
 if __name__ == "__main__":
     app()
