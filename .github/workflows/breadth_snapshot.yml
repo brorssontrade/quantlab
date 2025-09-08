@@ -15,10 +15,12 @@ jobs:
     env:
       TZ: Europe/Stockholm
       PYTHONPATH: ${{ github.workspace }}/src
+      EODHD_API_KEY: ${{ secrets.EODHD_API_KEY }}
+
     strategy:
       fail-fast: false
       matrix:
-        interval: [ "5m", "1d" ]
+        interval: ["5m", "1d"]
 
     steps:
       - uses: actions/checkout@v4
@@ -33,7 +35,7 @@ jobs:
           python -m pip install -U pip
           pip install -r requirements.txt
           pip install -e .
-          pip install "typer==0.17.3"
+          pip install "typer==0.17.3" requests pandas pyarrow pyyaml
 
       - name: Gate by market hours (SE + US)
         id: gate

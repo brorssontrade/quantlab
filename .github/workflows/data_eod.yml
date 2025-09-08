@@ -30,46 +30,85 @@ jobs:
           python -m pip install -U pip
           pip install -r requirements.txt
           pip install -e .
-          pip install "typer==0.17.3" awscli
+          pip install "typer==0.17.3" awscli requests pyarrow pandas pyyaml
 
-      - name: Run EOD for watchlist
+      - name: Run EOD fetch (direct HTTP -> Parquet)
+        env:
+          S3_BUCKET: ${{ secrets.S3_BUCKET }}
         run: |
           python - <<'PY'
-          import os, yaml, subprocess, shlex, pathlib as p
+          import os, sys, time, pathlib as p
+          import pandas as pd, requests, yaml
 
-          # Hitta en watchlist (pröva flera vägar)
-          candidates = [
-              "config/settings.yml",
-              "config/watchlist.yml",
-              "watchlist.yaml",
-              "watchlist.yml",
-          ]
-          path = next((c for c in candidates if p.Path(c).is_file()), None)
-          if not path:
-              raise SystemExit("No watchlist file found (tried: " + ", ".join(candidates) + ")")
+          API_KEY = os.environ.get("EODHD_API_KEY") or os.environ.get("EODHD_API_TOKEN")
+          if not API_KEY:
+              raise SystemExit("EODHD_API_KEY secret saknas.")
 
-          doc = yaml.safe_load(open(path, "r", encoding="utf-8")) or {}
+          def load_symbols():
+              # 1) Företräde: config/tickers.txt
+              tfile = p.Path("config/tickers.txt")
+              if tfile.is_file():
+                  lines = [l.strip() for l in tfile.read_text(encoding="utf-8").splitlines()]
+                  syms = [l for l in lines if l and not l.startswith("#")]
+                  if syms: return syms
 
-          items = []
-          if "watchlist" in doc and isinstance(doc["watchlist"], dict):
-              items = doc["watchlist"].get("items", []) or []
-          elif "items" in doc:
-              items = doc["items"] or []
-          elif "tickers" in doc:
-              items = [{"code": c} if isinstance(c, str) else c for c in doc["tickers"]]
+              # 2) Fallback: yaml-baserad watchlist
+              for yml in ("config/settings.yml","config/watchlist.yml","watchlist.yml","watchlist.yaml"):
+                  if p.Path(yml).is_file():
+                      doc = yaml.safe_load(open(yml, "r", encoding="utf-8")) or {}
+                      items = []
+                      if isinstance(doc.get("watchlist"), dict):
+                          items = doc["watchlist"].get("items", []) or []
+                      elif "items" in doc:
+                          items = doc["items"] or []
+                      elif "tickers" in doc:
+                          items = [{"code": t} if isinstance(t,str) else t for t in doc["tickers"]]
+                      def code(x):
+                          if isinstance(x,str): return x
+                          if isinstance(x,dict): return x.get("code") or x.get("symbol")
+                          return None
+                      syms = [code(it) for it in items if code(it)]
+                      if syms: return syms
 
-          def code(x):
-              if isinstance(x, str): return x
-              if isinstance(x, dict): return x.get("code") or x.get("symbol")
-              return None
+              raise SystemExit("Hittar inga tickers. Lägg i config/tickers.txt eller en watchlist.yml.")
 
-          syms = [code(it) for it in items if code(it)]
-          if not syms:
-              raise SystemExit("Watchlist is empty in " + path)
+          syms = load_symbols()
+          out_dir = p.Path("storage/cache/eodhd"); out_dir.mkdir(parents=True, exist_ok=True)
 
-          cmd = f"python -m quantkit.cli_data --interval EOD --tickers {','.join(syms)}"
-          print("RUN:", cmd)
-          subprocess.check_call(shlex.split(cmd))
+          def fetch_eod(symbol: str) -> pd.DataFrame:
+              url = f"https://eodhd.com/api/eod/{symbol}"
+              params = {"api_token": API_KEY, "fmt": "json", "period": "d", "from": "2000-01-01"}
+              r = requests.get(url, params=params, timeout=30); r.raise_for_status()
+              data = r.json()
+              if not isinstance(data, list): return pd.DataFrame(columns=["ts","open","high","low","close","volume"])
+              if not data: return pd.DataFrame(columns=["ts","open","high","low","close","volume"])
+              df = pd.DataFrame(data)
+              rename = {"date":"ts","Open":"open","High":"high","Low":"low","Close":"close","Volume":"volume"}
+              df = df.rename(columns=rename)
+              if "ts" not in df and "date" in df: df["ts"] = df["date"]
+              df["ts"] = pd.to_datetime(df["ts"], utc=True, errors="coerce")
+              keep = [c for c in ["ts","open","high","low","close","volume"] if c in df.columns]
+              df = df[keep].dropna(subset=["ts"]).sort_values("ts")
+              for c in ["open","high","low","close","volume"]:
+                  if c in df.columns: df[c] = pd.to_numeric(df[c], errors="coerce")
+              return df
+
+          ok = fail = 0
+          for sym in syms:
+              try:
+                  df = fetch_eod(sym)
+                  fp = out_dir / f"{sym}__1d.parquet"
+                  df.to_parquet(fp, index=False)
+                  print(f"✓ {sym} -> {fp} ({len(df)} rows)")
+                  ok += 1
+                  time.sleep(0.2)
+              except Exception as e:
+                  print(f"⚠ {sym}: {e}", file=sys.stderr)
+                  fail += 1
+
+          print(f"Done. OK={ok} FAIL={fail}")
+          if ok == 0:
+              raise SystemExit("Inga symboler ingested.")
           PY
 
       - name: Sync to S3 (optional)
@@ -85,4 +124,3 @@ jobs:
           else
             echo "S3_BUCKET not set; skipping sync."
           fi
-
