@@ -1,0 +1,17 @@
+# config/ticker_index_map.yml
+# Mappar "friendly" index-koder -> EODHD-symboler
+# Ex: ^GSPC (S&P 500), ^NDX (Nasdaq 100), ^OMXS30, etc.
+# OBS: EODHD kräver .INDX för index.
+map:
+  "^GSPC": "^GSPC.INDX"
+  "^OEX": "^OEX.INDX"
+  "^NDX": "^NDX.INDX"
+  "^DJI": "^DJI.INDX"
+
+  # S&P/Dow Jones sektor-/temaindex (EODHD har dessa som .INDX)
+  "DJUSTC": "DJUSTC.INDX"   # Dow Jones U.S. Technology
+  "SPLRCT": "SPLRCT.INDX"   # S&P 500 Information Technology
+
+  # Sverige
+  "^OMXS30": "^OMXS30.INDX"
+  "^OMXSPI": "^OMXSPI.INDX"
