@@ -198,11 +198,18 @@ def main(
     sym_df = pd.DataFrame(rows)
     agg_df = _aggregate(sym_df)
 
-    out_agg_p = p.Path(out_agg); out_agg_p.parent.mkdir(parents=True, exist_ok=True)
-    out_sym_p = p.Path(out_sym); out_sym_p.parent.mkdir(parents=True, exist_ok=True)
+    def _to_parquet_smart(df, target: str):
+        t = str(target)
+        if t.startswith("s3://"):
+            # Låt pandas/pyarrow + s3fs hantera S3 direkt
+            df.to_parquet(t, index=False)
+        else:
+            out_p = p.Path(t)
+            out_p.parent.mkdir(parents=True, exist_ok=True)
+            df.to_parquet(str(out_p), index=False)
 
-    agg_df.to_parquet(out_agg_p, index=False)
-    sym_df.to_parquet(out_sym_p, index=False)
+    _to_parquet_smart(agg_df, out_agg)
+    _to_parquet_smart(sym_df, out_sym)
 
     print(f"✓ Wrote {len(agg_df)} agg rows -> {out_agg_p}")
     print(f"✓ Wrote {len(sym_df)} symbol rows -> {out_sym_p}")
