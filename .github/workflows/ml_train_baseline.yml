@@ -1,0 +1,49 @@
+name: ml_train_baseline
+
+on:
+  schedule:
+    - cron: "15 22 * * 1-5"   # 22:15 UTC vardagar
+  workflow_dispatch:
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: ${{ github.workspace }}/src
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install
+        run: |
+          python -m pip install -U pip
+          pip install -r requirements.txt
+          pip install -e .
+
+      - name: Train (XGB 5d)
+        run: |
+          python -m quantkit.ml.supervised.trainer train \
+            --parquet storage/snapshots/breadth/symbols/latest.parquet \
+            --horizon 5 --label class --neutral-band 0.0 \
+            --n-splits 5 --n-trials 30 \
+            --out-model models/xgb_us_5d.pkl \
+            --out-oof storage/signals/oof_xgb_5d.parquet
+
+      - name: Signals from OOF
+        run: |
+          python -m quantkit.ml.supervised.signals from-oof \
+            --oof-parquet storage/signals/oof_xgb_5d.parquet \
+            --threshold 0.0 \
+            --out storage/signals/signals_oof_xgb_5d.parquet
+
+      - name: Backtest
+        run: |
+          python -m quantkit.backtest.engine run \
+            --signals storage/signals/signals_oof_xgb_5d.parquet \
+            --prices storage/snapshots/breadth/symbols/latest.parquet \
+            --cost-bps 2 \
+            --out storage/backtests/xgb_5d_equity.parquet
