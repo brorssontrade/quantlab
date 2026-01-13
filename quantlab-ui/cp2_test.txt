@@ -1,0 +1,40 @@
+[WebServer] 
+[WebServer] (!) Some chunks are larger than 500 kB after minification. Consider:
+[WebServer] - Using dynamic import() to code-split the application
+[WebServer] - Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+[WebServer] - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+
+Running 1 test using 1 worker
+
+BROWSER: warning The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+[gotoChartsPro] Found Charts tab via getByTestId('tab-charts')
+  Γ£ÿ  1 [chromium] ΓÇ║ tests\chartsPro.cp2.spec.ts:33:1 ΓÇ║ ChartsPro CP2 smoke (candles + compare overlays) (30.0s)
+
+
+  1) [chromium] ΓÇ║ tests\chartsPro.cp2.spec.ts:33:1 ΓÇ║ ChartsPro CP2 smoke (candles + compare overlays) 
+
+    [31mTest timeout of 30000ms exceeded.[39m
+
+    Error: page.waitForFunction: Test timeout of 30000ms exceeded.
+
+      89 |
+      90 |   let lastDump: any = null;
+    > 91 |   await page.waitForFunction(() => {
+         |              ^
+      92 |     const dump = (window as any).__lwcharts?.dump?.();
+      93 |     if (dump) {
+      94 |       lastDump = dump;
+        at C:\Users\Viktor Brorsson\Desktop\quantlab\quantlab-ui\tests\chartsPro.cp2.spec.ts:91:14
+
+    Error Context: test-results\chartsPro.cp2-ChartsPro-CP2-smoke-candles-compare-overlays--chromium\error-context.md
+
+  1 failed
+    [chromium] ΓÇ║ tests\chartsPro.cp2.spec.ts:33:1 ΓÇ║ ChartsPro CP2 smoke (candles + compare overlays) 
+
+To open last HTML report run:
+[36m[39m
+[36m  npx playwright show-report[39m
+[36m[39m

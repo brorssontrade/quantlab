@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>quantlab-ui</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      (() => {
+        if (typeof window === "undefined") return;
+        const patch = (proto) => {
+          if (!proto || typeof proto.removeChild !== "function") return;
+          const original = proto.removeChild;
+          proto.removeChild = function patchedRemoveChild(child) {
+            if (!child) return child;
+            try {
+              return original.call(this, child);
+            } catch (error) {
+              if (error instanceof DOMException && error.name === "NotFoundError") {
+                return child;
+              }
+              throw error;
+            }
+          };
+        };
+        if (typeof Node !== "undefined") {
+          patch(Node.prototype);
+        }
+        if (typeof Element !== "undefined") {
+          patch(Element.prototype);
+        }
+      })();
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
