@@ -1,0 +1,82 @@
+
+> quantlab-ui@0.0.0 test:chartspro
+> npx playwright test tests/chartsPro.contract.spec.ts tests/chartsPro.cp2.spec.ts tests/chartsPro.cp7.spec.ts tests/chartsPro.cp8.spec.ts tests/chartsPro.compareModes.spec.ts --project=chromium --workers=1 --reporter=line
+
+
+Running 5 tests using 1 worker
+
+[1A[2K[1/5] [chromium] ΓÇ║ tests\chartsPro.compareModes.spec.ts:19:1 ΓÇ║ compare add modes: samePercent, newPriceScale, newPane
+[1A[2K[chromium] ΓÇ║ tests\chartsPro.compareModes.spec.ts:19:1 ΓÇ║ compare add modes: samePercent, newPriceScale, newPane
+Γ£ô samePercent addMode applied and percent block present
+
+[1A[2KΓ£ô newPriceScale applied, compare in main pane with own price scale (addMode set)
+
+[1A[2KΓ£ô newPane created and paneId assigned; layout.panes increased
+
+[1A[2K
+Γ£à compareModes checks passed
+
+[1A[2K[2/5] [chromium] ΓÇ║ tests\chartsPro.contract.spec.ts:3:1 ΓÇ║ ChartsPro QA contract exposes set/dump/_applyPatch
+[1A[2K[3/5] [chromium] ΓÇ║ tests\chartsPro.cp2.spec.ts:32:1 ΓÇ║ ChartsPro CP2 smoke (candles + compare overlays)
+[1A[2K  1) [chromium] ΓÇ║ tests\chartsPro.cp2.spec.ts:32:1 ΓÇ║ ChartsPro CP2 smoke (candles + compare overlays) 
+
+    Error: [2mexpect([22m[31mreceived[39m[2m).[22mnot[2m.[22mtoBeNull[2m()[22m
+
+    Received: [31mnull[39m
+
+      168 |     return { expected: snapshot?.time ?? null, actual: api.dump().hover?.time ?? null };
+      169 |   });
+    > 170 |   expect(anchorHover.expected).not.toBeNull();
+          |                                    ^
+      171 |   expect(anchorHover.actual).toBe(anchorHover.expected);
+      172 |   await page.getByRole("button", { name: /^Dark$/i }).click();
+      173 |   await page.waitForFunction(() => (window as any).__lwcharts?.dump?.().styles?.theme === "dark");
+        at C:\Users\Viktor Brorsson\Desktop\quantlab\quantlab-ui\tests\chartsPro.cp2.spec.ts:170:36
+
+    Error Context: test-results\chartsPro.cp2-ChartsPro-CP2-smoke-candles-compare-overlays--chromium\error-context.md
+
+
+[1A[2K[4/5] [chromium] ΓÇ║ tests\chartsPro.cp7.spec.ts:28:1 ΓÇ║ ChartsPro CP7 legend/scale/last-value parity
+[1A[2K  2) [chromium] ΓÇ║ tests\chartsPro.cp7.spec.ts:28:1 ΓÇ║ ChartsPro CP7 legend/scale/last-value parity ΓöÇΓöÇ
+
+    [31mTest timeout of 30000ms exceeded.[39m
+
+    Error: page.waitForFunction: Test timeout of 30000ms exceeded.
+
+      58 |   });
+      59 |
+    > 60 |   await page.waitForFunction(() => {
+         |              ^
+      61 |     const api = (window as any).__lwcharts;
+      62 |     const dump = api?.dump?.();
+      63 |     return dump && dump.hover && Number.isFinite(dump.hover?.base?.percent);
+        at C:\Users\Viktor Brorsson\Desktop\quantlab\quantlab-ui\tests\chartsPro.cp7.spec.ts:60:14
+
+    Error Context: test-results\chartsPro.cp7-ChartsPro-CP7-legend-scale-last-value-parity-chromium\error-context.md
+
+
+[1A[2K[5/5] [chromium] ΓÇ║ tests\chartsPro.cp8.spec.ts:43:1 ΓÇ║ ChartsPro CP8 visual parity & layout persistence
+[1A[2K  3) [chromium] ΓÇ║ tests\chartsPro.cp8.spec.ts:43:1 ΓÇ║ ChartsPro CP8 visual parity & layout persistence 
+
+    Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoEqual[2m([22m[32mexpected[39m[2m) // deep equality[22m
+
+    Expected: [32mArrayContaining ["META.US", "GOOG.US"][39m
+    Received: [31m[][39m
+
+      160 |     })(),
+      161 |   );
+    > 162 |   expect(legendSymbols).toEqual(expect.arrayContaining(["META.US", "GOOG.US"]));
+          |                         ^
+      163 |
+      164 |   await page.fill("#charts-pro-symbol", "MSFT.US");
+      165 |   await page.getByRole("button", { name: /^4h$/i }).click();
+        at C:\Users\Viktor Brorsson\Desktop\quantlab\quantlab-ui\tests\chartsPro.cp8.spec.ts:162:25
+
+    Error Context: test-results\chartsPro.cp8-ChartsPro-CP8-visual-parity-layout-persistence-chromium\error-context.md
+
+
+[1A[2K  3 failed
+    [chromium] ΓÇ║ tests\chartsPro.cp2.spec.ts:32:1 ΓÇ║ ChartsPro CP2 smoke (candles + compare overlays) 
+    [chromium] ΓÇ║ tests\chartsPro.cp7.spec.ts:28:1 ΓÇ║ ChartsPro CP7 legend/scale/last-value parity ΓöÇΓöÇΓöÇ
+    [chromium] ΓÇ║ tests\chartsPro.cp8.spec.ts:43:1 ΓÇ║ ChartsPro CP8 visual parity & layout persistence 
+  2 passed (50.8s)
