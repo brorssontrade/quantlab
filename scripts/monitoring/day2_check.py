@@ -29,9 +29,17 @@ import requests
 # Configuration
 # ============================================================================
 
-BASE_URL = os.getenv("PROD_BASE_URL") or os.getenv("STAGING_BASE_URL") or "http://127.0.0.1:8000"
+# Fail-fast: BASE_URL must be set via secrets; no localhost fallback for prod
+BASE_URL = os.getenv("PROD_BASE_URL") or os.getenv("STAGING_BASE_URL")
+if not BASE_URL:
+    print("ERROR: PROD_BASE_URL or STAGING_BASE_URL environment variable not set.", file=sys.stderr)
+    print("GitHub Secrets must include PROD_BASE_URL and/or STAGING_BASE_URL.", file=sys.stderr)
+    sys.exit(1)
+
 TIMEOUT_SEC = 30
-REPORT_DIR = Path(__file__).parent.parent / "docs" / "verification"
+# Repo-root-anchored paths (works whether script runs locally or in CI)
+REPO_ROOT = Path(__file__).parent.parent.parent
+REPORT_DIR = REPO_ROOT / "docs" / "verification"
 REPORT_JSON = REPORT_DIR / "DAY2_REPORT.json"
 REPORT_MD = REPORT_DIR / "DAY2_REPORT.md"
 
@@ -94,13 +102,18 @@ def run_pytest_suite(suite: str, markers: str | None = None) -> dict[str, Any]:
     if markers:
         cmd.extend(["-m", markers])
     
+    # Set PYTHONPATH to repo root for proper imports
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(REPO_ROOT)
+    
     try:
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
             timeout=300,
-            cwd=Path(__file__).parent.parent,
+            cwd=REPO_ROOT,
+            env=env,
         )
         passed = result.returncode == 0
         log(f"{'✓' if passed else '✗'} pytest {suite} → exit {result.returncode}", "PASS" if passed else "FAIL")
@@ -211,6 +224,9 @@ def write_reports(results: dict[str, Any]) -> None:
 
 def main() -> int:
     """Main entry point; returns 0 for PASS, 1 for FAIL."""
+    log(f"Repo root: {REPO_ROOT}")
+    log(f"Report dir: {REPORT_DIR}")
+    
     results = run_day2_checks()
     write_reports(results)
     
