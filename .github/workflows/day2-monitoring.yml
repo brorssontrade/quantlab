@@ -177,7 +177,30 @@ jobs:
           PROD_BASE_URL: ${{ secrets.PROD_BASE_URL }}
           STAGING_BASE_URL: ${{ secrets.STAGING_BASE_URL }}
           PYTHONPATH: ${{ github.workspace }}
+          GITHUB_WORKSPACE: ${{ github.workspace }}
         run: |
+          Write-Host "========================================"
+          Write-Host "        WORKSPACE DIAGNOSTICS           "
+          Write-Host "========================================"
+          Write-Host "GITHUB_WORKSPACE: $env:GITHUB_WORKSPACE"
+          Write-Host "PWD: $(Get-Location)"
+          Write-Host ""
+          Write-Host "Git toplevel:"
+          git rev-parse --show-toplevel
+          Write-Host ""
+          Write-Host "Workspace root contents:"
+          Get-ChildItem $env:GITHUB_WORKSPACE | Select-Object Name
+          Write-Host ""
+          Write-Host "Tests folder exists?"
+          if (Test-Path "$env:GITHUB_WORKSPACE\tests") {
+            Write-Host "[OK] tests/ folder found"
+            Get-ChildItem "$env:GITHUB_WORKSPACE\tests" -Filter "*.py" | Select-Object Name
+          } else {
+            Write-Host "[WARN] tests/ folder NOT found at $env:GITHUB_WORKSPACE\tests"
+          }
+          Write-Host "========================================"
+          Write-Host ""
+          
           if (Test-Path ".venv\Scripts\Activate.ps1") {
             . .\.venv\Scripts\Activate.ps1
           }

@@ -112,8 +112,15 @@ print(f"[CONFIG] API_BASE_URL resolved from: {API_URL_SOURCE}", flush=True)
 print(f"[CONFIG] Target: {_mask_url(API_BASE_URL)}", flush=True)
 
 TIMEOUT_SEC = 30
-# Repo-root-anchored paths (works whether script runs locally or in CI)
-REPO_ROOT = Path(__file__).parent.parent.parent
+
+# Repo root: prefer GITHUB_WORKSPACE (set by Actions), fallback to __file__ for local runs
+if os.environ.get("GITHUB_WORKSPACE"):
+    REPO_ROOT = Path(os.environ["GITHUB_WORKSPACE"])
+    print(f"[CONFIG] REPO_ROOT from GITHUB_WORKSPACE: {REPO_ROOT}", flush=True)
+else:
+    REPO_ROOT = Path(__file__).parent.parent.parent
+    print(f"[CONFIG] REPO_ROOT from __file__: {REPO_ROOT}", flush=True)
+
 REPORT_DIR = REPO_ROOT / "docs" / "verification"
 REPORT_JSON = REPORT_DIR / "DAY2_REPORT.json"
 REPORT_MD = REPORT_DIR / "DAY2_REPORT.md"
