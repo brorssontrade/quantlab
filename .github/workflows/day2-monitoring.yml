@@ -35,30 +35,44 @@ jobs:
 
       - name: Fail if secrets not configured
         env:
+          PROD_API_BASE_URL: ${{ secrets.PROD_API_BASE_URL }}
+          STAGING_API_BASE_URL: ${{ secrets.STAGING_API_BASE_URL }}
+          # Legacy fallback support
           PROD_BASE_URL: ${{ secrets.PROD_BASE_URL }}
           STAGING_BASE_URL: ${{ secrets.STAGING_BASE_URL }}
         run: |
-          if [ -z "$PROD_BASE_URL" ] && [ -z "$STAGING_BASE_URL" ]; then
-            echo "ERROR: Neither PROD_BASE_URL nor STAGING_BASE_URL secrets are configured."
-            echo "Please add them to GitHub Settings > Secrets and variables > Actions."
+          # Check for new-style secrets first, then legacy
+          if [ -z "$PROD_API_BASE_URL" ] && [ -z "$STAGING_API_BASE_URL" ] && [ -z "$PROD_BASE_URL" ] && [ -z "$STAGING_BASE_URL" ]; then
+            echo "ERROR: No API URL secrets are configured."
+            echo "Please add PROD_API_BASE_URL and/or STAGING_API_BASE_URL to GitHub Settings > Secrets."
+            echo "(Legacy PROD_BASE_URL/STAGING_BASE_URL also supported for backwards compatibility)"
             exit 1
           fi
 
       - name: Run Day 2 checks
         env:
+          PROD_API_BASE_URL: ${{ secrets.PROD_API_BASE_URL }}
+          STAGING_API_BASE_URL: ${{ secrets.STAGING_API_BASE_URL }}
+          # Legacy fallback
           PROD_BASE_URL: ${{ secrets.PROD_BASE_URL }}
           STAGING_BASE_URL: ${{ secrets.STAGING_BASE_URL }}
         run: |
           if [ "${{ github.event.inputs.environment }}" = "production" ]; then
-            export PROD_BASE_URL="${{ secrets.PROD_BASE_URL }}"
-            if [ -z "$PROD_BASE_URL" ]; then
-              echo "ERROR: PROD_BASE_URL secret not configured for production environment."
+            if [ -n "$PROD_API_BASE_URL" ]; then
+              export PROD_API_BASE_URL="$PROD_API_BASE_URL"
+            elif [ -n "$PROD_BASE_URL" ]; then
+              export PROD_BASE_URL="$PROD_BASE_URL"
+            else
+              echo "ERROR: Neither PROD_API_BASE_URL nor PROD_BASE_URL secret configured."
               exit 1
             fi
           else
-            export STAGING_BASE_URL="${{ secrets.STAGING_BASE_URL }}"
-            if [ -z "$STAGING_BASE_URL" ]; then
-              echo "ERROR: STAGING_BASE_URL secret not configured for staging environment."
+            if [ -n "$STAGING_API_BASE_URL" ]; then
+              export STAGING_API_BASE_URL="$STAGING_API_BASE_URL"
+            elif [ -n "$STAGING_BASE_URL" ]; then
+              export STAGING_BASE_URL="$STAGING_BASE_URL"
+            else
+              echo "ERROR: Neither STAGING_API_BASE_URL nor STAGING_BASE_URL secret configured."
               exit 1
             fi
           fi

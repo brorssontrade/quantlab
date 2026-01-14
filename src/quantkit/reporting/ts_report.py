@@ -520,3 +520,29 @@ def build_report(bars: pd.DataFrame, equity: pd.Series, trades_like: Iterable[Tr
     out.write_text(html, encoding="utf-8")
     return out
 
+
+def load_backtest(path: str):
+    """Load backtest results from a path.
+    
+    Returns tuple of (equity, trades_df, turnover).
+    Stub implementation for backwards compatibility.
+    """
+    import json
+    p = Path(path)
+    
+    # Try loading from json results
+    json_path = p / "results.json" if p.is_dir() else p
+    if json_path.exists() and json_path.suffix == ".json":
+        data = json.loads(json_path.read_text())
+        equity = pd.Series(data.get("equity", []))
+        turnover = data.get("turnover", 0.0)
+        return equity, None, turnover
+    
+    # Try loading from parquet
+    parquet_path = p / "equity.parquet" if p.is_dir() else p.with_suffix(".parquet")
+    if parquet_path.exists():
+        equity = pd.read_parquet(parquet_path).squeeze()
+        return equity, None, 0.0
+    
+    # Return empty defaults
+    return pd.Series(dtype=float), None, 0.0

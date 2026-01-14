@@ -29,11 +29,26 @@ import requests
 # Configuration
 # ============================================================================
 
-# Fail-fast: BASE_URL must be set via secrets; no localhost fallback for prod
-BASE_URL = os.getenv("PROD_BASE_URL") or os.getenv("STAGING_BASE_URL")
-if not BASE_URL:
-    print("ERROR: PROD_BASE_URL or STAGING_BASE_URL environment variable not set.", file=sys.stderr)
-    print("GitHub Secrets must include PROD_BASE_URL and/or STAGING_BASE_URL.", file=sys.stderr)
+# API_BASE_URL: Backend FastAPI (health, OHLCV endpoints) - port 8000
+# UI_BASE_URL: Frontend Vite (for future UI smoke tests) - port 5173
+#
+# Secrets mapping:
+#   PROD_API_BASE_URL -> e.g. http://127.0.0.1:8000 (backend)
+#   PROD_UI_BASE_URL  -> e.g. http://127.0.0.1:5173 (frontend)
+#   STAGING_API_BASE_URL / STAGING_UI_BASE_URL for staging
+#
+# Day2 checks currently only use API; UI checks can be added later.
+
+API_BASE_URL = os.getenv("PROD_API_BASE_URL") or os.getenv("STAGING_API_BASE_URL")
+
+# Fallback to old variable names for backwards compatibility
+if not API_BASE_URL:
+    API_BASE_URL = os.getenv("PROD_BASE_URL") or os.getenv("STAGING_BASE_URL")
+
+if not API_BASE_URL:
+    print("ERROR: API_BASE_URL environment variable not set.", file=sys.stderr)
+    print("Set PROD_API_BASE_URL or STAGING_API_BASE_URL (or legacy PROD_BASE_URL/STAGING_BASE_URL).", file=sys.stderr)
+    print("GitHub Secrets must include the appropriate URL for the FastAPI backend (port 8000).", file=sys.stderr)
     sys.exit(1)
 
 TIMEOUT_SEC = 30
@@ -56,7 +71,7 @@ def log(msg: str, level: Literal["INFO", "ERROR", "PASS", "FAIL"] = "INFO") -> N
 
 def check_health(endpoint: str) -> dict[str, Any]:
     """Check health endpoint and return result."""
-    url = f"{BASE_URL}{endpoint}"
+    url = f"{API_BASE_URL}{endpoint}"
     log(f"Checking {url}")
     try:
         resp = requests.get(url, timeout=TIMEOUT_SEC)
@@ -78,7 +93,7 @@ def check_ohlcv_fetch(symbol: str = "ABB.ST", timeframes: list[str] | None = Non
     results = []
     
     for tf in timeframes:
-        url = f"{BASE_URL}/api/ohlcv"
+        url = f"{API_BASE_URL}/api/ohlcv"
         params = {"symbol": symbol, "bar": tf, "start_date": "2024-01-01", "end_date": "2024-12-31"}
         try:
             resp = requests.get(url, params=params, timeout=TIMEOUT_SEC)
