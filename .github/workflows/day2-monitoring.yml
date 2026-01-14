@@ -14,8 +14,11 @@ on:
 
 jobs:
   day2-checks:
-    runs-on: self-hosted
+    runs-on: [self-hosted, Windows]
     timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
     
     steps:
       - name: Checkout repository
@@ -23,59 +26,58 @@ jobs:
         with:
           ref: main
       
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
+      - name: Verify Python environment
+        run: |
+          # Use existing venv if available, otherwise use system Python
+          if (Test-Path ".venv\Scripts\Activate.ps1") {
+            Write-Host "Using local .venv"
+            . .\.venv\Scripts\Activate.ps1
+          }
+          python --version
+          pip --version
       
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install requests pytest pandas numpy
+          if (Test-Path ".venv\Scripts\Activate.ps1") {
+            . .\.venv\Scripts\Activate.ps1
+          }
+          pip install requests pytest pandas numpy --quiet
 
-      - name: Fail if secrets not configured
+      - name: Preflight - Check API is reachable
         env:
           PROD_API_BASE_URL: ${{ secrets.PROD_API_BASE_URL }}
           STAGING_API_BASE_URL: ${{ secrets.STAGING_API_BASE_URL }}
-          # Legacy fallback support
-          PROD_BASE_URL: ${{ secrets.PROD_BASE_URL }}
-          STAGING_BASE_URL: ${{ secrets.STAGING_BASE_URL }}
         run: |
-          # Check for new-style secrets first, then legacy
-          if [ -z "$PROD_API_BASE_URL" ] && [ -z "$STAGING_API_BASE_URL" ] && [ -z "$PROD_BASE_URL" ] && [ -z "$STAGING_BASE_URL" ]; then
-            echo "ERROR: No API URL secrets are configured."
-            echo "Please add PROD_API_BASE_URL and/or STAGING_API_BASE_URL to GitHub Settings > Secrets."
-            echo "(Legacy PROD_BASE_URL/STAGING_BASE_URL also supported for backwards compatibility)"
+          # Determine target URL
+          $targetUrl = if ($env:PROD_API_BASE_URL) { $env:PROD_API_BASE_URL } elseif ($env:STAGING_API_BASE_URL) { $env:STAGING_API_BASE_URL } else { $null }
+          
+          if (-not $targetUrl) {
+            Write-Host "::error::No API URL secret configured (PROD_API_BASE_URL or STAGING_API_BASE_URL)"
             exit 1
-          fi
+          }
+          
+          Write-Host "Preflight: Checking $targetUrl/health ..."
+          try {
+            $response = Invoke-WebRequest -Uri "$targetUrl/health" -TimeoutSec 10 -UseBasicParsing
+            Write-Host "✓ API is reachable: $($response.StatusCode)"
+          } catch {
+            Write-Host "::error::API not reachable at $targetUrl/health"
+            Write-Host "::error::Ensure uvicorn is running: uvicorn app.main:app --host 127.0.0.1 --port 8000"
+            Write-Host "::error::Error: $_"
+            exit 1
+          }
 
       - name: Run Day 2 checks
         env:
           PROD_API_BASE_URL: ${{ secrets.PROD_API_BASE_URL }}
           STAGING_API_BASE_URL: ${{ secrets.STAGING_API_BASE_URL }}
-          # Legacy fallback
           PROD_BASE_URL: ${{ secrets.PROD_BASE_URL }}
           STAGING_BASE_URL: ${{ secrets.STAGING_BASE_URL }}
+          PYTHONPATH: ${{ github.workspace }}
         run: |
-          if [ "${{ github.event.inputs.environment }}" = "production" ]; then
-            if [ -n "$PROD_API_BASE_URL" ]; then
-              export PROD_API_BASE_URL="$PROD_API_BASE_URL"
-            elif [ -n "$PROD_BASE_URL" ]; then
-              export PROD_BASE_URL="$PROD_BASE_URL"
-            else
-              echo "ERROR: Neither PROD_API_BASE_URL nor PROD_BASE_URL secret configured."
-              exit 1
-            fi
-          else
-            if [ -n "$STAGING_API_BASE_URL" ]; then
-              export STAGING_API_BASE_URL="$STAGING_API_BASE_URL"
-            elif [ -n "$STAGING_BASE_URL" ]; then
-              export STAGING_BASE_URL="$STAGING_BASE_URL"
-            else
-              echo "ERROR: Neither STAGING_API_BASE_URL nor STAGING_BASE_URL secret configured."
-              exit 1
-            fi
-          fi
+          if (Test-Path ".venv\Scripts\Activate.ps1") {
+            . .\.venv\Scripts\Activate.ps1
+          }
           python scripts/monitoring/day2_check.py
       
       - name: Upload reports
@@ -91,7 +93,19 @@ jobs:
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "GitHub Actions"
-          git add -f docs/verification/DAY2_REPORT.*
-          git diff --cached --quiet || git commit -m "docs(monitoring): add Day 2 report (production run)"
-          git push origin main
+          
+          # Check if reports exist before trying to add
+          $reports = Get-ChildItem -Path "docs/verification/DAY2_REPORT.*" -ErrorAction SilentlyContinue
+          if ($reports) {
+            git add -f docs/verification/DAY2_REPORT.*
+            $staged = git diff --cached --name-only
+            if ($staged) {
+              git commit -m "docs(monitoring): add Day 2 report (production run)"
+              git push origin main
+            } else {
+              Write-Host "No changes to commit"
+            }
+          } else {
+            Write-Host "::warning::No DAY2_REPORT files found to commit"
+          }
         continue-on-error: true

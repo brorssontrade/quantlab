@@ -32,24 +32,72 @@ import requests
 # API_BASE_URL: Backend FastAPI (health, OHLCV endpoints) - port 8000
 # UI_BASE_URL: Frontend Vite (for future UI smoke tests) - port 5173
 #
-# Secrets mapping:
-#   PROD_API_BASE_URL -> e.g. http://127.0.0.1:8000 (backend)
-#   PROD_UI_BASE_URL  -> e.g. http://127.0.0.1:5173 (frontend)
-#   STAGING_API_BASE_URL / STAGING_UI_BASE_URL for staging
+# Secrets mapping (priority order):
+#   1. PROD_API_BASE_URL / STAGING_API_BASE_URL (preferred)
+#   2. PROD_BASE_URL / STAGING_BASE_URL (legacy fallback)
 #
 # Day2 checks currently only use API; UI checks can be added later.
 
-API_BASE_URL = os.getenv("PROD_API_BASE_URL") or os.getenv("STAGING_API_BASE_URL")
 
-# Fallback to old variable names for backwards compatibility
-if not API_BASE_URL:
-    API_BASE_URL = os.getenv("PROD_BASE_URL") or os.getenv("STAGING_BASE_URL")
+def resolve_api_url() -> tuple[str, str]:
+    """Resolve API URL with deterministic priority. Returns (url, source_env_var)."""
+    # Priority 1: New-style API secrets
+    candidates = [
+        ("PROD_API_BASE_URL", os.getenv("PROD_API_BASE_URL")),
+        ("STAGING_API_BASE_URL", os.getenv("STAGING_API_BASE_URL")),
+        # Priority 2: Legacy secrets (backwards compat)
+        ("PROD_BASE_URL", os.getenv("PROD_BASE_URL")),
+        ("STAGING_BASE_URL", os.getenv("STAGING_BASE_URL")),
+    ]
+    
+    for env_name, value in candidates:
+        if value:
+            return value.rstrip("/"), env_name
+    
+    return "", ""
+
+
+def validate_api_url(url: str, source: str) -> None:
+    """Validate that URL looks like an API endpoint, not UI."""
+    # Reject common UI ports
+    ui_ports = ["5173", "5174", "3000", "4200"]  # Vite, CRA, Angular defaults
+    for port in ui_ports:
+        if f":{port}" in url:
+            print(f"ERROR: Configuration error!", file=sys.stderr)
+            print(f"  Source: {source} = {url}", file=sys.stderr)
+            print(f"  Port {port} looks like a UI/frontend port.", file=sys.stderr)
+            print(f"  Day2 API checks need the FastAPI backend (typically port 8000).", file=sys.stderr)
+            print(f"  Fix: Set {source} to http://127.0.0.1:8000 (or your API port).", file=sys.stderr)
+            sys.exit(1)
+
+
+API_BASE_URL, API_URL_SOURCE = resolve_api_url()
 
 if not API_BASE_URL:
-    print("ERROR: API_BASE_URL environment variable not set.", file=sys.stderr)
-    print("Set PROD_API_BASE_URL or STAGING_API_BASE_URL (or legacy PROD_BASE_URL/STAGING_BASE_URL).", file=sys.stderr)
-    print("GitHub Secrets must include the appropriate URL for the FastAPI backend (port 8000).", file=sys.stderr)
+    print("ERROR: No API URL environment variable is set.", file=sys.stderr)
+    print("Priority order checked:", file=sys.stderr)
+    print("  1. PROD_API_BASE_URL (preferred)", file=sys.stderr)
+    print("  2. STAGING_API_BASE_URL", file=sys.stderr)
+    print("  3. PROD_BASE_URL (legacy)", file=sys.stderr)
+    print("  4. STAGING_BASE_URL (legacy)", file=sys.stderr)
+    print("Set one of these in GitHub Secrets → FastAPI backend URL (port 8000).", file=sys.stderr)
     sys.exit(1)
+
+# Validate URL doesn't point to UI port
+validate_api_url(API_BASE_URL, API_URL_SOURCE)
+
+# Log resolved URL (mask middle for security)
+def _mask_url(url: str) -> str:
+    """Mask URL for logging (show scheme + port only)."""
+    if "://" in url:
+        scheme, rest = url.split("://", 1)
+        if ":" in rest:
+            host_part, port_part = rest.rsplit(":", 1)
+            return f"{scheme}://*****:{port_part}"
+    return "*****"
+
+print(f"[CONFIG] API_BASE_URL resolved from: {API_URL_SOURCE}", flush=True)
+print(f"[CONFIG] Target: {_mask_url(API_BASE_URL)}", flush=True)
 
 TIMEOUT_SEC = 30
 # Repo-root-anchored paths (works whether script runs locally or in CI)
