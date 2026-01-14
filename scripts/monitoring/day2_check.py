@@ -26,6 +26,18 @@ from typing import Any, Literal
 import requests
 
 # ============================================================================
+# Windows Console Encoding Fix
+# ============================================================================
+# Reconfigure stdout/stderr for UTF-8 to avoid UnicodeEncodeError on Windows
+# when printing Unicode characters (checkmarks, etc.) to cp1252 console
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except AttributeError:
+    # Python < 3.7 fallback
+    pass
+
+# ============================================================================
 # Configuration
 # ============================================================================
 
@@ -125,10 +137,10 @@ def check_health(endpoint: str) -> dict[str, Any]:
         resp = requests.get(url, timeout=TIMEOUT_SEC)
         resp.raise_for_status()
         data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
-        log(f"✓ {endpoint} → {resp.status_code}", "PASS")
+        log(f"[OK] {endpoint} -> {resp.status_code}", "PASS")
         return {"status": "PASS", "code": resp.status_code, "data": data}
     except Exception as exc:
-        log(f"✗ {endpoint} → {exc}", "FAIL")
+        log(f"[FAIL] {endpoint} -> {exc}", "FAIL")
         return {"status": "FAIL", "error": str(exc)}
 
 
@@ -148,10 +160,10 @@ def check_ohlcv_fetch(symbol: str = "ABB.ST", timeframes: list[str] | None = Non
             resp.raise_for_status()
             data = resp.json()
             rows = len(data) if isinstance(data, list) else 0
-            log(f"✓ {symbol}@{tf} → {rows} rows", "PASS")
+            log(f"[OK] {symbol}@{tf} -> {rows} rows", "PASS")
             results.append({"timeframe": tf, "status": "PASS", "rows": rows})
         except Exception as exc:
-            log(f"✗ {symbol}@{tf} → {exc}", "FAIL")
+            log(f"[FAIL] {symbol}@{tf} -> {exc}", "FAIL")
             results.append({"timeframe": tf, "status": "FAIL", "error": str(exc)})
     
     overall = "PASS" if all(r["status"] == "PASS" for r in results) else "FAIL"
@@ -234,16 +246,16 @@ def write_reports(results: dict[str, Any]) -> None:
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     
     # JSON report (machine-readable)
-    with REPORT_JSON.open("w") as f:
-        json.dump(results, f, indent=2)
-    log(f"✓ JSON report written: {REPORT_JSON}")
+    with REPORT_JSON.open("w", encoding="utf-8") as f:
+        json.dump(results, f, indent=2, ensure_ascii=False)
+    log(f"[OK] JSON report written: {REPORT_JSON}")
     
     # Markdown report (human-readable)
     overall = results["overall_status"]
-    icon = "✅" if overall == "APPROVED" else "❌"
+    icon = "[PASS]" if overall == "APPROVED" else "[FAIL]"
     
     md_lines = [
-        f"# Day 2 Production Monitoring Report — {icon} {overall}",
+        f"# Day 2 Production Monitoring Report - {icon} {overall}",
         "",
         f"**Timestamp:** {results['timestamp']}  ",
         f"**Target:** {results['base_url']}  ",
@@ -254,7 +266,7 @@ def write_reports(results: dict[str, Any]) -> None:
     ]
     
     for name, check in results["checks"].items():
-        status_icon = "✅" if check.get("status") == "PASS" else "❌"
+        status_icon = "[PASS]" if check.get("status") == "PASS" else "[FAIL]"
         md_lines.append(f"- **{name}:** {status_icon} {check.get('status', 'UNKNOWN')}")
         if "error" in check:
             md_lines.append(f"  - Error: `{check['error']}`")
@@ -275,9 +287,9 @@ def write_reports(results: dict[str, Any]) -> None:
         f"Full details: [DAY2_REPORT.json]({REPORT_JSON.name})",
     ])
     
-    with REPORT_MD.open("w") as f:
+    with REPORT_MD.open("w", encoding="utf-8") as f:
         f.write("\n".join(md_lines))
-    log(f"✓ Markdown report written: {REPORT_MD}")
+    log(f"[OK] Markdown report written: {REPORT_MD}")
 
 
 # ============================================================================

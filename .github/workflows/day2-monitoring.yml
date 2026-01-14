@@ -19,6 +19,10 @@ jobs:
     # If job queues forever: verify runner has ALL these labels in GitHub Settings → Actions → Runners
     runs-on: [self-hosted, Windows, X64, quantlab-local]
     timeout-minutes: 15
+    # Force UTF-8 encoding for Python to avoid UnicodeEncodeError on Windows cp1252 console
+    env:
+      PYTHONUTF8: "1"
+      PYTHONIOENCODING: "utf-8"
     defaults:
       run:
         shell: pwsh
