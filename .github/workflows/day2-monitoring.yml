@@ -1,0 +1,64 @@
+name: Day 2 Production Monitoring
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options:
+          - production
+          - staging
+        default: 'production'
+
+jobs:
+  day2-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests pytest pandas numpy
+
+      - name: Run Day 2 checks
+        env:
+          PROD_BASE_URL: ${{ secrets.PROD_BASE_URL }}
+          STAGING_BASE_URL: ${{ secrets.STAGING_BASE_URL }}
+        run: |
+          if [ "${{ github.event.inputs.environment }}" = "production" ]; then
+            export BASE_URL="${PROD_BASE_URL}"
+          else
+            export BASE_URL="${STAGING_BASE_URL}"
+          fi
+          python scripts/monitoring/day2_check.py
+      
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: day2-monitoring-reports
+          path: docs/verification/DAY2_REPORT.*
+          retention-days: 90
+      
+      - name: Commit reports to main
+        if: always()
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "GitHub Actions"
+          git add docs/verification/DAY2_REPORT.*
+          git diff --cached --quiet || git commit -m "docs: add Day 2 monitoring report (PR8 consolidation)"
+          git push origin main
+        continue-on-error: true
