@@ -1,16 +1,16 @@
 # Day 2 Production Monitoring Report - [FAIL] ROLLBACK
 
-**Timestamp:** 2026-01-14T23:00:36.222052+00:00  
+**Timestamp:** 2026-01-14T23:08:38.753156+00:00  
 **Target:** http://127.0.0.1:8000  
-**Duration:** 4.3s  
+**Duration:** 3.48s  
 
 ## Checks Summary
 
 - **health:** [PASS] PASS
 - **api_health:** [PASS] PASS
-- **ohlcv_fetch:** [PASS] PASS
+- **ohlcv_fetch:** [FAIL] FAIL
 - **pytest_parity:** [FAIL] FAIL
-  - Error: `Test path not found: tests/test_indicators_parity.py`
+  - Exit code: 2
 - **pytest_critical:** [FAIL] FAIL
   - Exit code: 2
 
@@ -20,5 +20,5 @@
 
 ---
 
-Report generated: 2026-01-14T23:00:36.222052+00:00  
+Report generated: 2026-01-14T23:08:38.753156+00:00  
 Full details: [DAY2_REPORT.json](DAY2_REPORT.json)
