@@ -21,6 +21,44 @@ jobs:
         shell: pwsh
     
     steps:
+      - name: Runner Identity Check (MUST be self-hosted)
+        run: |
+          Write-Host "========================================"
+          Write-Host "        RUNNER IDENTITY CHECK           "
+          Write-Host "========================================"
+          Write-Host ""
+          Write-Host "RUNNER_NAME:    $env:RUNNER_NAME"
+          Write-Host "RUNNER_OS:      $env:RUNNER_OS"
+          Write-Host "RUNNER_ARCH:    $env:RUNNER_ARCH"
+          Write-Host "RUNNER_ENVIRONMENT: $env:RUNNER_ENVIRONMENT"
+          Write-Host ""
+          Write-Host "Hostname:       $(hostname)"
+          Write-Host "Username:       $(whoami)"
+          Write-Host "PWD:            $(Get-Location)"
+          Write-Host ""
+          
+          # Hard fail if not Windows
+          if ($env:RUNNER_OS -ne "Windows") {
+            Write-Host "::error::FATAL: Day2 must run on Windows self-hosted runner!"
+            Write-Host "::error::Current RUNNER_OS: $env:RUNNER_OS"
+            Write-Host "::error::localhost checks require the runner to be on the same machine as uvicorn."
+            exit 1
+          }
+          
+          # Check if port 8000 has a listener
+          Write-Host "Checking if port 8000 has a listener..."
+          $portCheck = netstat -ano | Select-String ":8000"
+          if ($portCheck) {
+            Write-Host "✓ Port 8000 listeners found:"
+            $portCheck | ForEach-Object { Write-Host "  $_" }
+          } else {
+            Write-Host "::warning::No listener found on port 8000!"
+            Write-Host "::warning::uvicorn may not be running. Start it with:"
+            Write-Host "::warning::  uvicorn app.main:app --host 127.0.0.1 --port 8000"
+          }
+          Write-Host ""
+          Write-Host "========================================"
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -47,15 +85,34 @@ jobs:
         env:
           PROD_API_BASE_URL: ${{ secrets.PROD_API_BASE_URL }}
           STAGING_API_BASE_URL: ${{ secrets.STAGING_API_BASE_URL }}
+          PROD_BASE_URL: ${{ secrets.PROD_BASE_URL }}
+          STAGING_BASE_URL: ${{ secrets.STAGING_BASE_URL }}
         run: |
-          # Determine target URL
-          $targetUrl = if ($env:PROD_API_BASE_URL) { $env:PROD_API_BASE_URL } elseif ($env:STAGING_API_BASE_URL) { $env:STAGING_API_BASE_URL } else { $null }
+          # Determine target URL (same priority as day2_check.py)
+          $targetUrl = $null
+          $source = $null
+          
+          if ($env:PROD_API_BASE_URL) {
+            $targetUrl = $env:PROD_API_BASE_URL
+            $source = "PROD_API_BASE_URL"
+          } elseif ($env:STAGING_API_BASE_URL) {
+            $targetUrl = $env:STAGING_API_BASE_URL
+            $source = "STAGING_API_BASE_URL"
+          } elseif ($env:PROD_BASE_URL) {
+            $targetUrl = $env:PROD_BASE_URL
+            $source = "PROD_BASE_URL"
+          } elseif ($env:STAGING_BASE_URL) {
+            $targetUrl = $env:STAGING_BASE_URL
+            $source = "STAGING_BASE_URL"
+          }
           
           if (-not $targetUrl) {
-            Write-Host "::error::No API URL secret configured (PROD_API_BASE_URL or STAGING_API_BASE_URL)"
+            Write-Host "::error::No API URL secret configured"
+            Write-Host "::error::Set PROD_API_BASE_URL or PROD_BASE_URL in GitHub Secrets"
             exit 1
           }
           
+          Write-Host "Preflight: Using $source = $targetUrl"
           Write-Host "Preflight: Checking $targetUrl/health ..."
           try {
             $response = Invoke-WebRequest -Uri "$targetUrl/health" -TimeoutSec 10 -UseBasicParsing
