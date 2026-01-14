@@ -1,0 +1,274 @@
+[1A[2K[WebServer] 
+[WebServer] (!) Some chunks are larger than 500 kB after minification. Consider:
+[WebServer] - Using dynamic import() to code-split the application
+[WebServer] - Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+[WebServer] - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+
+
+Running 41 tests using 1 worker
+
+[1A[2K[1/41] [chromium] ΓÇ║ tests\chartsPro.chartType.spec.ts:67:3 ΓÇ║ TV-3 Steg 1C: Chart Type Switcher ΓÇ║ should render chart type menu with trigger button
+[1A[2K[chromium] ΓÇ║ tests\chartsPro.chartType.spec.ts:67:3 ΓÇ║ TV-3 Steg 1C: Chart Type Switcher ΓÇ║ should render chart type menu with trigger button
+BROWSER: warning The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+[1A[2K[gotoChartsPro] Found Charts tab via getByTestId('tab-charts')
+
+[1A[2K  1) [chromium] ΓÇ║ tests\chartsPro.chartType.spec.ts:67:3 ΓÇ║ TV-3 Steg 1C: Chart Type Switcher ΓÇ║ should render chart type menu with trigger button 
+
+    Error: Base data did not become ready within timeout
+
+      32 |     await page.waitForTimeout(100);
+      33 |   }
+    > 34 |   throw new Error("Base data did not become ready within timeout");
+         |         ^
+      35 | }
+      36 |
+      37 | // Helper to set chart type via QA primitive
+        at waitForBaseReady (C:\Users\Viktor Brorsson\Desktop\quantlab\quantlab-ui\tests\chartsPro.chartType.spec.ts:34:9)
+        at C:\Users\Viktor Brorsson\Desktop\quantlab\quantlab-ui\tests\chartsPro.chartType.spec.ts:64:5
+
+    Error Context: test-results\chartsPro.chartType-TV-3-S-9cf9c-pe-menu-with-trigger-button-chromium\error-context.md
+
+
+[1A[2K[2/41] [chromium] ΓÇ║ tests\chartsPro.chartType.spec.ts:81:3 ΓÇ║ TV-3 Steg 1C: Chart Type Switcher ΓÇ║ should open dropdown menu on trigger click
+[1A[2K[chromium] ΓÇ║ tests\chartsPro.chartType.spec.ts:81:3 ΓÇ║ TV-3 Steg 1C: Chart Type Switcher ΓÇ║ should open dropdown menu on trigger click
+BROWSER: warning The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+[1A[2K[gotoChartsPro] Found Charts tab via getByTestId('tab-charts')
+
+[1A[2K  2) [chromium] ΓÇ║ tests\chartsPro.chartType.spec.ts:81:3 ΓÇ║ TV-3 Steg 1C: Chart Type Switcher ΓÇ║ should open dropdown menu on trigger click 
+
+    Error: Base data did not become ready within timeout
+
+      32 |     await page.waitForTimeout(100);
+      33 |   }
+    > 34 |   throw new Error("Base data did not become ready within timeout");
+         |         ^
+      35 | }
+      36 |
+      37 | // Helper to set chart type via QA primitive
+        at waitForBaseReady (C:\Users\Viktor Brorsson\Desktop\quantlab\quantlab-ui\tests\chartsPro.chartType.spec.ts:34:9)
+        at C:\Users\Viktor Brorsson\Desktop\quantlab\quantlab-ui\tests\chartsPro.chartType.spec.ts:64:5
+
+    Error Context: test-results\chartsPro.chartType-TV-3-S-5bdc3-pdown-menu-on-trigger-click-chromium\error-context.md
+
+
+[1A[2K[3/41] [chromium] ΓÇ║ tests\chartsPro.chartType.spec.ts:107:3 ΓÇ║ TV-3 Steg 1C: Chart Type Switcher ΓÇ║ should switch chart type via UI: candles ΓåÆ line ΓåÆ area ΓåÆ bars
+[1A[2K[chromium] ΓÇ║ tests\chartsPro.chartType.spec.ts:107:3 ΓÇ║ TV-3 Steg 1C: Chart Type Switcher ΓÇ║ should switch chart type via UI: candles ΓåÆ line ΓåÆ area ΓåÆ bars
+BROWSER: warning The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+[1A[2K[gotoChartsPro] Found Charts tab via getByTestId('tab-charts')
+
+[1A[2K  3) [chromium] ΓÇ║ tests\chartsPro.chartType.spec.ts:107:3 ΓÇ║ TV-3 Steg 1C: Chart Type Switcher ΓÇ║ should switch chart type via UI: candles ΓåÆ line ΓåÆ area ΓåÆ bars 
+
+    Error: Base data did not become ready within timeout
+
+      32 |     await page.waitForTimeout(100);
+      33 |   }
+    > 34 |   throw new Error("Base data did not become ready within timeout");
+         |         ^
+      35 | }
+      36 |
+      37 | // Helper to set chart type via QA primitive
+        at waitForBaseReady (C:\Users\Viktor Brorsson\Desktop\quantlab\quantlab-ui\tests\chartsPro.chartType.spec.ts:34:9)
+        at C:\Users\Viktor Brorsson\Desktop\quantlab\quantlab-ui\tests\chartsPro.chartType.spec.ts:64:5
+
+    Error Context: test-results\chartsPro.chartType-TV-3-S-9ae46-andles-ΓåÆ-line-ΓåÆ-area-ΓåÆ-bars-chromium\error-context.md
+
+
+[1A[2K[4/41] [chromium] ΓÇ║ tests\chartsPro.chartType.spec.ts:145:3 ΓÇ║ TV-3 Steg 1C: Chart Type Switcher ΓÇ║ should switch chart type via QA primitive: candles ΓåÆ hollowCandles ΓåÆ baseline ΓåÆ columns
+[1A[2K[chromium] ΓÇ║ tests\chartsPro.chartType.spec.ts:145:3 ΓÇ║ TV-3 Steg 1C: Chart Type Switcher ΓÇ║ should switch chart type via QA primitive: candles ΓåÆ hollowCandles ΓåÆ baseline ΓåÆ columns
+BROWSER: warning The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+[1A[2K[gotoChartsPro] Found Charts tab via getByTestId('tab-charts')
+
+[1A[2K  4) [chromium] ΓÇ║ tests\chartsPro.chartType.spec.ts:145:3 ΓÇ║ TV-3 Steg 1C: Chart Type Switcher ΓÇ║ should switch chart type via QA primitive: candles ΓåÆ hollowCandles ΓåÆ baseline ΓåÆ columns 
+
+    Error: Base data did not become ready within timeout
+
+      32 |     await page.waitForTimeout(100);
+      33 |   }
+    > 34 |   throw new Error("Base data did not become ready within timeout");
+         |         ^
+      35 | }
+      36 |
+      37 | // Helper to set chart type via QA primitive
+        at waitForBaseReady (C:\Users\Viktor Brorsson\Desktop\quantlab\quantlab-ui\tests\chartsPro.chartType.spec.ts:34:9)
+        at C:\Users\Viktor Brorsson\Desktop\quantlab\quantlab-ui\tests\chartsPro.chartType.spec.ts:64:5
+
+    Error Context: test-results\chartsPro.chartType-TV-3-S-596ad-andles-ΓåÆ-baseline-ΓåÆ-columns-chromium\error-context.md
+
+
+[1A[2K[5/41] [chromium] ΓÇ║ tests\chartsPro.chartType.spec.ts:184:3 ΓÇ║ TV-3 Steg 1C: Chart Type Switcher ΓÇ║ should reject invalid chart type via QA primitive
+[1A[2K[chromium] ΓÇ║ tests\chartsPro.chartType.spec.ts:184:3 ΓÇ║ TV-3 Steg 1C: Chart Type Switcher ΓÇ║ should reject invalid chart type via QA primitive
+BROWSER: warning The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+[1A[2K[gotoChartsPro] Found Charts tab via getByTestId('tab-charts')
+
+[1A[2K  5) [chromium] ΓÇ║ tests\chartsPro.chartType.spec.ts:184:3 ΓÇ║ TV-3 Steg 1C: Chart Type Switcher ΓÇ║ should reject invalid chart type via QA primitive 
+
+    Error: Base data did not become ready within timeout
+
+      32 |     await page.waitForTimeout(100);
+      33 |   }
+    > 34 |   throw new Error("Base data did not become ready within timeout");
+         |         ^
+      35 | }
+      36 |
+      37 | // Helper to set chart type via QA primitive
+        at waitForBaseReady (C:\Users\Viktor Brorsson\Desktop\quantlab\quantlab-ui\tests\chartsPro.chartType.spec.ts:34:9)
+        at C:\Users\Viktor Brorsson\Desktop\quantlab\quantlab-ui\tests\chartsPro.chartType.spec.ts:64:5
+
+    Error Context: test-results\chartsPro.chartType-TV-3-S-c5ae0-chart-type-via-QA-primitive-chromium\error-context.md
+
+
+[1A[2K[6/41] [chromium] ΓÇ║ tests\chartsPro.chartType.spec.ts:194:3 ΓÇ║ TV-3 Steg 1C: Chart Type Switcher ΓÇ║ should persist chart type in localStorage
+[1A[2K[chromium] ΓÇ║ tests\chartsPro.chartType.spec.ts:194:3 ΓÇ║ TV-3 Steg 1C: Chart Type Switcher ΓÇ║ should persist chart type in localStorage
+BROWSER: warning The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+[1A[2K[gotoChartsPro] Found Charts tab via getByTestId('tab-charts')
+
+[1A[2K  6) [chromium] ΓÇ║ tests\chartsPro.chartType.spec.ts:194:3 ΓÇ║ TV-3 Steg 1C: Chart Type Switcher ΓÇ║ should persist chart type in localStorage 
+
+    Error: Base data did not become ready within timeout
+
+      32 |     await page.waitForTimeout(100);
+      33 |   }
+    > 34 |   throw new Error("Base data did not become ready within timeout");
+         |         ^
+      35 | }
+      36 |
+      37 | // Helper to set chart type via QA primitive
+        at waitForBaseReady (C:\Users\Viktor Brorsson\Desktop\quantlab\quantlab-ui\tests\chartsPro.chartType.spec.ts:34:9)
+        at C:\Users\Viktor Brorsson\Desktop\quantlab\quantlab-ui\tests\chartsPro.chartType.spec.ts:64:5
+
+    Error Context: test-results\chartsPro.chartType-TV-3-S-df4fa--chart-type-in-localStorage-chromium\error-context.md
+
+
+[1A[2K[7/41] [chromium] ΓÇ║ tests\chartsPro.chartType.spec.ts:214:3 ΓÇ║ TV-3 Steg 1C: Chart Type Switcher ΓÇ║ should maintain data readiness across all chart types
+[1A[2K[chromium] ΓÇ║ tests\chartsPro.chartType.spec.ts:214:3 ΓÇ║ TV-3 Steg 1C: Chart Type Switcher ΓÇ║ should maintain data readiness across all chart types
+BROWSER: warning The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+[1A[2K[gotoChartsPro] Found Charts tab via getByTestId('tab-charts')
+
+[1A[2K  7) [chromium] ΓÇ║ tests\chartsPro.chartType.spec.ts:214:3 ΓÇ║ TV-3 Steg 1C: Chart Type Switcher ΓÇ║ should maintain data readiness across all chart types 
+
+    Error: Base data did not become ready within timeout
+
+      32 |     await page.waitForTimeout(100);
+      33 |   }
+    > 34 |   throw new Error("Base data did not become ready within timeout");
+         |         ^
+      35 | }
+      36 |
+      37 | // Helper to set chart type via QA primitive
+        at waitForBaseReady (C:\Users\Viktor Brorsson\Desktop\quantlab\quantlab-ui\tests\chartsPro.chartType.spec.ts:34:9)
+        at C:\Users\Viktor Brorsson\Desktop\quantlab\quantlab-ui\tests\chartsPro.chartType.spec.ts:64:5
+
+    Error Context: test-results\chartsPro.chartType-TV-3-S-68f4a-ness-across-all-chart-types-chromium\error-context.md
+
+
+[1A[2K[8/41] [chromium] ΓÇ║ tests\chartsPro.chartType.spec.ts:228:3 ΓÇ║ TV-3 Steg 1C: Chart Type Switcher ΓÇ║ should not crash or log errors during type switching
+[1A[2K[chromium] ΓÇ║ tests\chartsPro.chartType.spec.ts:228:3 ΓÇ║ TV-3 Steg 1C: Chart Type Switcher ΓÇ║ should not crash or log errors during type switching
+BROWSER: warning The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+[1A[2K[gotoChartsPro] Found Charts tab via getByTestId('tab-charts')
+
+[1A[2K  8) [chromium] ΓÇ║ tests\chartsPro.chartType.spec.ts:228:3 ΓÇ║ TV-3 Steg 1C: Chart Type Switcher ΓÇ║ should not crash or log errors during type switching 
+
+    Error: Base data did not become ready within timeout
+
+      32 |     await page.waitForTimeout(100);
+      33 |   }
+    > 34 |   throw new Error("Base data did not become ready within timeout");
+         |         ^
+      35 | }
+      36 |
+      37 | // Helper to set chart type via QA primitive
+        at waitForBaseReady (C:\Users\Viktor Brorsson\Desktop\quantlab\quantlab-ui\tests\chartsPro.chartType.spec.ts:34:9)
+        at C:\Users\Viktor Brorsson\Desktop\quantlab\quantlab-ui\tests\chartsPro.chartType.spec.ts:64:5
+
+    Error Context: test-results\chartsPro.chartType-TV-3-S-7b26a-rrors-during-type-switching-chromium\error-context.md
+
+
+[1A[2K[9/41] [chromium] ΓÇ║ tests\chartsPro.chartType.spec.ts:251:3 ΓÇ║ TV-3 Steg 1C: Chart Type Switcher ΓÇ║ should update dump() contract fields correctly
+[1A[2K[chromium] ΓÇ║ tests\chartsPro.chartType.spec.ts:251:3 ΓÇ║ TV-3 Steg 1C: Chart Type Switcher ΓÇ║ should update dump() contract fields correctly
+BROWSER: warning The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+[1A[2K[gotoChartsPro] Found Charts tab via getByTestId('tab-charts')
+
+[1A[2K  9) [chromium] ΓÇ║ tests\chartsPro.chartType.spec.ts:251:3 ΓÇ║ TV-3 Steg 1C: Chart Type Switcher ΓÇ║ should update dump() contract fields correctly 
+
+    Error: Base data did not become ready within timeout
+
+      32 |     await page.waitForTimeout(100);
+      33 |   }
+    > 34 |   throw new Error("Base data did not become ready within timeout");
+         |         ^
+      35 | }
+      36 |
+      37 | // Helper to set chart type via QA primitive
+        at waitForBaseReady (C:\Users\Viktor Brorsson\Desktop\quantlab\quantlab-ui\tests\chartsPro.chartType.spec.ts:34:9)
+        at C:\Users\Viktor Brorsson\Desktop\quantlab\quantlab-ui\tests\chartsPro.chartType.spec.ts:64:5
+
+    Error Context: test-results\chartsPro.chartType-TV-3-S-6c38e-p-contract-fields-correctly-chromium\error-context.md
+
+
+[1A[2K[10/41] [chromium] ΓÇ║ tests\chartsPro.cp2.spec.ts:33:1 ΓÇ║ ChartsPro CP2 smoke (candles + compare overlays)
+[1A[2K[chromium] ΓÇ║ tests\chartsPro.cp2.spec.ts:33:1 ΓÇ║ ChartsPro CP2 smoke (candles + compare overlays)
+BROWSER: warning The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+
+[1A[2K[gotoChartsPro] Found Charts tab via getByTestId('tab-charts')
+
+[1A[2K  10) [chromium] ΓÇ║ tests\chartsPro.cp2.spec.ts:33:1 ΓÇ║ ChartsPro CP2 smoke (candles + compare overlays) 
+
+    [31mTest timeout of 30000ms exceeded.[39m
+
+    Error: page.waitForFunction: Test timeout of 30000ms exceeded.
+
+      89 |
+      90 |   let lastDump: any = null;
+    > 91 |   await page.waitForFunction(() => {
+         |              ^
+      92 |     const dump = (window as any).__lwcharts?.dump?.();
+      93 |     if (dump) {
+      94 |       lastDump = dump;
+        at C:\Users\Viktor Brorsson\Desktop\quantlab\quantlab-ui\tests\chartsPro.cp2.spec.ts:91:14
+
+    Error Context: test-results\chartsPro.cp2-ChartsPro-CP2-smoke-candles-compare-overlays--chromium\error-context.md
+
+
+[1A[2K[11/41] [chromium] ΓÇ║ tests\chartsPro.cp7.spec.ts:29:1 ΓÇ║ ChartsPro CP7 legend/scale/last-value parity
+[1A[2K[chromium] ΓÇ║ tests\chartsPro.cp7.spec.ts:29:1 ΓÇ║ ChartsPro CP7 legend/scale/last-value parity
+[gotoChartsPro] Found Charts tab via getByTestId('tab-charts')
+

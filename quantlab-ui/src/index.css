@@ -1,0 +1,312 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 3.9%;
+    --primary: 0 0% 9%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 0 0% 96.1%;
+    --secondary-foreground: 0 0% 9%;
+    --muted: 0 0% 96.1%;
+    --muted-foreground: 0 0% 45.1%;
+    --accent: 0 0% 96.1%;
+    --accent-foreground: 0 0% 9%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 89.8%;
+    --input: 0 0% 89.8%;
+    --ring: 0 0% 3.9%;
+    --chart-1: 12 76% 61%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+    --radius: 0.5rem
+  }
+  .dark {
+    --background: 0 0% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 0 0% 9%;
+    --secondary: 0 0% 14.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 14.9%;
+    --muted-foreground: 0 0% 63.9%;
+    --accent: 0 0% 14.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 14.9%;
+    --input: 0 0% 14.9%;
+    --ring: 0 0% 83.1%;
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+.chartspro-root {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 520px;
+  min-width: 0;
+}
+
+@media (min-height: 900px) {
+  .chartspro-surface {
+    height: calc(100vh - 240px);
+  }
+}
+
+.chartspro-surface {
+  position: relative;
+  flex: 1;
+  height: 560px;
+  min-height: 320px;
+}
+
+.chartspro-price {
+  position: absolute;
+  inset: 0;
+  min-height: 520px;
+  min-width: 0;
+}
+
+.chartspro-root a[href*="tradingview"] {
+  display: none !important;
+}
+
+.chartspro-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  background: transparent !important;
+  pointer-events: none;
+}
+
+.chartspro-overlay__canvas {
+  background: transparent !important;
+  cursor: inherit;
+  /* Do not intercept pointer events; legend and UI should receive them */
+  pointer-events: none;
+}
+
+.chartspro-object-row {
+  cursor: grab;
+}
+
+.chartspro-object-row:active {
+  cursor: grabbing;
+}
+
+.chartspro-data-window {
+  min-width: 180px;
+  max-width: 240px;
+  background: rgba(2, 6, 23, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  color: #e2e8f0;
+  font-size: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  box-shadow: 0 8px 24px rgba(3, 7, 18, 0.45);
+  backdrop-filter: blur(4px);
+}
+
+.chartspro-data-window__section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.chartspro-data-window__title {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(226, 232, 240, 0.7);
+}
+
+.chartspro-data-window__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.chartspro-data-window__label {
+  color: rgba(203, 213, 225, 0.85);
+}
+
+.chartspro-data-window__value {
+  font-weight: 600;
+}
+
+.chartspro-legend {
+  position: absolute;
+  right: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  z-index: 40;
+}
+
+.chartspro-legend--compare {
+  top: 0.75rem;
+}
+
+.chartspro-legend--indicator {
+  bottom: 0.75rem;
+}
+
+.chartspro-legend__item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.45rem;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(51, 65, 85, 0.5);
+  color: #e2e8f0;
+  font-size: 0.75rem;
+}
+
+.chartspro-legend__item.is-muted {
+  opacity: 0.5;
+}
+
+.chartspro-legend__item:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.chartspro-legend__dot {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(148, 163, 184, 0.5);
+}
+
+.chartspro-legend__text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.15;
+  flex: 1;
+}
+
+.chartspro-legend__label {
+  font-weight: 600;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.chartspro-legend__value {
+  font-size: 0.72rem;
+  color: rgba(226, 232, 240, 0.8);
+}
+
+.chartspro-last-labels {
+  position: absolute;
+  inset: 0 0 0 auto;
+  pointer-events: none;
+  z-index: 30;
+}
+
+.chartspro-last-label {
+  position: absolute;
+  right: 0.35rem;
+  transform: translateY(-50%);
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.1rem 0.45rem;
+  border-radius: 0.35rem;
+  color: #0f172a;
+  z-index: 35;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.35);
+}
+
+.chartspro-last-label--compare {
+  right: 0.35rem;
+}
+
+/* TV-4 Shell Layout Grid (TradingView-style) */
+.tv-shell {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-rows: auto 1fr auto;
+  gap: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.tv-topbar {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  min-height: 0;
+  background: transparent;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.tv-leftbar {
+  grid-column: 1;
+  grid-row: 2;
+  min-width: 0;
+  background: transparent;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.tv-chart-root {
+  grid-column: 2;
+  grid-row: 2;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.tv-rightbar {
+  grid-column: 3;
+  grid-row: 2;
+  min-width: 0;
+  background: transparent;
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.tv-bottombar {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  min-height: 0;
+  background: transparent;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+

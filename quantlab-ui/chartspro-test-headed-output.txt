@@ -1,0 +1,102 @@
+
+> quantlab-ui@0.0.0 test:chartspro:headed
+> npx playwright test tests/chartsPro.contract.spec.ts tests/chartsPro.cp2.spec.ts tests/chartsPro.cp7.spec.ts tests/chartsPro.cp8.spec.ts tests/chartsPro.compareModes.spec.ts --project=chromium --workers=1 --headed --reporter=line,html
+
+
+Running 5 tests using 1 worker
+
+[1A[2K[1/5] [chromium] ΓÇ║ tests\chartsPro.compareModes.spec.ts:19:1 ΓÇ║ compare add modes: samePercent, newPriceScale, newPane
+[1A[2K[chromium] ΓÇ║ tests\chartsPro.compareModes.spec.ts:19:1 ΓÇ║ compare add modes: samePercent, newPriceScale, newPane
+Γ£ô samePercent addMode applied and percent block present
+
+[1A[2KΓ£ô newPriceScale applied, compare in main pane with own price scale (addMode set)
+
+[1A[2K  1) [chromium] ΓÇ║ tests\chartsPro.compareModes.spec.ts:19:1 ΓÇ║ compare add modes: samePercent, newPriceScale, newPane 
+
+    Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoBeGreaterThan[2m([22m[32mexpected[39m[2m)[22m
+
+    Expected: > [32m1[39m
+    Received:   [31m1[39m
+
+      70 |   const panes = dump?.render?.layout?.panes ?? [];
+      71 |   expect(Array.isArray(panes)).toBe(true);
+    > 72 |   expect(panes.length).toBeGreaterThan(1);
+         |                        ^
+      73 |   const expectedPaneId = `pane-compare-${("TSLA.US".toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""))}`;
+      74 |   // Check that compare object paneId matches the pane id pattern
+      75 |   expect(tsla?.paneId).toBeDefined();
+        at C:\Users\Viktor Brorsson\Desktop\quantlab\quantlab-ui\tests\chartsPro.compareModes.spec.ts:72:24
+
+    Error Context: test-results\chartsPro.compareModes-com-f335c-rcent-newPriceScale-newPane-chromium\error-context.md
+
+
+[1A[2K[2/5] [chromium] ΓÇ║ tests\chartsPro.contract.spec.ts:3:1 ΓÇ║ ChartsPro QA contract exposes set/dump/_applyPatch
+[1A[2K  2) [chromium] ΓÇ║ tests\chartsPro.contract.spec.ts:3:1 ΓÇ║ ChartsPro QA contract exposes set/dump/_applyPatch 
+
+    Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoBeTruthy[2m()[22m
+
+    Received: [31mfalse[39m
+
+      28 |   expect(layoutCanvas.h ?? 0).toBeGreaterThan(0);
+      29 |   expect(Array.isArray(dump.render?.layout?.panes)).toBeTruthy();
+    > 30 |   expect(dump.render?.layout?.panes?.some?.((p: any) => p?.id === "price")).toBeTruthy();
+         |                                                                             ^
+      31 |   expect(typeof dump.scale?.baseMode).toBe("string");
+      32 |   expect(typeof dump.render?.barSpacing === "number").toBeTruthy();
+      33 |   expect(dump.render?.visibleRange?.from).not.toBeUndefined();
+        at C:\Users\Viktor Brorsson\Desktop\quantlab\quantlab-ui\tests\chartsPro.contract.spec.ts:30:77
+
+    Error Context: test-results\chartsPro.contract-ChartsP-3fd77-exposes-set-dump-applyPatch-chromium\error-context.md
+
+
+[1A[2K[3/5] [chromium] ΓÇ║ tests\chartsPro.cp2.spec.ts:32:1 ΓÇ║ ChartsPro CP2 smoke (candles + compare overlays)
+[1A[2K[chromium] ΓÇ║ tests\chartsPro.cp2.spec.ts:32:1 ΓÇ║ ChartsPro CP2 smoke (candles + compare overlays)
+BROWSER: log __lwcharts.hoverAt -> target: anchor timeKey: 1704348000 visible.len: 12 base.len: 12 snapshot: true
+
+[1A[2K[4/5] [chromium] ΓÇ║ tests\chartsPro.cp7.spec.ts:28:1 ΓÇ║ ChartsPro CP7 legend/scale/last-value parity
+[1A[2K  3) [chromium] ΓÇ║ tests\chartsPro.cp7.spec.ts:28:1 ΓÇ║ ChartsPro CP7 legend/scale/last-value parity ΓöÇΓöÇ
+
+    Error: [2mexpect([22m[31mreceived[39m[2m).[22mtoBeLessThan[2m([22m[32mexpected[39m[2m)[22m
+
+    Expected: < [32m0.05[39m
+    Received:   [31mNaN[39m
+
+      106 |   const legendBaseValue = legendBaseEntry?.value ? parseFloat(legendBaseEntry.value.replace("%", "")) : NaN;
+      107 |   const hoverBase = percentDump.hover?.base?.percent ?? NaN;
+    > 108 |   expect(Math.abs(legendBaseValue - hoverBase)).toBeLessThan(0.05);
+          |                                                 ^
+      109 |
+      110 |   const legendCompareValue = legendCompareEntry?.value ? parseFloat(legendCompareEntry.value.replace("%", "")) : NaN;
+      111 |   expect(Math.abs(legendCompareValue - hoverCompare)).toBeLessThan(0.30);
+        at C:\Users\Viktor Brorsson\Desktop\quantlab\quantlab-ui\tests\chartsPro.cp7.spec.ts:108:49
+
+    Error Context: test-results\chartsPro.cp7-ChartsPro-CP7-legend-scale-last-value-parity-chromium\error-context.md
+
+
+[1A[2K[5/5] [chromium] ΓÇ║ tests\chartsPro.cp8.spec.ts:43:1 ΓÇ║ ChartsPro CP8 visual parity & layout persistence
+[1A[2K  4) [chromium] ΓÇ║ tests\chartsPro.cp8.spec.ts:43:1 ΓÇ║ ChartsPro CP8 visual parity & layout persistence 
+
+    [31mTest timeout of 30000ms exceeded.[39m
+
+    Error: page.waitForFunction: Test timeout of 30000ms exceeded.
+
+      134 |   const panResult = await page.evaluate(() => (window as any).__lwcharts.debug?.pan?.(20, 0) ?? false);
+      135 |   expect(panResult).toBeTruthy();
+    > 136 |   await page.waitForFunction(
+          |              ^
+      137 |     (before) => {
+      138 |       const next = (window as any).__lwcharts.dump().render?.scrollPosition ?? null;
+      139 |       return typeof next === "number" && next !== before;
+        at C:\Users\Viktor Brorsson\Desktop\quantlab\quantlab-ui\tests\chartsPro.cp8.spec.ts:136:14
+
+    Error Context: test-results\chartsPro.cp8-ChartsPro-CP8-visual-parity-layout-persistence-chromium\error-context.md
+
+
+[1A[2K  4 failed
+    [chromium] ΓÇ║ tests\chartsPro.compareModes.spec.ts:19:1 ΓÇ║ compare add modes: samePercent, newPriceScale, newPane 
+    [chromium] ΓÇ║ tests\chartsPro.contract.spec.ts:3:1 ΓÇ║ ChartsPro QA contract exposes set/dump/_applyPatch 
+    [chromium] ΓÇ║ tests\chartsPro.cp7.spec.ts:28:1 ΓÇ║ ChartsPro CP7 legend/scale/last-value parity ΓöÇΓöÇΓöÇ
+    [chromium] ΓÇ║ tests\chartsPro.cp8.spec.ts:43:1 ΓÇ║ ChartsPro CP8 visual parity & layout persistence 
+  1 passed (1.3m)
+
+[36m  Serving HTML report at http://localhost:64682. Press Ctrl+C to quit.[39m
