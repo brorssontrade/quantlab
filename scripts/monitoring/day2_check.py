@@ -151,7 +151,7 @@ def run_pytest_suite(suite: str, markers: str | None = None) -> dict[str, Any]:
 def run_day2_checks() -> dict[str, Any]:
     """Execute all Day 2 checks and aggregate results."""
     log("=== Day 2 Production Monitoring Start ===")
-    log(f"Target: {BASE_URL}")
+    log(f"Target: {API_BASE_URL}")
     
     start_time = time.time()
     timestamp = datetime.now(timezone.utc).isoformat()
@@ -174,7 +174,7 @@ def run_day2_checks() -> dict[str, Any]:
     
     return {
         "timestamp": timestamp,
-        "base_url": BASE_URL,
+        "base_url": API_BASE_URL,
         "duration_sec": round(elapsed, 2),
         "overall_status": overall_status,
         "checks": checks,
@@ -242,8 +242,22 @@ def main() -> int:
     log(f"Repo root: {REPO_ROOT}")
     log(f"Report dir: {REPORT_DIR}")
     
-    results = run_day2_checks()
-    write_reports(results)
+    results = None
+    try:
+        results = run_day2_checks()
+    except Exception as exc:
+        # Ensure we always produce a report even on unexpected errors
+        log(f"FATAL: Unexpected error during checks: {exc}", "ERROR")
+        results = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "base_url": API_BASE_URL,
+            "duration_sec": 0,
+            "overall_status": "ROLLBACK",
+            "checks": {"fatal_error": {"status": "FAIL", "error": str(exc)}},
+        }
+    finally:
+        if results:
+            write_reports(results)
     
     exit_code = 0 if results["overall_status"] == "APPROVED" else 1
     log(f"Exiting with code {exit_code}")
