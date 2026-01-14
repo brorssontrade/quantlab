@@ -162,14 +162,14 @@ def check_ohlcv_fetch(symbol: str | None = None, timeframes: list[str] | None = 
       - limit: max candles (default 2000)
     
     Environment variables:
-      - DAY2_SAMPLE_SYMBOL: Symbol to test (default: AAPL)
-      - DAY2_LOOKBACK_DAYS: Days to look back (default: 30)
+      - DAY2_SAMPLE_SYMBOL: Symbol to test (default: ABB.ST - Swedish stock)
+      - DAY2_LOOKBACK_DAYS: Days to look back (default: 90)
     """
-    # Configurable via env vars
+    # Configurable via env vars - default to Swedish stock that should exist
     if symbol is None:
-        symbol = os.environ.get("DAY2_SAMPLE_SYMBOL", "AAPL")
+        symbol = os.environ.get("DAY2_SAMPLE_SYMBOL", "ABB.ST")
     
-    lookback_days = int(os.environ.get("DAY2_LOOKBACK_DAYS", "30"))
+    lookback_days = int(os.environ.get("DAY2_LOOKBACK_DAYS", "90"))
     end_date = datetime.now(timezone.utc)
     start_date = end_date - timedelta(days=lookback_days)
     
@@ -188,25 +188,39 @@ def check_ohlcv_fetch(symbol: str | None = None, timeframes: list[str] | None = 
             "end": end_date.strftime("%Y-%m-%dT23:59:59"),
             "limit": 500,
         }
+        log(f"[DIAG] OHLCV request: {url}")
+        log(f"[DIAG] OHLCV params: {params}")
+        
         try:
             resp = requests.get(url, params=params, timeout=TIMEOUT_SEC)
+            log(f"[DIAG] HTTP status: {resp.status_code}")
             resp.raise_for_status()
+            
             data = resp.json()
             candles = data.get("candles", []) if isinstance(data, dict) else data
             rows = len(candles) if isinstance(candles, list) else 0
             
             # FAIL if 0 candles - data pipeline not working
             if rows == 0:
+                # Log response body for debugging (capped)
+                body_preview = str(data)[:500] if data else "<empty>"
+                log(f"[DIAG] Response body (0 candles): {body_preview}", "ERROR")
                 log(f"[FAIL] {symbol}@{tf} -> 0 candles (expected data for last {lookback_days} days)", "FAIL")
                 results.append({
                     "timeframe": tf, 
                     "status": "FAIL", 
                     "rows": 0,
-                    "error": f"No candles returned for {symbol} in last {lookback_days} days"
+                    "error": f"No candles returned for {symbol} in last {lookback_days} days",
+                    "response_preview": body_preview,
                 })
             else:
                 log(f"[OK] {symbol}@{tf} -> {rows} candles", "PASS")
                 results.append({"timeframe": tf, "status": "PASS", "rows": rows})
+        except requests.exceptions.HTTPError as exc:
+            body_preview = exc.response.text[:500] if exc.response else "<no response>"
+            log(f"[DIAG] HTTP error response: {body_preview}", "ERROR")
+            log(f"[FAIL] {symbol}@{tf} -> {exc}", "FAIL")
+            results.append({"timeframe": tf, "status": "FAIL", "error": str(exc), "response_preview": body_preview})
         except Exception as exc:
             log(f"[FAIL] {symbol}@{tf} -> {exc}", "FAIL")
             results.append({"timeframe": tf, "status": "FAIL", "error": str(exc)})
@@ -232,13 +246,37 @@ def run_pytest_suite(suite: str, markers: str | None = None) -> dict[str, Any]:
     test_path = REPO_ROOT / suite
     if not test_path.exists():
         log(f"[FAIL] Test path does not exist: {test_path}", "FAIL")
-        return {"status": "FAIL", "error": f"Test path not found: {suite}"}
+        return {"status": "FAIL", "error": f"Test path not found: {suite}", "stderr": ""}
+    
+    # First run --collect-only to see what pytest finds
+    collect_cmd = [sys.executable, "-m", "pytest", suite, "--collect-only", "-q"]
+    if markers:
+        collect_cmd.extend(["-m", markers])
+    
+    log(f"[DIAG] Running collect: {' '.join(collect_cmd)}")
+    try:
+        collect_result = subprocess.run(
+            collect_cmd,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            cwd=REPO_ROOT,
+            env=env,
+        )
+        log(f"[DIAG] collect-only exit: {collect_result.returncode}")
+        if collect_result.stdout:
+            log(f"[DIAG] collected: {collect_result.stdout[:500]}")
+        if collect_result.returncode != 0 and collect_result.stderr:
+            log(f"[DIAG] collect stderr: {collect_result.stderr[:500]}", "ERROR")
+    except Exception as exc:
+        log(f"[DIAG] collect-only failed: {exc}", "ERROR")
     
     # Run pytest with python -m to ensure correct environment
     cmd = [sys.executable, "-m", "pytest", suite, "-q", "--disable-warnings", "--tb=short"]
     if markers:
         cmd.extend(["-m", markers])
     
+    log(f"[DIAG] Running: {' '.join(cmd)}")
     try:
         result = subprocess.run(
             cmd,
@@ -251,9 +289,11 @@ def run_pytest_suite(suite: str, markers: str | None = None) -> dict[str, Any]:
         passed = result.returncode == 0
         log(f"{'[OK]' if passed else '[FAIL]'} pytest {suite} -> exit {result.returncode}", "PASS" if passed else "FAIL")
         
-        # Log stderr if there was an error (collection issues, import errors)
-        if result.returncode != 0 and result.stderr:
-            log(f"[DIAG] stderr: {result.stderr[:500]}", "ERROR")
+        # Always log stdout/stderr for debugging
+        if result.stdout:
+            log(f"[DIAG] stdout (last 500): {result.stdout[-500:]}")
+        if result.stderr:
+            log(f"[DIAG] stderr (last 500): {result.stderr[-500:]}", "ERROR")
         
         return {
             "status": "PASS" if passed else "FAIL",
@@ -263,7 +303,7 @@ def run_pytest_suite(suite: str, markers: str | None = None) -> dict[str, Any]:
         }
     except Exception as exc:
         log(f"[FAIL] pytest {suite} -> {exc}", "FAIL")
-        return {"status": "FAIL", "error": str(exc)}
+        return {"status": "FAIL", "error": str(exc), "stderr": ""}
 
 
 # ============================================================================
@@ -275,11 +315,24 @@ def find_parity_tests() -> str | None:
     """Auto-detect parity test file via glob search."""
     log("[DIAG] Searching for parity test files...")
     
-    # Search patterns in priority order
+    # First, list ALL test files for diagnostics
+    log("[DIAG] All Python test files in repo:")
+    all_tests = list(REPO_ROOT.glob("**/test*.py")) + list(REPO_ROOT.glob("**/*_test.py"))
+    for tf in all_tests[:20]:  # Show first 20
+        log(f"[DIAG]   - {tf.relative_to(REPO_ROOT)}")
+    if len(all_tests) > 20:
+        log(f"[DIAG]   ... and {len(all_tests) - 20} more")
+    if not all_tests:
+        log("[DIAG]   (no test files found)")
+    
+    # Search patterns in priority order (include repo root)
     patterns = [
-        "**/test*parity*.py",
-        "**/test*indicators*.py",
-        "**/*parity*test*.py",
+        "test*parity*.py",           # repo root
+        "test*indicator*.py",        # repo root
+        "tests/test*parity*.py",     # tests/ folder
+        "tests/test*indicator*.py",  # tests/ folder
+        "**/test*parity*.py",        # anywhere
+        "**/test*indicator*.py",     # anywhere
     ]
     
     for pattern in patterns:
@@ -291,7 +344,12 @@ def find_parity_tests() -> str | None:
             # Return first match
             return str(matches[0].relative_to(REPO_ROOT))
     
-    log("[DIAG] No parity test files found via glob")
+    log("[DIAG] No parity/indicator test files found via glob")
+    
+    # Last resort: check if ANY tests exist and use keyword filter
+    if all_tests:
+        log("[DIAG] Will use pytest keyword filter instead")
+    
     return None
 
 

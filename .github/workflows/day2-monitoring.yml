@@ -191,13 +191,20 @@ jobs:
           Write-Host "Workspace root contents:"
           Get-ChildItem $env:GITHUB_WORKSPACE | Select-Object Name
           Write-Host ""
-          Write-Host "Tests folder exists?"
+          Write-Host "Tests folder check:"
           if (Test-Path "$env:GITHUB_WORKSPACE\tests") {
             Write-Host "[OK] tests/ folder found"
-            Get-ChildItem "$env:GITHUB_WORKSPACE\tests" -Filter "*.py" | Select-Object Name
+            Write-Host "All test files in tests/:"
+            Get-ChildItem "$env:GITHUB_WORKSPACE\tests" -Filter "*.py" -Recurse | Select-Object FullName
           } else {
             Write-Host "[WARN] tests/ folder NOT found at $env:GITHUB_WORKSPACE\tests"
           }
+          Write-Host ""
+          Write-Host "All test*.py files in repo:"
+          Get-ChildItem $env:GITHUB_WORKSPACE -Filter "test*.py" -Recurse | Select-Object FullName
+          Write-Host ""
+          Write-Host "Git tracked test files:"
+          git ls-files | Select-String -Pattern "test.*\.py$"
           Write-Host "========================================"
           Write-Host ""
           
