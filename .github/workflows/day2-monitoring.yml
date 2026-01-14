@@ -15,9 +15,9 @@ on:
 jobs:
   day2-checks:
     # CRITICAL: Must run on Viktor's local Windows machine where uvicorn runs
-    # Labels: self-hosted + Windows + quantlab-local (custom label)
-    # If job queues forever: add "quantlab-local" label to runner in GitHub Settings → Actions → Runners
-    runs-on: [self-hosted, Windows, quantlab-local]
+    # All 4 labels MUST match: self-hosted + Windows + X64 + quantlab-local
+    # If job queues forever: verify runner has ALL these labels in GitHub Settings → Actions → Runners
+    runs-on: [self-hosted, Windows, X64, quantlab-local]
     timeout-minutes: 15
     defaults:
       run:
@@ -39,10 +39,12 @@ jobs:
           Write-Host ""
           Write-Host "Hostname:           $(hostname)"
           Write-Host "Username:           $(whoami)"
-          Write-Host "PWD:                $(Get-Location)"
+          
+          $currentPath = (Get-Location).Path
+          Write-Host "PWD:                $currentPath"
           Write-Host ""
           
-          # HARD FAIL if not Windows - this should never trigger if labels are correct
+          # HARD FAIL 1: Check RUNNER_OS
           if ($env:RUNNER_OS -ne "Windows") {
             Write-Host "::error::=============================================="
             Write-Host "::error::FATAL: Running on WRONG runner!"
@@ -52,14 +54,25 @@ jobs:
             Write-Host "::error::"
             Write-Host "::error::This workflow MUST run on Viktor's local Windows machine"
             Write-Host "::error::where uvicorn serves 127.0.0.1:8000."
+            Write-Host "::error::=============================================="
+            exit 1
+          }
+          
+          # HARD FAIL 2: Check path is Windows-style (C:\...)
+          if (-not ($currentPath -match "^[A-Za-z]:\\")) {
+            Write-Host "::error::=============================================="
+            Write-Host "::error::FATAL: Working directory is NOT a Windows path!"
+            Write-Host "::error::=============================================="
+            Write-Host "::error::Expected: C:\... (Windows path)"
+            Write-Host "::error::Got:      $currentPath"
             Write-Host "::error::"
-            Write-Host "::error::FIX: Add label 'quantlab-local' to your self-hosted runner:"
-            Write-Host "::error::  GitHub → Settings → Actions → Runners → [your runner] → Edit labels"
+            Write-Host "::error::This indicates the job landed on a Linux/Mac runner."
             Write-Host "::error::=============================================="
             exit 1
           }
           
           Write-Host "✓ Running on Windows self-hosted runner"
+          Write-Host "✓ Working directory is Windows path"
           Write-Host ""
           
           # Check if port 8000 has a listener
