@@ -1,7 +1,7 @@
 {
-  "timestamp": "2026-01-14T22:51:18.163697+00:00",
+  "timestamp": "2026-01-14T23:00:36.222052+00:00",
   "base_url": "http://127.0.0.1:8000",
-  "duration_sec": 4.2,
+  "duration_sec": 4.3,
   "overall_status": "ROLLBACK",
   "checks": {
     "health": {
@@ -9,7 +9,7 @@
       "code": 200,
       "data": {
         "status": "ok",
-        "time": "2026-01-14T22:51:18.165407"
+        "time": "2026-01-14T23:00:36.223772"
       }
     },
     "api_health": {
@@ -17,7 +17,7 @@
       "code": 200,
       "data": {
         "status": "ok",
-        "timestamp": "2026-01-14T22:51:18.167408"
+        "timestamp": "2026-01-14T23:00:36.223772"
       }
     },
     "ohlcv_fetch": {
@@ -43,7 +43,7 @@
     "pytest_critical": {
       "status": "FAIL",
       "exit_code": 2,
-      "stdout": "\n=================================== ERRORS ====================================\n__________________ ERROR collecting tests/test_cli_basic.py ___________________\nImportError while importing test module 'C:\\actions-runner\\quantlab-local\\quantlab\\quantlab\\tests\\test_cli_basic.py'.\nHint: make sure your test modules/packages have valid Python names.\nTraceback:\nC:\\Python314\\Lib\\importlib\\__init__.py:88: in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntests\\test_cli_basic.py:2: in <module>\n    from typer.testing import CliRunner\nE   ModuleNotFoundError: No module named 'typer'\n____________________ ERROR collecting tests/test_costs.py _____________________\nImportError while importing test module 'C:\\actions-runner\\quantlab-local\\quantlab\\quantlab\\tests\\test_costs.py'.\nHint: make sure your test modules/packages have valid Python names.\nTraceback:\nC:\\Python314\\Lib\\importlib\\__init__.py:88: in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntests\\test_costs.py:3: in <module>\n    from quantkit.backtest.costs import apply_costs\nE   ModuleNotFoundError: No module named 'quantkit'\n=========================== short test summary info ===========================\nERROR tests/test_cli_basic.py\nERROR tests/test_costs.py\n!!!!!!!!!!!!!!!!!!! Interrupted: 2 errors during collection !!!!!!!!!!!!!!!!!!!\n2 errors in 0.48s\n",
+      "stdout": "\n=================================== ERRORS ====================================\n__________________ ERROR collecting tests/test_cli_basic.py ___________________\nImportError while importing test module 'C:\\actions-runner\\quantlab-local\\quantlab\\quantlab\\tests\\test_cli_basic.py'.\nHint: make sure your test modules/packages have valid Python names.\nTraceback:\nC:\\Python314\\Lib\\importlib\\__init__.py:88: in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntests\\test_cli_basic.py:2: in <module>\n    from typer.testing import CliRunner\nE   ModuleNotFoundError: No module named 'typer'\n____________________ ERROR collecting tests/test_costs.py _____________________\nImportError while importing test module 'C:\\actions-runner\\quantlab-local\\quantlab\\quantlab\\tests\\test_costs.py'.\nHint: make sure your test modules/packages have valid Python names.\nTraceback:\nC:\\Python314\\Lib\\importlib\\__init__.py:88: in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntests\\test_costs.py:3: in <module>\n    from quantkit.backtest.costs import apply_costs\nE   ModuleNotFoundError: No module named 'quantkit'\n=========================== short test summary info ===========================\nERROR tests/test_cli_basic.py\nERROR tests/test_costs.py\n!!!!!!!!!!!!!!!!!!! Interrupted: 2 errors during collection !!!!!!!!!!!!!!!!!!!\n2 errors in 0.51s\n",
       "stderr": ""
     }
   }
