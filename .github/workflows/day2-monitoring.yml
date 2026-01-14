@@ -14,36 +14,53 @@ on:
 
 jobs:
   day2-checks:
-    runs-on: [self-hosted, Windows]
+    # CRITICAL: Must run on Viktor's local Windows machine where uvicorn runs
+    # Labels: self-hosted + Windows + quantlab-local (custom label)
+    # If job queues forever: add "quantlab-local" label to runner in GitHub Settings → Actions → Runners
+    runs-on: [self-hosted, Windows, quantlab-local]
     timeout-minutes: 15
     defaults:
       run:
         shell: pwsh
     
     steps:
-      - name: Runner Identity Check (MUST be self-hosted)
+      - name: Runner Identity Check (MUST be self-hosted Windows)
+        shell: pwsh
         run: |
           Write-Host "========================================"
           Write-Host "        RUNNER IDENTITY CHECK           "
           Write-Host "========================================"
           Write-Host ""
-          Write-Host "RUNNER_NAME:    $env:RUNNER_NAME"
-          Write-Host "RUNNER_OS:      $env:RUNNER_OS"
-          Write-Host "RUNNER_ARCH:    $env:RUNNER_ARCH"
+          Write-Host "RUNNER_NAME:        $env:RUNNER_NAME"
+          Write-Host "RUNNER_OS:          $env:RUNNER_OS"
+          Write-Host "RUNNER_ARCH:        $env:RUNNER_ARCH"
           Write-Host "RUNNER_ENVIRONMENT: $env:RUNNER_ENVIRONMENT"
+          Write-Host "RUNNER_WORKSPACE:   $env:RUNNER_WORKSPACE"
           Write-Host ""
-          Write-Host "Hostname:       $(hostname)"
-          Write-Host "Username:       $(whoami)"
-          Write-Host "PWD:            $(Get-Location)"
+          Write-Host "Hostname:           $(hostname)"
+          Write-Host "Username:           $(whoami)"
+          Write-Host "PWD:                $(Get-Location)"
           Write-Host ""
           
-          # Hard fail if not Windows
+          # HARD FAIL if not Windows - this should never trigger if labels are correct
           if ($env:RUNNER_OS -ne "Windows") {
-            Write-Host "::error::FATAL: Day2 must run on Windows self-hosted runner!"
-            Write-Host "::error::Current RUNNER_OS: $env:RUNNER_OS"
-            Write-Host "::error::localhost checks require the runner to be on the same machine as uvicorn."
+            Write-Host "::error::=============================================="
+            Write-Host "::error::FATAL: Running on WRONG runner!"
+            Write-Host "::error::=============================================="
+            Write-Host "::error::Expected: Windows self-hosted runner"
+            Write-Host "::error::Got:      $env:RUNNER_OS ($env:RUNNER_NAME)"
+            Write-Host "::error::"
+            Write-Host "::error::This workflow MUST run on Viktor's local Windows machine"
+            Write-Host "::error::where uvicorn serves 127.0.0.1:8000."
+            Write-Host "::error::"
+            Write-Host "::error::FIX: Add label 'quantlab-local' to your self-hosted runner:"
+            Write-Host "::error::  GitHub → Settings → Actions → Runners → [your runner] → Edit labels"
+            Write-Host "::error::=============================================="
             exit 1
           }
+          
+          Write-Host "✓ Running on Windows self-hosted runner"
+          Write-Host ""
           
           # Check if port 8000 has a listener
           Write-Host "Checking if port 8000 has a listener..."
