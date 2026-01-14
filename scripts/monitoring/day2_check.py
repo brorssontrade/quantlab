@@ -145,22 +145,40 @@ def check_health(endpoint: str) -> dict[str, Any]:
 
 
 def check_ohlcv_fetch(symbol: str = "ABB.ST", timeframes: list[str] | None = None) -> dict[str, Any]:
-    """Fetch OHLCV for one symbol across multiple timeframes."""
+    """Fetch OHLCV for one symbol across multiple timeframes.
+    
+    Uses /chart/ohlcv endpoint with params:
+      - symbol: ticker symbol (e.g. ABB.ST)
+      - bar: D (daily), W (weekly), 1h, 15m, 5m
+      - start: ISO timestamp (optional)
+      - end: ISO timestamp (optional)
+      - limit: max candles (default 2000)
+    """
     if timeframes is None:
-        timeframes = ["daily", "weekly"]
+        # Map friendly names to API bar values
+        timeframes = ["D", "W"]  # D=daily, W=weekly
     
     log(f"Fetching OHLCV: {symbol} @ {timeframes}")
     results = []
     
     for tf in timeframes:
-        url = f"{API_BASE_URL}/api/ohlcv"
-        params = {"symbol": symbol, "bar": tf, "start_date": "2024-01-01", "end_date": "2024-12-31"}
+        # Correct endpoint: /chart/ohlcv (not /api/ohlcv)
+        url = f"{API_BASE_URL}/chart/ohlcv"
+        params = {
+            "symbol": symbol,
+            "bar": tf,  # D, W, 1h, 15m, 5m
+            "start": "2024-01-01T00:00:00",
+            "end": "2024-12-31T23:59:59",
+            "limit": 500,
+        }
         try:
             resp = requests.get(url, params=params, timeout=TIMEOUT_SEC)
             resp.raise_for_status()
             data = resp.json()
-            rows = len(data) if isinstance(data, list) else 0
-            log(f"[OK] {symbol}@{tf} -> {rows} rows", "PASS")
+            # Response is ChartOHLCVResponse with 'candles' list
+            candles = data.get("candles", []) if isinstance(data, dict) else data
+            rows = len(candles) if isinstance(candles, list) else 0
+            log(f"[OK] {symbol}@{tf} -> {rows} candles", "PASS")
             results.append({"timeframe": tf, "status": "PASS", "rows": rows})
         except Exception as exc:
             log(f"[FAIL] {symbol}@{tf} -> {exc}", "FAIL")
@@ -173,13 +191,26 @@ def check_ohlcv_fetch(symbol: str = "ABB.ST", timeframes: list[str] | None = Non
 def run_pytest_suite(suite: str, markers: str | None = None) -> dict[str, Any]:
     """Run pytest suite and return results."""
     log(f"Running pytest suite: {suite}")
-    cmd = ["pytest", suite, "-q", "--disable-warnings", "--tb=short"]
-    if markers:
-        cmd.extend(["-m", markers])
     
     # Set PYTHONPATH to repo root for proper imports
     env = os.environ.copy()
     env["PYTHONPATH"] = str(REPO_ROOT)
+    env["PYTHONUTF8"] = "1"  # Force UTF-8 on Windows
+    
+    # First, run collection diagnostics
+    log(f"[DIAG] Python: {sys.executable}")
+    log(f"[DIAG] REPO_ROOT: {REPO_ROOT}")
+    
+    # Check if test file/dir exists
+    test_path = REPO_ROOT / suite
+    if not test_path.exists():
+        log(f"[FAIL] Test path does not exist: {test_path}", "FAIL")
+        return {"status": "FAIL", "error": f"Test path not found: {suite}"}
+    
+    # Run pytest with python -m to ensure correct environment
+    cmd = [sys.executable, "-m", "pytest", suite, "-q", "--disable-warnings", "--tb=short"]
+    if markers:
+        cmd.extend(["-m", markers])
     
     try:
         result = subprocess.run(
@@ -191,7 +222,12 @@ def run_pytest_suite(suite: str, markers: str | None = None) -> dict[str, Any]:
             env=env,
         )
         passed = result.returncode == 0
-        log(f"{'✓' if passed else '✗'} pytest {suite} → exit {result.returncode}", "PASS" if passed else "FAIL")
+        log(f"{'[OK]' if passed else '[FAIL]'} pytest {suite} -> exit {result.returncode}", "PASS" if passed else "FAIL")
+        
+        # Log stderr if there was an error (collection issues, import errors)
+        if result.returncode != 0 and result.stderr:
+            log(f"[DIAG] stderr: {result.stderr[:500]}", "ERROR")
+        
         return {
             "status": "PASS" if passed else "FAIL",
             "exit_code": result.returncode,
@@ -199,7 +235,7 @@ def run_pytest_suite(suite: str, markers: str | None = None) -> dict[str, Any]:
             "stderr": result.stderr[-1000:],
         }
     except Exception as exc:
-        log(f"✗ pytest {suite} → {exc}", "FAIL")
+        log(f"[FAIL] pytest {suite} -> {exc}", "FAIL")
         return {"status": "FAIL", "error": str(exc)}
 
 

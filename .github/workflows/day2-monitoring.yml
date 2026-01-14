@@ -113,7 +113,19 @@ jobs:
           if (Test-Path ".venv\Scripts\Activate.ps1") {
             . .\.venv\Scripts\Activate.ps1
           }
+          # Install Day2 script dependencies + full requirements for pytest
           pip install requests pytest pandas numpy --quiet
+          if (Test-Path "requirements.txt") {
+            Write-Host "Installing requirements.txt..."
+            pip install -r requirements.txt --quiet
+          }
+          
+          # Diagnostic: Show pytest and key packages
+          Write-Host "Pytest version:"
+          python -m pytest --version
+          Write-Host ""
+          Write-Host "Key packages:"
+          pip show pandas numpy requests | Select-String "Name:|Version:"
 
       - name: Preflight - Check API is reachable
         env:
