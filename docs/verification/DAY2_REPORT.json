@@ -1,12 +1,52 @@
 {
-  "timestamp": "2026-01-14T22:38:18.133290+00:00",
+  "timestamp": "2026-01-14T22:45:10.099394+00:00",
   "base_url": "http://127.0.0.1:8000",
-  "duration_sec": 0,
+  "duration_sec": 3.68,
   "overall_status": "ROLLBACK",
   "checks": {
-    "fatal_error": {
+    "health": {
+      "status": "PASS",
+      "code": 200,
+      "data": {
+        "status": "ok",
+        "time": "2026-01-14T22:45:10.102114"
+      }
+    },
+    "api_health": {
+      "status": "PASS",
+      "code": 200,
+      "data": {
+        "status": "ok",
+        "timestamp": "2026-01-14T22:45:10.104114"
+      }
+    },
+    "ohlcv_fetch": {
       "status": "FAIL",
-      "error": "'charmap' codec can't encode character '\\u2717' in position 42: character maps to <undefined>"
+      "symbol": "ABB.ST",
+      "results": [
+        {
+          "timeframe": "daily",
+          "status": "FAIL",
+          "error": "404 Client Error: Not Found for url: http://127.0.0.1:8000/api/ohlcv?symbol=ABB.ST&bar=daily&start_date=2024-01-01&end_date=2024-12-31"
+        },
+        {
+          "timeframe": "weekly",
+          "status": "FAIL",
+          "error": "404 Client Error: Not Found for url: http://127.0.0.1:8000/api/ohlcv?symbol=ABB.ST&bar=weekly&start_date=2024-01-01&end_date=2024-12-31"
+        }
+      ]
+    },
+    "pytest_parity": {
+      "status": "FAIL",
+      "exit_code": 4,
+      "stdout": "\nno tests ran in 0.00s\n",
+      "stderr": "ERROR: file or directory not found: tests/test_indicators_parity.py\n\n"
+    },
+    "pytest_critical": {
+      "status": "FAIL",
+      "exit_code": 2,
+      "stdout": "\n=================================== ERRORS ====================================\n__________________ ERROR collecting tests/test_cli_basic.py ___________________\nImportError while importing test module 'C:\\actions-runner\\quantlab-local\\quantlab\\quantlab\\tests\\test_cli_basic.py'.\nHint: make sure your test modules/packages have valid Python names.\nTraceback:\nC:\\Python314\\Lib\\importlib\\__init__.py:88: in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntests\\test_cli_basic.py:2: in <module>\n    from typer.testing import CliRunner\nE   ModuleNotFoundError: No module named 'typer'\n____________________ ERROR collecting tests/test_costs.py _____________________\nImportError while importing test module 'C:\\actions-runner\\quantlab-local\\quantlab\\quantlab\\tests\\test_costs.py'.\nHint: make sure your test modules/packages have valid Python names.\nTraceback:\nC:\\Python314\\Lib\\importlib\\__init__.py:88: in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntests\\test_costs.py:3: in <module>\n    from quantkit.backtest.costs import apply_costs\nE   ModuleNotFoundError: No module named 'quantkit'\n=========================== short test summary info ===========================\nERROR tests/test_cli_basic.py\nERROR tests/test_costs.py\n!!!!!!!!!!!!!!!!!!! Interrupted: 2 errors during collection !!!!!!!!!!!!!!!!!!!\n2 errors in 2.05s\n",
+      "stderr": ""
     }
   }
 }
