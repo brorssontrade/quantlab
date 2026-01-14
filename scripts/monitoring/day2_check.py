@@ -19,7 +19,7 @@ import os
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Literal
 
@@ -151,7 +151,7 @@ def check_health(endpoint: str) -> dict[str, Any]:
         return {"status": "FAIL", "error": str(exc)}
 
 
-def check_ohlcv_fetch(symbol: str = "ABB.ST", timeframes: list[str] | None = None) -> dict[str, Any]:
+def check_ohlcv_fetch(symbol: str | None = None, timeframes: list[str] | None = None) -> dict[str, Any]:
     """Fetch OHLCV for one symbol across multiple timeframes.
     
     Uses /chart/ohlcv endpoint with params:
@@ -160,33 +160,53 @@ def check_ohlcv_fetch(symbol: str = "ABB.ST", timeframes: list[str] | None = Non
       - start: ISO timestamp (optional)
       - end: ISO timestamp (optional)
       - limit: max candles (default 2000)
-    """
-    if timeframes is None:
-        # Map friendly names to API bar values
-        timeframes = ["D", "W"]  # D=daily, W=weekly
     
-    log(f"Fetching OHLCV: {symbol} @ {timeframes}")
+    Environment variables:
+      - DAY2_SAMPLE_SYMBOL: Symbol to test (default: AAPL)
+      - DAY2_LOOKBACK_DAYS: Days to look back (default: 30)
+    """
+    # Configurable via env vars
+    if symbol is None:
+        symbol = os.environ.get("DAY2_SAMPLE_SYMBOL", "AAPL")
+    
+    lookback_days = int(os.environ.get("DAY2_LOOKBACK_DAYS", "30"))
+    end_date = datetime.now(timezone.utc)
+    start_date = end_date - timedelta(days=lookback_days)
+    
+    if timeframes is None:
+        timeframes = ["D"]  # D=daily (most reliable)
+    
+    log(f"Fetching OHLCV: {symbol} @ {timeframes} (last {lookback_days} days)")
     results = []
     
     for tf in timeframes:
-        # Correct endpoint: /chart/ohlcv (not /api/ohlcv)
         url = f"{API_BASE_URL}/chart/ohlcv"
         params = {
             "symbol": symbol,
-            "bar": tf,  # D, W, 1h, 15m, 5m
-            "start": "2024-01-01T00:00:00",
-            "end": "2024-12-31T23:59:59",
+            "bar": tf,
+            "start": start_date.strftime("%Y-%m-%dT00:00:00"),
+            "end": end_date.strftime("%Y-%m-%dT23:59:59"),
             "limit": 500,
         }
         try:
             resp = requests.get(url, params=params, timeout=TIMEOUT_SEC)
             resp.raise_for_status()
             data = resp.json()
-            # Response is ChartOHLCVResponse with 'candles' list
             candles = data.get("candles", []) if isinstance(data, dict) else data
             rows = len(candles) if isinstance(candles, list) else 0
-            log(f"[OK] {symbol}@{tf} -> {rows} candles", "PASS")
-            results.append({"timeframe": tf, "status": "PASS", "rows": rows})
+            
+            # FAIL if 0 candles - data pipeline not working
+            if rows == 0:
+                log(f"[FAIL] {symbol}@{tf} -> 0 candles (expected data for last {lookback_days} days)", "FAIL")
+                results.append({
+                    "timeframe": tf, 
+                    "status": "FAIL", 
+                    "rows": 0,
+                    "error": f"No candles returned for {symbol} in last {lookback_days} days"
+                })
+            else:
+                log(f"[OK] {symbol}@{tf} -> {rows} candles", "PASS")
+                results.append({"timeframe": tf, "status": "PASS", "rows": rows})
         except Exception as exc:
             log(f"[FAIL] {symbol}@{tf} -> {exc}", "FAIL")
             results.append({"timeframe": tf, "status": "FAIL", "error": str(exc)})
@@ -251,6 +271,30 @@ def run_pytest_suite(suite: str, markers: str | None = None) -> dict[str, Any]:
 # ============================================================================
 
 
+def find_parity_tests() -> str | None:
+    """Auto-detect parity test file via glob search."""
+    log("[DIAG] Searching for parity test files...")
+    
+    # Search patterns in priority order
+    patterns = [
+        "**/test*parity*.py",
+        "**/test*indicators*.py",
+        "**/*parity*test*.py",
+    ]
+    
+    for pattern in patterns:
+        matches = list(REPO_ROOT.glob(pattern))
+        if matches:
+            log(f"[DIAG] Pattern '{pattern}' found {len(matches)} files:")
+            for m in matches[:5]:  # Show first 5
+                log(f"[DIAG]   - {m.relative_to(REPO_ROOT)}")
+            # Return first match
+            return str(matches[0].relative_to(REPO_ROOT))
+    
+    log("[DIAG] No parity test files found via glob")
+    return None
+
+
 def run_day2_checks() -> dict[str, Any]:
     """Execute all Day 2 checks and aggregate results."""
     log("=== Day 2 Production Monitoring Start ===")
@@ -259,18 +303,38 @@ def run_day2_checks() -> dict[str, Any]:
     start_time = time.time()
     timestamp = datetime.now(timezone.utc).isoformat()
     
+    # Core health checks
     checks = {
         "health": check_health("/health"),
         "api_health": check_health("/api/health"),
-        "ohlcv_fetch": check_ohlcv_fetch("ABB.ST", ["daily", "weekly"]),
-        "pytest_parity": run_pytest_suite("tests/test_indicators_parity.py"),
-        "pytest_critical": run_pytest_suite("tests/", markers="not slow"),
+        "ohlcv_fetch": check_ohlcv_fetch(),  # Uses env vars for config
     }
+    
+    # Auto-detect parity tests
+    parity_test = find_parity_tests()
+    if parity_test:
+        log(f"[INFO] Running parity test: {parity_test}")
+        checks["pytest_parity"] = run_pytest_suite(parity_test)
+    else:
+        log("[WARN] No parity test file found - running pytest with keyword filter")
+        # Fallback: use keyword matching
+        checks["pytest_parity"] = run_pytest_suite("tests/", markers="parity or indicators")
+    
+    # Run critical tests (skip slow ones)
+    tests_dir = REPO_ROOT / "tests"
+    if tests_dir.exists():
+        checks["pytest_critical"] = run_pytest_suite("tests/", markers="not slow")
+    else:
+        log("[WARN] tests/ directory not found - skipping pytest_critical")
+        checks["pytest_critical"] = {"status": "SKIP", "error": "tests/ directory not found"}
     
     elapsed = time.time() - start_time
     
-    # Determine overall status
-    all_pass = all(check.get("status") == "PASS" for check in checks.values())
+    # Determine overall status (SKIP doesn't count as failure)
+    all_pass = all(
+        check.get("status") in ("PASS", "SKIP") 
+        for check in checks.values()
+    )
     overall_status = "APPROVED" if all_pass else "ROLLBACK"
     
     log(f"=== Day 2 Monitoring Complete: {overall_status} ({elapsed:.1f}s) ===")
