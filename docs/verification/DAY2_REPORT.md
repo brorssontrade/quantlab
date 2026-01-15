@@ -1,14 +1,14 @@
 # Day 2 Production Monitoring Report - [FAIL] ROLLBACK
 
-**Timestamp:** 2026-01-15T06:20:07.033598+00:00  
+**Timestamp:** 2026-01-15T06:35:34.571811+00:00  
 **Target:** http://127.0.0.1:8000  
-**Duration:** 5.0s  
+**Duration:** 6.49s  
 
 ## Checks Summary
 
 - **health:** [PASS] PASS
 - **api_health:** [PASS] PASS
-- **ohlcv_fetch:** [FAIL] FAIL
+- **ohlcv_fetch:** [PASS] PASS
 - **pytest_parity:** [FAIL] FAIL
   - Exit code: 2
 - **pytest_critical:** [FAIL] FAIL
@@ -20,5 +20,5 @@
 
 ---
 
-Report generated: 2026-01-15T06:20:07.033598+00:00  
+Report generated: 2026-01-15T06:35:34.571811+00:00  
 Full details: [DAY2_REPORT.json](DAY2_REPORT.json)
