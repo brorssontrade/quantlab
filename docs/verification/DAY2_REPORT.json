@@ -1,7 +1,7 @@
 {
-  "timestamp": "2026-01-15T07:07:07.152335+00:00",
+  "timestamp": "2026-01-15T16:51:50.665505+00:00",
   "base_url": "http://127.0.0.1:8000",
-  "duration_sec": 6.5,
+  "duration_sec": 6.85,
   "overall_status": "ROLLBACK",
   "checks": {
     "health": {
@@ -9,7 +9,7 @@
       "code": 200,
       "data": {
         "status": "ok",
-        "time": "2026-01-15T07:07:07.152640"
+        "time": "2026-01-15T16:51:50.660291"
       }
     },
     "api_health": {
@@ -17,7 +17,7 @@
       "code": 200,
       "data": {
         "status": "ok",
-        "timestamp": "2026-01-15T07:07:07.152640"
+        "timestamp": "2026-01-15T16:51:50.660291"
       }
     },
     "ohlcv_fetch": {
@@ -34,13 +34,13 @@
     "pytest_parity": {
       "status": "FAIL",
       "exit_code": 2,
-      "stdout": "\n=================================== ERRORS ====================================\n__________________ ERROR collecting tests/test_cli_basic.py ___________________\nImportError while importing test module 'C:\\actions-runner\\quantlab-local\\quantlab\\quantlab\\tests\\test_cli_basic.py'.\nHint: make sure your test modules/packages have valid Python names.\nTraceback:\nC:\\Python314\\Lib\\importlib\\__init__.py:88: in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntests\\test_cli_basic.py:2: in <module>\n    from typer.testing import CliRunner\nE   ModuleNotFoundError: No module named 'typer'\n=========================== short test summary info ===========================\nERROR tests/test_cli_basic.py\n!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!\n4 deselected, 1 error in 0.43s\n",
+      "stdout": "\n=================================== ERRORS ====================================\n__________________ ERROR collecting tests/test_cli_basic.py ___________________\nImportError while importing test module 'C:\\actions-runner\\quantlab-local\\quantlab\\quantlab\\tests\\test_cli_basic.py'.\nHint: make sure your test modules/packages have valid Python names.\nTraceback:\nC:\\Python314\\Lib\\importlib\\__init__.py:88: in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntests\\test_cli_basic.py:2: in <module>\n    from typer.testing import CliRunner\nE   ModuleNotFoundError: No module named 'typer'\n=========================== short test summary info ===========================\nERROR tests/test_cli_basic.py\n!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!\n4 deselected, 1 error in 0.44s\n",
       "stderr": ""
     },
     "pytest_critical": {
       "status": "FAIL",
       "exit_code": 2,
-      "stdout": "\n=================================== ERRORS ====================================\n__________________ ERROR collecting tests/test_cli_basic.py ___________________\nImportError while importing test module 'C:\\actions-runner\\quantlab-local\\quantlab\\quantlab\\tests\\test_cli_basic.py'.\nHint: make sure your test modules/packages have valid Python names.\nTraceback:\nC:\\Python314\\Lib\\importlib\\__init__.py:88: in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntests\\test_cli_basic.py:2: in <module>\n    from typer.testing import CliRunner\nE   ModuleNotFoundError: No module named 'typer'\n=========================== short test summary info ===========================\nERROR tests/test_cli_basic.py\n!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!\n1 error in 0.43s\n",
+      "stdout": "\n=================================== ERRORS ====================================\n__________________ ERROR collecting tests/test_cli_basic.py ___________________\nImportError while importing test module 'C:\\actions-runner\\quantlab-local\\quantlab\\quantlab\\tests\\test_cli_basic.py'.\nHint: make sure your test modules/packages have valid Python names.\nTraceback:\nC:\\Python314\\Lib\\importlib\\__init__.py:88: in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntests\\test_cli_basic.py:2: in <module>\n    from typer.testing import CliRunner\nE   ModuleNotFoundError: No module named 'typer'\n=========================== short test summary info ===========================\nERROR tests/test_cli_basic.py\n!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!\n1 error in 0.42s\n",
       "stderr": ""
     }
   }
