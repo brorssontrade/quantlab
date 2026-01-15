@@ -124,24 +124,27 @@ jobs:
           Write-Host "Upgrading pip/setuptools/wheel..."
           & $venvPython -m pip install --upgrade pip setuptools wheel
           
-          # FORCE REINSTALL requirements.txt to ensure all deps are fresh
-          # (venv persists on self-hosted runner, may be stale/corrupt)
+          # Install CORE SCIENTIFIC STACK FIRST (numpy/pandas may need compatible versions)
+          # Use flexible version ranges to support Python 3.12+ / 3.14
+          Write-Host ""
+          Write-Host "Installing core scientific stack (numpy, pandas)..."
+          & $venvPip install "numpy>=1.26" "pandas>=2.0" --upgrade
+          
+          # Install requirements.txt (may override versions, that's OK)
           if (Test-Path "requirements.txt") {
             Write-Host ""
-            Write-Host "Installing requirements.txt (force reinstall)..."
-            & $venvPip install -r requirements.txt --force-reinstall --no-deps
+            Write-Host "Installing requirements.txt..."
             & $venvPip install -r requirements.txt --upgrade
           }
           
-          # Install core test dependencies explicitly
+          # Install core test dependencies explicitly (ensures they're present)
           Write-Host ""
-          Write-Host "Installing core test dependencies..."
-          & $venvPip install requests pytest typer rich --upgrade
+          Write-Host "Installing test dependencies..."
+          & $venvPip install pytest typer rich requests --upgrade
           
           # CRITICAL: Install project in editable mode so quantkit is importable
           Write-Host ""
           Write-Host "Installing quantlab in editable mode (pip install -e .)..."
-          & $venvPip install -e . --no-deps
           & $venvPip install -e .
           
           # Verify no broken dependencies
@@ -149,26 +152,44 @@ jobs:
           Write-Host "Running pip check..."
           & $venvPip check
           
-          # Verify critical imports work
+          # DEPENDENCY GATE: Verify ALL critical imports before pytest
           Write-Host ""
           Write-Host "======================================="
-          Write-Host "       IMPORT VERIFICATION             "
+          Write-Host "       DEPENDENCY GATE                 "
           Write-Host "======================================="
+          $gatePassed = $true
+          
+          Write-Host "Testing numpy import:"
+          & $venvPython -c "import numpy; print(f'  numpy: {numpy.__version__}')"
+          if ($LASTEXITCODE -ne 0) { $gatePassed = $false }
+          
+          Write-Host "Testing pandas import:"
+          & $venvPython -c "import pandas; print(f'  pandas: {pandas.__version__}')"
+          if ($LASTEXITCODE -ne 0) { $gatePassed = $false }
+          
+          Write-Host "Testing typer import:"
+          & $venvPython -c "import typer; print(f'  typer: {typer.__version__}')"
+          if ($LASTEXITCODE -ne 0) { $gatePassed = $false }
+          
           Write-Host "Testing quantkit import:"
           & $venvPython -c "import quantkit; print(f'  quantkit: {quantkit.__file__}')"
-          Write-Host "Testing typer import:"
-          & $venvPython -c "import typer; print(f'  typer version: {typer.__version__}, file: {typer.__file__}')"
+          if ($LASTEXITCODE -ne 0) { $gatePassed = $false }
           
-          # Diagnostic: Show pytest and key packages
-          Write-Host ""
-          Write-Host "Pytest version:"
+          Write-Host "Testing pytest:"
           & $venvPython -m pytest --version
+          if ($LASTEXITCODE -ne 0) { $gatePassed = $false }
+          
+          if (-not $gatePassed) {
+            Write-Host "::error::DEPENDENCY GATE FAILED - one or more critical imports failed"
+            exit 1
+          }
           Write-Host ""
-          Write-Host "pip show typer:"
-          & $venvPip show typer
+          Write-Host "[OK] All critical dependencies verified"
+          
+          # Show installed packages for debugging
           Write-Host ""
-          Write-Host "pip list (filtered):"
-          & $venvPip list | Select-String "typer|pytest|pandas|numpy|quantlab|rich"
+          Write-Host "pip list (scientific + test stack):"
+          & $venvPip list | Select-String "numpy|pandas|typer|pytest|quantlab|rich"
 
       - name: Preflight - Check API is reachable
         env:
