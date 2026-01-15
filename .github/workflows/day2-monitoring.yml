@@ -224,34 +224,38 @@ jobs:
           Write-Host "Git toplevel:"
           git rev-parse --show-toplevel
           Write-Host ""
-          Write-Host "Workspace root contents:"
-          Get-ChildItem -Path $env:GITHUB_WORKSPACE -Force | ForEach-Object { Write-Host "  $($_.Name)" }
+          Write-Host "Workspace root contents (excluding .venv):"
+          Get-ChildItem -Path $env:GITHUB_WORKSPACE -Force | Where-Object { $_.Name -ne '.venv' } | ForEach-Object { Write-Host "  $($_.Name)" }
           Write-Host ""
           Write-Host "Tests folder check:"
           $testsPath = Join-Path $env:GITHUB_WORKSPACE "tests"
           if (Test-Path $testsPath) {
             Write-Host "[OK] tests/ folder found"
-            Write-Host "All test files in tests/:"
+            Write-Host "Test files in tests/:"
             Get-ChildItem -Path $testsPath -Filter "*.py" -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" }
           } else {
             Write-Host "[WARN] tests/ folder NOT found at $testsPath"
           }
           Write-Host ""
-          Write-Host "All test*.py files in repo:"
-          Get-ChildItem -Path $env:GITHUB_WORKSPACE -Filter "test*.py" -Recurse -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $($_.FullName)" }
-          Write-Host ""
           Write-Host "Git tracked test files:"
-          git ls-files "**/test*.py" "tests/*.py" | ForEach-Object { Write-Host "  $_" }
+          git ls-files "tests/*.py" "tests/**/*.py" | ForEach-Object { Write-Host "  $_" }
           Write-Host "========================================"
           Write-Host ""
           
           # Use explicit venv python path (activation doesn't persist between steps)
           $venvPython = Join-Path $PWD ".venv\Scripts\python.exe"
           Write-Host "Using venv Python: $venvPython"
+          Write-Host ""
           
-          # Verify typer is available before running day2
-          Write-Host "Pre-flight typer check:"
-          & $venvPython -c "import typer; print(f'  typer {typer.__version__} OK')"
+          # Bulletproof preflight: verify we're using the right interpreter
+          Write-Host "========================================"
+          Write-Host "     PREFLIGHT INTERPRETER CHECK        "
+          Write-Host "========================================"
+          & $venvPython -c "import sys; print(f'sys.executable: {sys.executable}')"
+          & $venvPython -m pip -V
+          & $venvPython -c "import typer; print(f'typer: {typer.__version__} from {typer.__file__}')"
+          & $venvPython -m pytest --version
+          Write-Host "========================================"
           Write-Host ""
           
           # Run Day2 checks with explicit venv Python
