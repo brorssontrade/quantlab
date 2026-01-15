@@ -197,8 +197,30 @@ def check_ohlcv_fetch(symbol: str | None = None, timeframes: list[str] | None = 
             resp.raise_for_status()
             
             data = resp.json()
-            candles = data.get("candles", []) if isinstance(data, dict) else data
+            
+            # Support both 'candles' and 'rows' keys in response
+            # Backend may return {rows: [...]} or {candles: [...]} or [...]
+            candles = None
+            data_key = None
+            if isinstance(data, dict):
+                if data.get("candles"):
+                    candles = data["candles"]
+                    data_key = "candles"
+                elif data.get("rows"):
+                    candles = data["rows"]
+                    data_key = "rows"
+                else:
+                    candles = []
+                    data_key = "<missing>"
+            elif isinstance(data, list):
+                candles = data
+                data_key = "<root-array>"
+            else:
+                candles = []
+                data_key = "<unknown-type>"
+            
             rows = len(candles) if isinstance(candles, list) else 0
+            log(f"[DIAG] Response data_key={data_key}, row_count={rows}")
             
             # FAIL if 0 candles - data pipeline not working
             if rows == 0:
@@ -214,7 +236,7 @@ def check_ohlcv_fetch(symbol: str | None = None, timeframes: list[str] | None = 
                     "response_preview": body_preview,
                 })
             else:
-                log(f"[OK] {symbol}@{tf} -> {rows} candles", "PASS")
+                log(f"[OK] {symbol}@{tf} -> {rows} candles (from '{data_key}')", "PASS")
                 results.append({"timeframe": tf, "status": "PASS", "rows": rows})
         except requests.exceptions.HTTPError as exc:
             body_preview = exc.response.text[:500] if exc.response else "<no response>"
@@ -233,14 +255,21 @@ def run_pytest_suite(suite: str, markers: str | None = None) -> dict[str, Any]:
     """Run pytest suite and return results."""
     log(f"Running pytest suite: {suite}")
     
-    # Set PYTHONPATH to repo root for proper imports
+    # Set PYTHONPATH to repo root AND src/ for proper imports
+    # quantkit is under src/quantkit/, so src/ must be on path
     env = os.environ.copy()
-    env["PYTHONPATH"] = str(REPO_ROOT)
+    src_path = str(REPO_ROOT / "src")
+    existing_path = env.get("PYTHONPATH", "")
+    if existing_path:
+        env["PYTHONPATH"] = f"{src_path}{os.pathsep}{REPO_ROOT}{os.pathsep}{existing_path}"
+    else:
+        env["PYTHONPATH"] = f"{src_path}{os.pathsep}{REPO_ROOT}"
     env["PYTHONUTF8"] = "1"  # Force UTF-8 on Windows
     
     # First, run collection diagnostics
     log(f"[DIAG] Python: {sys.executable}")
     log(f"[DIAG] REPO_ROOT: {REPO_ROOT}")
+    log(f"[DIAG] PYTHONPATH: {env['PYTHONPATH']}")
     
     # Check if test file/dir exists
     test_path = REPO_ROOT / suite

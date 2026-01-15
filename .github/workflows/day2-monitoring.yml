@@ -98,34 +98,57 @@ jobs:
         with:
           ref: main
       
-      - name: Verify Python environment
+      - name: Setup Python environment (venv + editable install)
         run: |
-          # Use existing venv if available, otherwise use system Python
-          if (Test-Path ".venv\Scripts\Activate.ps1") {
-            Write-Host "Using local .venv"
-            . .\.venv\Scripts\Activate.ps1
+          Write-Host "========================================"
+          Write-Host "      PYTHON ENVIRONMENT SETUP          "
+          Write-Host "========================================"
+          
+          # Always use/create .venv for consistent environment
+          if (-not (Test-Path ".venv\Scripts\Activate.ps1")) {
+            Write-Host "Creating new .venv..."
+            python -m venv .venv
           }
+          
+          Write-Host "Activating .venv..."
+          . .\.venv\Scripts\Activate.ps1
+          
+          Write-Host ""
+          Write-Host "Python executable: $(Get-Command python | Select-Object -ExpandProperty Source)"
           python --version
           pip --version
-      
-      - name: Install dependencies
-        run: |
-          if (Test-Path ".venv\Scripts\Activate.ps1") {
-            . .\.venv\Scripts\Activate.ps1
-          }
-          # Install Day2 script dependencies + full requirements for pytest
+          Write-Host ""
+          
+          # Upgrade pip to avoid issues
+          python -m pip install --upgrade pip --quiet
+          
+          # Install Day2 script dependencies
+          Write-Host "Installing core dependencies..."
           pip install requests pytest pandas numpy --quiet
+          
+          # Install requirements.txt if present
           if (Test-Path "requirements.txt") {
             Write-Host "Installing requirements.txt..."
             pip install -r requirements.txt --quiet
           }
           
+          # CRITICAL: Install project in editable mode so quantkit is importable
+          Write-Host ""
+          Write-Host "Installing quantlab in editable mode (pip install -e .)..."
+          pip install -e . --quiet
+          
+          # Verify quantkit is importable
+          Write-Host ""
+          Write-Host "Verifying quantkit import..."
+          python -c "import quantkit; print(f'quantkit imported from: {quantkit.__file__}')"
+          
           # Diagnostic: Show pytest and key packages
+          Write-Host ""
           Write-Host "Pytest version:"
           python -m pytest --version
           Write-Host ""
           Write-Host "Key packages:"
-          pip show pandas numpy requests | Select-String "Name:|Version:"
+          pip show pandas numpy requests quantlab | Select-String "Name:|Version:|Location:"
 
       - name: Preflight - Check API is reachable
         env:
@@ -208,9 +231,14 @@ jobs:
           Write-Host "========================================"
           Write-Host ""
           
-          if (Test-Path ".venv\Scripts\Activate.ps1") {
-            . .\.venv\Scripts\Activate.ps1
-          }
+          # CRITICAL: Activate venv before running Day2 checks
+          Write-Host "Activating .venv for Day2 checks..."
+          . .\.venv\Scripts\Activate.ps1
+          
+          Write-Host "Python executable: $(Get-Command python | Select-Object -ExpandProperty Source)"
+          Write-Host ""
+          
+          # Run Day2 checks with venv Python
           python scripts/monitoring/day2_check.py
       
       - name: Upload reports
