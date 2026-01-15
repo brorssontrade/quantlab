@@ -1,7 +1,7 @@
 {
-  "timestamp": "2026-01-15T17:30:51.251138+00:00",
+  "timestamp": "2026-01-15T18:35:25.518248+00:00",
   "base_url": "http://127.0.0.1:8000",
-  "duration_sec": 3.75,
+  "duration_sec": 6.98,
   "overall_status": "ROLLBACK",
   "checks": {
     "health": {
@@ -9,7 +9,7 @@
       "code": 200,
       "data": {
         "status": "ok",
-        "time": "2026-01-15T17:30:51.252385"
+        "time": "2026-01-15T18:35:25.520543"
       }
     },
     "api_health": {
@@ -17,7 +17,7 @@
       "code": 200,
       "data": {
         "status": "ok",
-        "timestamp": "2026-01-15T17:30:51.252385"
+        "timestamp": "2026-01-15T18:35:25.521547"
       }
     },
     "ohlcv_fetch": {
@@ -27,20 +27,20 @@
         {
           "timeframe": "D",
           "status": "PASS",
-          "rows": 58
+          "rows": 59
         }
       ]
     },
     "pytest_parity": {
       "status": "FAIL",
-      "exit_code": 2,
-      "stdout": "\n=================================== ERRORS ====================================\n____________________ ERROR collecting tests/test_costs.py _____________________\nImportError while importing test module 'C:\\actions-runner\\quantlab-local\\quantlab\\quantlab\\tests\\test_costs.py'.\nHint: make sure your test modules/packages have valid Python names.\nTraceback:\nC:\\Python314\\Lib\\importlib\\__init__.py:88: in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntests\\test_costs.py:2: in <module>\n    import pandas as pd\nE   ModuleNotFoundError: No module named 'pandas'\n___________________ ERROR collecting tests/test_features.py ___________________\nImportError while importing test module 'C:\\actions-runner\\quantlab-local\\quantlab\\quantlab\\tests\\test_features.py'.\nHint: make sure your test modules/packages have valid Python names.\nTraceback:\nC:\\Python314\\Lib\\importlib\\__init__.py:88: in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntests\\test_features.py:2: in <module>\n    import numpy as np\nE   ModuleNotFoundError: No module named 'numpy'\n=========================== short test summary info ===========================\nERROR tests/test_costs.py\nERROR tests/test_features.py\n!!!!!!!!!!!!!!!!!!! Interrupted: 2 errors during collection !!!!!!!!!!!!!!!!!!!\n2 deselected, 2 errors in 0.14s\n",
+      "exit_code": 5,
+      "stdout": "\n6 deselected in 0.37s\n",
       "stderr": ""
     },
     "pytest_critical": {
-      "status": "FAIL",
-      "exit_code": 2,
-      "stdout": "\n=================================== ERRORS ====================================\n____________________ ERROR collecting tests/test_costs.py _____________________\nImportError while importing test module 'C:\\actions-runner\\quantlab-local\\quantlab\\quantlab\\tests\\test_costs.py'.\nHint: make sure your test modules/packages have valid Python names.\nTraceback:\nC:\\Python314\\Lib\\importlib\\__init__.py:88: in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntests\\test_costs.py:2: in <module>\n    import pandas as pd\nE   ModuleNotFoundError: No module named 'pandas'\n___________________ ERROR collecting tests/test_features.py ___________________\nImportError while importing test module 'C:\\actions-runner\\quantlab-local\\quantlab\\quantlab\\tests\\test_features.py'.\nHint: make sure your test modules/packages have valid Python names.\nTraceback:\nC:\\Python314\\Lib\\importlib\\__init__.py:88: in import_module\n    return _bootstrap._gcd_import(name[level:], package, level)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\ntests\\test_features.py:2: in <module>\n    import numpy as np\nE   ModuleNotFoundError: No module named 'numpy'\n=========================== short test summary info ===========================\nERROR tests/test_costs.py\nERROR tests/test_features.py\n!!!!!!!!!!!!!!!!!!! Interrupted: 2 errors during collection !!!!!!!!!!!!!!!!!!!\n2 errors in 0.14s\n",
+      "status": "PASS",
+      "exit_code": 0,
+      "stdout": "......                                                                   [100%]\n6 passed in 2.08s\n",
       "stderr": ""
     }
   }
