@@ -315,8 +315,23 @@ def run_pytest_suite(suite: str, markers: str | None = None) -> dict[str, Any]:
             cwd=REPO_ROOT,
             env=env,
         )
-        passed = result.returncode == 0
-        log(f"{'[OK]' if passed else '[FAIL]'} pytest {suite} -> exit {result.returncode}", "PASS" if passed else "FAIL")
+        
+        # Pytest exit codes:
+        # 0 = all tests passed
+        # 1 = some tests failed
+        # 2 = user interrupted
+        # 3 = internal error
+        # 4 = usage error
+        # 5 = no tests collected (treat as SKIP, not FAIL)
+        if result.returncode == 0:
+            status = "PASS"
+            log(f"[OK] pytest {suite} -> exit 0 (all passed)", "PASS")
+        elif result.returncode == 5:
+            status = "SKIP"
+            log(f"[SKIP] pytest {suite} -> exit 5 (no tests collected for marker)", "WARN")
+        else:
+            status = "FAIL"
+            log(f"[FAIL] pytest {suite} -> exit {result.returncode}", "FAIL")
         
         # Always log stdout/stderr for debugging
         if result.stdout:
@@ -325,7 +340,7 @@ def run_pytest_suite(suite: str, markers: str | None = None) -> dict[str, Any]:
             log(f"[DIAG] stderr (last 500): {result.stderr[-500:]}", "ERROR")
         
         return {
-            "status": "PASS" if passed else "FAIL",
+            "status": status,
             "exit_code": result.returncode,
             "stdout": result.stdout[-2000:],  # Last 2000 chars
             "stderr": result.stderr[-1000:],
