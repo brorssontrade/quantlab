@@ -104,53 +104,64 @@ jobs:
           Write-Host "      PYTHON ENVIRONMENT SETUP          "
           Write-Host "========================================"
           
+          # Define venv python path explicitly (avoids activation issues between steps)
+          $venvPython = Join-Path $PWD ".venv\Scripts\python.exe"
+          $venvPip = Join-Path $PWD ".venv\Scripts\pip.exe"
+          
           # Always use/create .venv for consistent environment
-          if (-not (Test-Path ".venv\Scripts\Activate.ps1")) {
+          if (-not (Test-Path $venvPython)) {
             Write-Host "Creating new .venv..."
             python -m venv .venv
           }
           
-          Write-Host "Activating .venv..."
-          . .\.venv\Scripts\Activate.ps1
-          
-          Write-Host ""
-          Write-Host "Python executable: $(Get-Command python | Select-Object -ExpandProperty Source)"
-          python --version
-          pip --version
+          Write-Host "Venv Python: $venvPython"
+          Write-Host "Venv Pip: $venvPip"
+          & $venvPython --version
+          & $venvPip --version
           Write-Host ""
           
           # Upgrade pip to avoid issues
-          python -m pip install --upgrade pip --quiet
+          Write-Host "Upgrading pip..."
+          & $venvPython -m pip install --upgrade pip
           
-          # Install Day2 script dependencies
+          # Install Day2 script dependencies (no --quiet for visibility)
+          Write-Host ""
           Write-Host "Installing core dependencies..."
-          pip install requests pytest pandas numpy --quiet
+          & $venvPip install requests pytest pandas numpy
           
           # ALWAYS reinstall requirements.txt to ensure all deps are present
           # (venv persists on self-hosted runner, may be stale)
           if (Test-Path "requirements.txt") {
-            Write-Host "Installing requirements.txt (force reinstall)..."
-            pip install -r requirements.txt --quiet --upgrade
+            Write-Host ""
+            Write-Host "Installing requirements.txt (force upgrade)..."
+            & $venvPip install -r requirements.txt --upgrade
           }
           
           # CRITICAL: Install project in editable mode so quantkit is importable
           Write-Host ""
           Write-Host "Installing quantlab in editable mode (pip install -e .)..."
-          pip install -e . --quiet
+          & $venvPip install -e .
           
           # Verify critical imports work
           Write-Host ""
-          Write-Host "Verifying imports..."
-          python -c "import quantkit; print(f'quantkit: {quantkit.__file__}')"
-          python -c "import typer; print(f'typer: {typer.__version__}')"
+          Write-Host "======================================="
+          Write-Host "       IMPORT VERIFICATION             "
+          Write-Host "======================================="
+          Write-Host "Testing quantkit import:"
+          & $venvPython -c "import quantkit; print(f'  quantkit: {quantkit.__file__}')"
+          Write-Host "Testing typer import:"
+          & $venvPython -c "import typer; print(f'  typer version: {typer.__version__}')"
           
           # Diagnostic: Show pytest and key packages
           Write-Host ""
           Write-Host "Pytest version:"
-          python -m pytest --version
+          & $venvPython -m pytest --version
           Write-Host ""
-          Write-Host "Key packages:"
-          pip show pandas numpy requests typer quantlab | Select-String "Name:|Version:|Location:"
+          Write-Host "pip show typer:"
+          & $venvPip show typer
+          Write-Host ""
+          Write-Host "pip list (filtered):"
+          & $venvPip list | Select-String "typer|pytest|pandas|numpy|quantlab"
 
       - name: Preflight - Check API is reachable
         env:
@@ -214,34 +225,37 @@ jobs:
           git rev-parse --show-toplevel
           Write-Host ""
           Write-Host "Workspace root contents:"
-          Get-ChildItem $env:GITHUB_WORKSPACE | Select-Object Name
+          Get-ChildItem -Path $env:GITHUB_WORKSPACE -Force | ForEach-Object { Write-Host "  $($_.Name)" }
           Write-Host ""
           Write-Host "Tests folder check:"
-          if (Test-Path "$env:GITHUB_WORKSPACE\tests") {
+          $testsPath = Join-Path $env:GITHUB_WORKSPACE "tests"
+          if (Test-Path $testsPath) {
             Write-Host "[OK] tests/ folder found"
             Write-Host "All test files in tests/:"
-            Get-ChildItem "$env:GITHUB_WORKSPACE\tests" -Filter "*.py" -Recurse | Select-Object FullName
+            Get-ChildItem -Path $testsPath -Filter "*.py" -Recurse | ForEach-Object { Write-Host "  $($_.FullName)" }
           } else {
-            Write-Host "[WARN] tests/ folder NOT found at $env:GITHUB_WORKSPACE\tests"
+            Write-Host "[WARN] tests/ folder NOT found at $testsPath"
           }
           Write-Host ""
           Write-Host "All test*.py files in repo:"
-          Get-ChildItem $env:GITHUB_WORKSPACE -Filter "test*.py" -Recurse | Select-Object FullName
+          Get-ChildItem -Path $env:GITHUB_WORKSPACE -Filter "test*.py" -Recurse -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $($_.FullName)" }
           Write-Host ""
           Write-Host "Git tracked test files:"
-          git ls-files | Select-String -Pattern "test.*\.py$"
+          git ls-files "**/test*.py" "tests/*.py" | ForEach-Object { Write-Host "  $_" }
           Write-Host "========================================"
           Write-Host ""
           
-          # CRITICAL: Activate venv before running Day2 checks
-          Write-Host "Activating .venv for Day2 checks..."
-          . .\.venv\Scripts\Activate.ps1
+          # Use explicit venv python path (activation doesn't persist between steps)
+          $venvPython = Join-Path $PWD ".venv\Scripts\python.exe"
+          Write-Host "Using venv Python: $venvPython"
           
-          Write-Host "Python executable: $(Get-Command python | Select-Object -ExpandProperty Source)"
+          # Verify typer is available before running day2
+          Write-Host "Pre-flight typer check:"
+          & $venvPython -c "import typer; print(f'  typer {typer.__version__} OK')"
           Write-Host ""
           
-          # Run Day2 checks with venv Python
-          python scripts/monitoring/day2_check.py
+          # Run Day2 checks with explicit venv Python
+          & $venvPython scripts/monitoring/day2_check.py
       
       - name: Upload reports
         if: always()
