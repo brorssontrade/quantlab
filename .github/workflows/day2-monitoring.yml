@@ -126,10 +126,11 @@ jobs:
           Write-Host "Installing core dependencies..."
           pip install requests pytest pandas numpy --quiet
           
-          # Install requirements.txt if present
+          # ALWAYS reinstall requirements.txt to ensure all deps are present
+          # (venv persists on self-hosted runner, may be stale)
           if (Test-Path "requirements.txt") {
-            Write-Host "Installing requirements.txt..."
-            pip install -r requirements.txt --quiet
+            Write-Host "Installing requirements.txt (force reinstall)..."
+            pip install -r requirements.txt --quiet --upgrade
           }
           
           # CRITICAL: Install project in editable mode so quantkit is importable
@@ -137,10 +138,11 @@ jobs:
           Write-Host "Installing quantlab in editable mode (pip install -e .)..."
           pip install -e . --quiet
           
-          # Verify quantkit is importable
+          # Verify critical imports work
           Write-Host ""
-          Write-Host "Verifying quantkit import..."
-          python -c "import quantkit; print(f'quantkit imported from: {quantkit.__file__}')"
+          Write-Host "Verifying imports..."
+          python -c "import quantkit; print(f'quantkit: {quantkit.__file__}')"
+          python -c "import typer; print(f'typer: {typer.__version__}')"
           
           # Diagnostic: Show pytest and key packages
           Write-Host ""
@@ -148,7 +150,7 @@ jobs:
           python -m pytest --version
           Write-Host ""
           Write-Host "Key packages:"
-          pip show pandas numpy requests quantlab | Select-String "Name:|Version:|Location:"
+          pip show pandas numpy requests typer quantlab | Select-String "Name:|Version:|Location:"
 
       - name: Preflight - Check API is reachable
         env:
