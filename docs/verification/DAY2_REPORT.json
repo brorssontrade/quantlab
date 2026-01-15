@@ -1,7 +1,7 @@
 {
-  "timestamp": "2026-01-15T19:00:39.447886+00:00",
+  "timestamp": "2026-01-15T21:43:18.895735+00:00",
   "base_url": "http://127.0.0.1:8000",
-  "duration_sec": 6.12,
+  "duration_sec": 6.35,
   "overall_status": "APPROVED",
   "checks": {
     "health": {
@@ -9,7 +9,7 @@
       "code": 200,
       "data": {
         "status": "ok",
-        "time": "2026-01-15T19:00:39.449809"
+        "time": "2026-01-15T21:43:18.892341"
       }
     },
     "api_health": {
@@ -17,7 +17,7 @@
       "code": 200,
       "data": {
         "status": "ok",
-        "timestamp": "2026-01-15T19:00:39.451809"
+        "timestamp": "2026-01-15T21:43:18.892341"
       }
     },
     "ohlcv_fetch": {
@@ -34,13 +34,13 @@
     "pytest_parity": {
       "status": "SKIP",
       "exit_code": 5,
-      "stdout": "\n6 deselected in 0.34s\n",
+      "stdout": "\n6 deselected in 0.36s\n",
       "stderr": ""
     },
     "pytest_critical": {
       "status": "PASS",
       "exit_code": 0,
-      "stdout": "......                                                                   [100%]\n6 passed in 1.46s\n",
+      "stdout": "......                                                                   [100%]\n6 passed in 1.51s\n",
       "stderr": ""
     }
   }
