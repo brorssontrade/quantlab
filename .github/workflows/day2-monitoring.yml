@@ -120,27 +120,34 @@ jobs:
           & $venvPip --version
           Write-Host ""
           
-          # Upgrade pip to avoid issues
-          Write-Host "Upgrading pip..."
-          & $venvPython -m pip install --upgrade pip
+          # Upgrade pip, setuptools, wheel first
+          Write-Host "Upgrading pip/setuptools/wheel..."
+          & $venvPython -m pip install --upgrade pip setuptools wheel
           
-          # Install Day2 script dependencies (no --quiet for visibility)
-          Write-Host ""
-          Write-Host "Installing core dependencies..."
-          & $venvPip install requests pytest pandas numpy
-          
-          # ALWAYS reinstall requirements.txt to ensure all deps are present
-          # (venv persists on self-hosted runner, may be stale)
+          # FORCE REINSTALL requirements.txt to ensure all deps are fresh
+          # (venv persists on self-hosted runner, may be stale/corrupt)
           if (Test-Path "requirements.txt") {
             Write-Host ""
-            Write-Host "Installing requirements.txt (force upgrade)..."
+            Write-Host "Installing requirements.txt (force reinstall)..."
+            & $venvPip install -r requirements.txt --force-reinstall --no-deps
             & $venvPip install -r requirements.txt --upgrade
           }
+          
+          # Install core test dependencies explicitly
+          Write-Host ""
+          Write-Host "Installing core test dependencies..."
+          & $venvPip install requests pytest typer rich --upgrade
           
           # CRITICAL: Install project in editable mode so quantkit is importable
           Write-Host ""
           Write-Host "Installing quantlab in editable mode (pip install -e .)..."
+          & $venvPip install -e . --no-deps
           & $venvPip install -e .
+          
+          # Verify no broken dependencies
+          Write-Host ""
+          Write-Host "Running pip check..."
+          & $venvPip check
           
           # Verify critical imports work
           Write-Host ""
@@ -150,7 +157,7 @@ jobs:
           Write-Host "Testing quantkit import:"
           & $venvPython -c "import quantkit; print(f'  quantkit: {quantkit.__file__}')"
           Write-Host "Testing typer import:"
-          & $venvPython -c "import typer; print(f'  typer version: {typer.__version__}')"
+          & $venvPython -c "import typer; print(f'  typer version: {typer.__version__}, file: {typer.__file__}')"
           
           # Diagnostic: Show pytest and key packages
           Write-Host ""
@@ -161,7 +168,7 @@ jobs:
           & $venvPip show typer
           Write-Host ""
           Write-Host "pip list (filtered):"
-          & $venvPip list | Select-String "typer|pytest|pandas|numpy|quantlab"
+          & $venvPip list | Select-String "typer|pytest|pandas|numpy|quantlab|rich"
 
       - name: Preflight - Check API is reachable
         env:

@@ -344,9 +344,17 @@ def find_parity_tests() -> str | None:
     """Auto-detect parity test file via glob search."""
     log("[DIAG] Searching for parity test files...")
     
-    # First, list ALL test files for diagnostics
-    log("[DIAG] All Python test files in repo:")
-    all_tests = list(REPO_ROOT.glob("**/test*.py")) + list(REPO_ROOT.glob("**/*_test.py"))
+    # Helper to filter out .venv and other non-repo paths
+    def is_repo_test(p: Path) -> bool:
+        """Return True if path is a real repo test (not in .venv, node_modules, etc)."""
+        parts = p.relative_to(REPO_ROOT).parts
+        exclude_dirs = {'.venv', 'venv', 'node_modules', '.git', '__pycache__', 'site-packages'}
+        return not any(part in exclude_dirs for part in parts)
+    
+    # First, list ALL test files for diagnostics (excluding .venv)
+    log("[DIAG] All Python test files in repo (excluding .venv):")
+    all_tests_raw = list(REPO_ROOT.glob("**/test*.py")) + list(REPO_ROOT.glob("**/*_test.py"))
+    all_tests = [t for t in all_tests_raw if is_repo_test(t)]
     for tf in all_tests[:20]:  # Show first 20
         log(f"[DIAG]   - {tf.relative_to(REPO_ROOT)}")
     if len(all_tests) > 20:
@@ -365,7 +373,8 @@ def find_parity_tests() -> str | None:
     ]
     
     for pattern in patterns:
-        matches = list(REPO_ROOT.glob(pattern))
+        matches_raw = list(REPO_ROOT.glob(pattern))
+        matches = [m for m in matches_raw if is_repo_test(m)]
         if matches:
             log(f"[DIAG] Pattern '{pattern}' found {len(matches)} files:")
             for m in matches[:5]:  # Show first 5
