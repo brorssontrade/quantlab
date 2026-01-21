@@ -251,8 +251,15 @@ test.describe('TV-13.6b: Layout Dead-Space Audit', () => {
 
     if (isOpen) {
       await inspectorToggle.click();
-      await page.waitForTimeout(200);
-      log('Inspector toggled to closed');
+      // Wait deterministically: ensure dump reflects toggle state change
+      await expect.poll(
+        async () => {
+          const dump = await page.evaluate(() => window.__lwcharts?.dump?.()?.ui?.inspectorOpen ?? null);
+          return dump;
+        },
+        { timeout: 2000 }
+      ).toBe(false);
+      log('Inspector toggled to closed (deterministic)');
     }
 
     // Measure surface grid rows when inspector is closed
@@ -310,9 +317,15 @@ test.describe('TV-13.6b: Layout Dead-Space Audit', () => {
     const isOpen = await page.evaluate(() => window.__lwcharts.dump?.().ui.inspectorOpen ?? false);
     if (isOpen) {
       await inspectorToggle.click();
-      // Wait for toggle animation
-      await page.waitForTimeout(500);
-      log('Inspector closed for invariant test');
+      // Wait deterministically: ensure inspector close animation completes
+      await expect.poll(
+        async () => {
+          const dump = await page.evaluate(() => window.__lwcharts?.dump?.()?.ui?.inspectorOpen ?? null);
+          return dump;
+        },
+        { timeout: 2000 }
+      ).toBe(false);
+      log('Inspector closed for invariant test (deterministic)');
     }
 
     // Measure the gap between .chartspro-price bottom and .tv-bottombar top
