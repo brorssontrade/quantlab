@@ -1,20 +1,14 @@
 import { test, expect } from "@playwright/test";
+import { gotoChartsPro } from "./helpers";
 
-// TODO: TV-8.2 - Alert Markers in Chart
-// These tests need to be rewritten with proper gotoChartsPro helper
-// Currently using wrong port (5173 vs 4173) and missing proper setup
-test.describe.skip("TV-8.2: Alert Markers in Chart", () => {
-  test.beforeEach(async ({ page }) => {
-    // Navigate to ChartsPro with mock mode
-    await page.goto("http://localhost:5173/?mock=1");
-    
-    // Wait for chart to render
-    await page.waitForSelector("div.chartspro-root", { timeout: 5000 }).catch(() => {
-      // If main chart fails, it's ok – we'll skip gracefully
-    });
-
-    // Wait for initial data load
-    await page.waitForTimeout(1000);
+// TV-8.2 - Alert Markers in Chart
+// Tests verify alert marker overlay rendering, interaction, and state consistency
+// Uses gotoChartsPro helper for deterministic navigation to ChartsPro tab
+test.describe("TV-8.2: Alert Markers in Chart", () => {
+  test.beforeEach(async ({ page, testInfo }) => {
+    // Navigate to ChartsPro with mock mode via deterministic helper
+    // Includes: tab detection, LWCharts API validation, canvas visibility check
+    await gotoChartsPro(page, testInfo, { mock: true });
   });
 
   test("1. Alert markers overlay renders (no errors on load)", async ({ page }) => {
@@ -132,13 +126,20 @@ test.describe.skip("TV-8.2: Alert Markers in Chart", () => {
   });
 
   test("10. Alert markers update without flicker on rapid changes", async ({ page }) => {
-    // Simulate rapid data updates
+    // Get initial bell icon count
     const initialCount = await page.locator('[data-testid^="alert-marker-bell-"]').count();
     
-    // Force a page repaint by waiting
-    await page.waitForTimeout(100);
+    // Wait for alert state stability (check that count remains constant via dump)
+    // Use deterministic wait: ensure __lwcharts dump is accessible and stable
+    await expect.poll(
+      async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.alerts?.count ?? 0;
+      },
+      { timeout: 2000 }
+    ).toBe(initialCount);
     
-    // Count should remain consistent
+    // Count should remain consistent (no flicker)
     const afterCount = await page.locator('[data-testid^="alert-marker-bell-"]').count();
     
     expect(afterCount).toBe(initialCount);
@@ -176,10 +177,23 @@ test.describe.skip("TV-8.2: Alert Markers in Chart", () => {
     
     const initialCount = dump?.ui?.alerts?.count;
     
-    // Wait and check again (simulating time passing)
-    await page.waitForTimeout(500);
+    // Wait for alert state stability (deterministic, not fixed sleep)
+    // Ensure dump is still accessible and count hasn't changed
+    await expect.poll(
+      async () => {
+        const newDump = await page.evaluate(() => {
+          try {
+            return (window as any).__lwcharts?.dump?.();
+          } catch {
+            return null;
+          }
+        });
+        return newDump?.ui?.alerts?.count ?? 0;
+      },
+      { timeout: 2000 }
+    ).toBe(initialCount);
     
-    // Count should be same (no automatic additions)
+    // Final check: count should still be same (no automatic additions)
     const dump2 = await page.evaluate(() => {
       try {
         return (window as any).__lwcharts?.dump?.();
