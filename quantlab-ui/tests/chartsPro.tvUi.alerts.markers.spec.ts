@@ -5,13 +5,11 @@ import { gotoChartsPro } from "./helpers";
 // Tests verify alert marker overlay rendering, interaction, and state consistency
 // Uses gotoChartsPro helper for deterministic navigation to ChartsPro tab
 test.describe("TV-8.2: Alert Markers in Chart", () => {
-  test.beforeEach(async ({ page, testInfo }) => {
-    // Navigate to ChartsPro with mock mode via deterministic helper
-    // Includes: tab detection, LWCharts API validation, canvas visibility check
-    await gotoChartsPro(page, testInfo, { mock: true });
-  });
 
-  test("1. Alert markers overlay renders (no errors on load)", async ({ page }) => {
+  test("1. Alert markers overlay renders (no errors on load)", async ({ page }, testInfo) => {
+    // Navigate to ChartsPro with mock mode via deterministic helper
+    await gotoChartsPro(page, testInfo, { mock: true });
+
     // Check that alert markers overlay exists in DOM
     const overlay = await page.locator('[data-testid="alert-markers-overlay"]').count();
     
@@ -20,7 +18,10 @@ test.describe("TV-8.2: Alert Markers in Chart", () => {
     expect(page.url()).toContain("localhost");
   });
 
-  test("2. Bell icon appears when alert is created", async ({ page }) => {
+  test("2. Bell icon appears when alert is created", async ({ page }, testInfo) => {
+    // Navigate to ChartsPro with mock mode via deterministic helper
+    await gotoChartsPro(page, testInfo, { mock: true });
+
     // This requires an active alert to exist
     // In QA mode, we can manipulate state or use mock data
     const bellIcons = await page.locator('[data-testid^="alert-marker-bell-"]').count();
@@ -30,7 +31,10 @@ test.describe("TV-8.2: Alert Markers in Chart", () => {
     expect(bellIcons).toBeGreaterThanOrEqual(0);
   });
 
-  test("3. Bell icon disappears when alert is deleted", async ({ page }) => {
+  test("3. Bell icon disappears when alert is deleted", async ({ page }, testInfo) => {
+    // Navigate to ChartsPro with mock mode via deterministic helper
+    await gotoChartsPro(page, testInfo, { mock: true });
+
     // Verify marker count before/after delete via dump()
     const dump1 = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
     const alertCount1 = dump1?.ui?.alerts?.count ?? 0;
@@ -45,7 +49,10 @@ test.describe("TV-8.2: Alert Markers in Chart", () => {
     expect(alertCount1).toBeGreaterThanOrEqual(0);
   });
 
-  test("4. Clicking bell icon selects alert in dump()", async ({ page }) => {
+  test("4. Clicking bell icon selects alert in dump()", async ({ page }, testInfo) => {
+    // Navigate to ChartsPro with mock mode via deterministic helper
+    await gotoChartsPro(page, testInfo, { mock: true });
+
     // Get dump with alerts
     const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
     const alertIds = dump?.ui?.alerts?.ids ?? [];
@@ -59,7 +66,10 @@ test.describe("TV-8.2: Alert Markers in Chart", () => {
     expect(alertIds).toBeDefined();
   });
 
-  test("5. Alert marker lines render at correct price level", async ({ page }) => {
+  test("5. Alert marker lines render at correct price level", async ({ page }, testInfo) => {
+    // Navigate to ChartsPro with mock mode via deterministic helper
+    await gotoChartsPro(page, testInfo, { mock: true });
+
     // Verify dump().ui.alerts has price data
     const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
     const alerts = dump?.ui?.alerts?.items ?? [];
@@ -71,7 +81,10 @@ test.describe("TV-8.2: Alert Markers in Chart", () => {
     });
   });
 
-  test("6. Alert markers are theme-aware (light/dark mode)", async ({ page }) => {
+  test("6. Alert markers are theme-aware (light/dark mode)", async ({ page }, testInfo) => {
+    // Navigate to ChartsPro with mock mode via deterministic helper
+    await gotoChartsPro(page, testInfo, { mock: true });
+
     // Verify alert markers overlay exists
     const overlay = await page.locator('[data-testid="alert-markers-overlay"]');
     const exists = await overlay.count() > 0;
@@ -81,7 +94,10 @@ test.describe("TV-8.2: Alert Markers in Chart", () => {
     expect(typeof exists).toBe("boolean");
   });
 
-  test("7. Bell icons have proper pointer events (click-able)", async ({ page }) => {
+  test("7. Bell icons have proper pointer events (click-able)", async ({ page }, testInfo) => {
+    // Navigate to ChartsPro with mock mode via deterministic helper
+    await gotoChartsPro(page, testInfo, { mock: true });
+
     // Get first bell icon if available
     const bellIcon = await page.locator('[data-testid^="alert-marker-bell-"]').first();
     const visible = await bellIcon.isVisible().catch(() => false);
@@ -92,7 +108,10 @@ test.describe("TV-8.2: Alert Markers in Chart", () => {
     }
   });
 
-  test("8. Marker overlay does not interfere with chart interactions (pan/zoom)", async ({ page }) => {
+  test("8. Marker overlay does not interfere with chart interactions (pan/zoom)", async ({ page }, testInfo) => {
+    // Navigate to ChartsPro with mock mode via deterministic helper
+    await gotoChartsPro(page, testInfo, { mock: true });
+
     // Verify that the overlay exists (which means it's initialized)
     const overlay = await page.locator('[data-testid="alert-markers-overlay"]');
     const count = await overlay.count();
@@ -102,7 +121,10 @@ test.describe("TV-8.2: Alert Markers in Chart", () => {
     expect(count).toBeGreaterThanOrEqual(0);
   });
 
-  test("9. Alert marker count in dump() matches visible markers", async ({ page }) => {
+  test("9. Alert marker count in dump() matches visible markers", async ({ page }, testInfo) => {
+    // Navigate to ChartsPro with mock mode via deterministic helper
+    await gotoChartsPro(page, testInfo, { mock: true });
+
     // Get dump alert count
     const dump = await page.evaluate(() => {
       try {
@@ -125,7 +147,10 @@ test.describe("TV-8.2: Alert Markers in Chart", () => {
     expect(bellCount).toBeLessThanOrEqual(alertCount + 1); // Allow 1 extra for rounding
   });
 
-  test("10. Alert markers update without flicker on rapid changes", async ({ page }) => {
+  test("10. Alert markers update without flicker on rapid changes", async ({ page }, testInfo) => {
+    // Navigate to ChartsPro with mock mode via deterministic helper
+    await gotoChartsPro(page, testInfo, { mock: true });
+
     // Get initial bell icon count
     const initialCount = await page.locator('[data-testid^="alert-marker-bell-"]').count();
     
@@ -145,7 +170,10 @@ test.describe("TV-8.2: Alert Markers in Chart", () => {
     expect(afterCount).toBe(initialCount);
   });
 
-  test("11. Hovering over bell icon shows tooltip with alert label", async ({ page }) => {
+  test("11. Hovering over bell icon shows tooltip with alert label", async ({ page }, testInfo) => {
+    // Navigate to ChartsPro with mock mode via deterministic helper
+    await gotoChartsPro(page, testInfo, { mock: true });
+
     // Find first bell icon
     const bellIcon = await page.locator('[data-testid^="alert-marker-bell-"]').first();
     const visible = await bellIcon.isVisible().catch(() => false);
@@ -161,7 +189,10 @@ test.describe("TV-8.2: Alert Markers in Chart", () => {
     }
   });
 
-  test("12. Determinism check: Alert markers rendered consistently on reload", async ({ page }) => {
+  test("12. Determinism check: Alert markers rendered consistently on reload", async ({ page }, testInfo) => {
+    // Navigate to ChartsPro with mock mode via deterministic helper
+    await gotoChartsPro(page, testInfo, { mock: true });
+
     // Get initial marker count from dump
     const dump = await page.evaluate(() => {
       try {
@@ -209,3 +240,5 @@ test.describe("TV-8.2: Alert Markers in Chart", () => {
     }
   });
 });
+
+
