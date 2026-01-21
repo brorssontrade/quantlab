@@ -15,7 +15,7 @@ test.describe("TV-8.2: Alert Markers in Chart", () => {
     
     // If overlay doesn't exist yet, that's ok – alerts may be empty
     // The test passes if we reach here without crashes
-    expect(page.url()).toContain("localhost");
+    expect(page.url()).toContain("4173");  // Dev server port
   });
 
   test("2. Bell icon appears when alert is created", async ({ page }, testInfo) => {
