@@ -98,6 +98,7 @@ export interface DrawingLayerProps {
   duplicateDrawing: (id: string) => Drawing | null;
   onToggleLock: (id: string) => void;
   onToggleHide: (id: string) => void;
+  setTool: (tool: Tool) => void;
 }
 
 export function DrawingLayer({
@@ -119,6 +120,7 @@ export function DrawingLayer({
   duplicateDrawing,
   onToggleLock,
   onToggleHide,
+  setTool,
 }: DrawingLayerProps) {
   const overlay = useOverlayCanvas();
   const pointerState = useRef<PointerState>({ mode: "idle" });
@@ -198,12 +200,16 @@ export function DrawingLayer({
 
   const updateCursor = useCallback(
     (value: string) => {
-      if (!overlay.canvas) return;
       if (cursorRef.current === value) return;
       cursorRef.current = value;
-      overlay.canvas.style.cursor = value;
+      if (containerRef.current) {
+        containerRef.current.style.cursor = value;
+      }
+      if (overlay.canvas) {
+        overlay.canvas.style.cursor = value;
+      }
     },
-    [overlay.canvas],
+    [containerRef, overlay.canvas],
   );
 
   const applyCursorForHit = useCallback(
@@ -384,9 +390,11 @@ export function DrawingLayer({
       if (!selectedId) return;
       if (event.key === "Delete") {
         onRemove(selectedId);
-      } else if (event.key.toLowerCase() === "l") {
+      } else if (event.shiftKey && event.key.toLowerCase() === "l") {
+        // Shift+L = toggle lock
         onToggleLock(selectedId);
-      } else if (event.key.toLowerCase() === "h") {
+      } else if (event.shiftKey && event.key.toLowerCase() === "h") {
+        // Shift+H = toggle hide (H alone is reserved for hline tool)
         onToggleHide(selectedId);
       }
     };
@@ -403,13 +411,20 @@ export function DrawingLayer({
 
   useEffect(() => {
     const handle = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && cancelActiveOperation()) {
+      if (event.key === "Escape") {
+        // Priority: Cancel active drawing/drag operation first
+        if (cancelActiveOperation()) {
+          event.preventDefault();
+          return;
+        }
+        // Fallback: If no active operation, switch to select tool
+        setTool("select");
         event.preventDefault();
       }
     };
     window.addEventListener("keydown", handle);
     return () => window.removeEventListener("keydown", handle);
-  }, [cancelActiveOperation]);
+  }, [cancelActiveOperation, setTool]);
 
   const computePoint = useCallback(
     (event: PointerEvent): ChartPoint | null => {
@@ -508,7 +523,7 @@ export function DrawingLayer({
   const beginDrawing = useCallback(
     (point: ChartPoint) => {
       switch (tool) {
-        case "h": {
+        case "hline": {
           const drawing: Drawing = {
             id: createId(),
             kind: "hline",
@@ -524,7 +539,7 @@ export function DrawingLayer({
           requestRender();
           break;
         }
-        case "v": {
+        case "vline": {
           const drawing: Drawing = {
             id: createId(),
             kind: "vline",
@@ -540,7 +555,7 @@ export function DrawingLayer({
           requestRender();
           break;
         }
-        case "trend": {
+        case "trendline": {
           const drawing: Drawing = {
             id: createId(),
             kind: "trend",
@@ -728,11 +743,41 @@ export function DrawingLayer({
     [applyCursorForHit, duplicateDrawing, hitTest, onSelect],
   );
 
+  const spacePanRef = useRef(false);
+  const spaceDraggingRef = useRef(false);
+
   useEffect(() => {
-    const canvas = overlay.canvas;
-    if (!canvas || !chart || !candleSeries) return;
+    const down = (e: KeyboardEvent) => {
+      if (e.code === "Space" && !spacePanRef.current) {
+        spacePanRef.current = true;
+        if (pointerState.current.mode === "idle") updateCursor(CURSORS.grab);
+      }
+    };
+    const up = (e: KeyboardEvent) => {
+      if (e.code === "Space") {
+        spacePanRef.current = false;
+        spaceDraggingRef.current = false;
+        if (pointerState.current.mode === "idle") updateCursor(tool === "select" ? CURSORS.default : CURSORS.crosshair);
+      }
+    };
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+    };
+  }, [tool, updateCursor]);
+
+  useEffect(() => {
+    const targetEl = containerRef.current;
+    if (!targetEl || !chart || !candleSeries) return;
 
     const handlePointerDown = (event: PointerEvent) => {
+      if (spacePanRef.current) {
+        spaceDraggingRef.current = true;
+        updateCursor(CURSORS.grabbing);
+        return; // allow LW to handle pan
+      }
       const point = computePoint(event);
       if (!point) return;
       pointerOrigin.current = point;
@@ -742,6 +787,8 @@ export function DrawingLayer({
       } else if (hit && !event.shiftKey) {
         handleSelection(point, event, hit);
       } else {
+        // Starting a draw session: prevent LW from panning
+        event.preventDefault();
         beginDrawing(point);
       }
     };
@@ -754,6 +801,11 @@ export function DrawingLayer({
     };
 
     const handlePointerUp = () => {
+      if (spaceDraggingRef.current) {
+        spaceDraggingRef.current = false;
+        if (spacePanRef.current) updateCursor(CURSORS.grab);
+        return;
+      }
       if (pendingCommitRef.current && activeDraftRef.current) {
         onUpsert(activeDraftRef.current, { select: true });
       }
@@ -761,11 +813,18 @@ export function DrawingLayer({
     };
 
     const handleWheel = (event: WheelEvent) => {
-      event.preventDefault();
+      // Allow LW zooming unless actively drawing/dragging
+      if (pointerState.current.mode !== "idle") {
+        event.preventDefault();
+      }
     };
 
     const handleHover = (event: PointerEvent) => {
       if (pointerState.current.mode !== "idle") return;
+      if (spacePanRef.current) {
+        updateCursor(CURSORS.grab);
+        return;
+      }
       const point = computePoint(event);
       if (!point) {
         applyCursorForHit(null, false);
@@ -780,19 +839,19 @@ export function DrawingLayer({
       applyCursorForHit(null, false);
     };
 
-    canvas.addEventListener("pointerdown", handlePointerDown);
-    canvas.addEventListener("pointermove", handleHover);
-    canvas.addEventListener("pointerleave", handlePointerLeave);
+    targetEl.addEventListener("pointerdown", handlePointerDown);
+    targetEl.addEventListener("pointermove", handleHover);
+    targetEl.addEventListener("pointerleave", handlePointerLeave);
     window.addEventListener("pointermove", handlePointerMove);
     window.addEventListener("pointerup", handlePointerUp);
-    canvas.addEventListener("wheel", handleWheel, { passive: false });
+    targetEl.addEventListener("wheel", handleWheel, { passive: false });
     return () => {
-      canvas.removeEventListener("pointerdown", handlePointerDown);
-      canvas.removeEventListener("pointermove", handleHover);
-      canvas.removeEventListener("pointerleave", handlePointerLeave);
+      targetEl.removeEventListener("pointerdown", handlePointerDown);
+      targetEl.removeEventListener("pointermove", handleHover);
+      targetEl.removeEventListener("pointerleave", handlePointerLeave);
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", handlePointerUp);
-      canvas.removeEventListener("wheel", handleWheel);
+      targetEl.removeEventListener("wheel", handleWheel);
     };
   }, [
     applyCursorForHit,
@@ -803,7 +862,7 @@ export function DrawingLayer({
     handleSelection,
     hitTest,
     onUpsert,
-    overlay.canvas,
+    containerRef,
     resetPointerSession,
     tool,
     updateDrawing,

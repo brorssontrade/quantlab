@@ -383,10 +383,38 @@ function paintProbeIfEmpty(root: HTMLElement | Document | null): boolean {
   return Boolean(result && result.a > 0);
 }
 
+/**
+ * Simulate a wheel zoom event on the chart canvas.
+ * @param deltaY - Positive = zoom out, Negative = zoom in
+ * @param clientX - Optional x position (defaults to canvas center)
+ * @param clientY - Optional y position (defaults to canvas center)
+ */
+function simulateZoom(deltaY: number, clientX?: number, clientY?: number): void {
+  const canvases = getAllChartCanvases(null);
+  const canvas = canvases.length ? canvases[canvases.length - 1] : null;
+  if (!canvas) return;
+  
+  const rect = canvas.getBoundingClientRect();
+  const x = clientX ?? rect.left + rect.width / 2;
+  const y = clientY ?? rect.top + rect.height / 2;
+  
+  canvas.dispatchEvent(
+    new WheelEvent("wheel", {
+      bubbles: true,
+      cancelable: true,
+      clientX: x,
+      clientY: y,
+      deltaY,
+      deltaMode: WheelEvent.DOM_DELTA_PIXEL,
+    })
+  );
+}
+
 const debugHelpersState: ChartsHelpersDebug = {
   lastSample: null,
   scan: (root) => scanPriceCanvasDiagnostics(root ?? null),
   paintProbeIfEmpty: (root) => (root === undefined ? paintProbeIfEmpty(null) : paintProbeIfEmpty(root)),
+  zoom: simulateZoom,
 };
 
 function hoverAt(root: HTMLElement | null, pos: "left" | "center" | "right" | number): boolean {

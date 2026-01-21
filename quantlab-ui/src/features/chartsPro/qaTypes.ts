@@ -26,6 +26,7 @@ export interface ChartsHelpersDebug {
   lastSample: LastSampleSnapshot | null;
   scan: (root?: HTMLElement | Document | null) => CanvasScanSummary;
   paintProbeIfEmpty: (root?: HTMLElement | Document | null) => boolean;
+  zoom?: (deltaY: number, clientX?: number, clientY?: number) => void;
 }
 
 export interface ChartsHelpersApi {

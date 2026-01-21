@@ -15,13 +15,16 @@ import {
   type Time,
   type TimeRange,
 } from "@/lib/lightweightCharts";
+import { createBaseSeries, type ChartType as FactoryChartType, type BaseSeriesApi } from "../runtime/seriesFactory";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
 import { toast } from "sonner";
 
 import type { ChartMeta, Drawing, IndicatorInstance, NormalizedBar, RawOhlcvRow, Tf } from "../types";
-import { indicatorDisplayName, normalizeRows } from "../types";
+import { indicatorDisplayName, indicatorParamsSummary, normalizeRows } from "../types";
 import { useChartControls, TIMEFRAME_OPTIONS } from "../state/controls";
+import type { ChartSettings } from "./TopBar/SettingsPanel";
+import { applyChartLevelSettings, applySeriesSettings, createAppliedSnapshot, type AppliedSettingsSnapshot } from "../utils/applyChartSettings";
 import {
   colorFor,
   compareCache,
@@ -44,8 +47,14 @@ import {
 } from "../state/compare";
 import { OverlayCanvasLayer } from "./OverlayCanvas";
 import { DrawingLayer } from "./DrawingLayer";
+import { AlertMarkersLayer } from "./AlertMarkersLayer";
 import { CompareToolbar } from "./CompareToolbar";
 import { InspectorSidebar, type InspectorObject } from "./InspectorSidebar";
+import { OhlcStrip } from "./OhlcStrip";
+import { ContextMenu, DEFAULT_CHART_ACTIONS, type ContextMenuState } from "./ContextMenu";
+import { CrosshairOverlay, type CrosshairPosition } from "./CrosshairOverlay";
+import { Watermark } from "./Watermark";
+import { LastPriceLine } from "./LastPriceLine";
 import type { ChartsTheme } from "../theme";
 import type { IndicatorWorkerResponse } from "../indicators/registry";
 import {
@@ -83,6 +92,22 @@ import type {
   VisibleRow,
   LwChartsExportHandlers,
 } from "../qaTypes";
+
+/** Get the bar duration in seconds for a timeframe */
+function getBarDurationSeconds(tf: Tf): number {
+  const map: Record<Tf, number> = {
+    "1m": 60,
+    "5m": 5 * 60,
+    "15m": 15 * 60,
+    "30m": 30 * 60,
+    "1h": 60 * 60,
+    "4h": 4 * 60 * 60,
+    "1d": 24 * 60 * 60,
+    "1w": 7 * 24 * 60 * 60,
+    "1M": 30 * 24 * 60 * 60, // approximate
+  };
+  return map[tf] ?? 60;
+}
 
 const TIMEFRAME_VALUE_SET = new Set<Tf>(TIMEFRAME_OPTIONS.map((option) => option.value));
 const MAX_COMPARE_COUNT = 4;
@@ -132,6 +157,7 @@ type ScaleSnapshot = {
   zeroLine: { visible: boolean; value: number };
 };
 type InspectorTab = "objectTree" | "dataWindow";
+type DataStatus = "idle" | "loading" | "ready" | "error";
 
 const describePriceScaleMode = (mode: PriceScaleMode | undefined) => {
   switch (mode) {
@@ -209,6 +235,7 @@ const installLwChartsStub = () => {
       overlayPercentActive: false,
       priceScaleModeBase: "Normal",
       bgColor: "#000000",
+      seriesType: null,
       candlePalette: {
         up: "#000000",
         down: "#000000",
@@ -233,7 +260,8 @@ const installLwChartsStub = () => {
       if (patch.debug) {
         merged.debug = { ...(w.__lwcharts as Partial<LwChartsApi> | undefined)?.debug, ...patch.debug };
       }
-      merged.set = setter;
+      // Preserve new set function if provided, otherwise use stub setter
+      merged.set = patch.set ?? setter;
       w.__lwcharts = merged;
       try {
         // Notify consumers via event for reactive patches (supports compareAddMode / compares)
@@ -318,6 +346,8 @@ const installLwChartsStub = () => {
 installLwChartsStub();
 
 
+type ChartTypeProp = "candles" | "bars" | "line" | "area";
+
 interface ChartViewportProps {
   apiBase: string;
   data: NormalizedBar[];
@@ -326,6 +356,8 @@ interface ChartViewportProps {
   loading?: boolean;
   symbol: string;
   timeframe: Tf;
+  chartType?: ChartTypeProp;
+  chartSettings?: ChartSettings;
   drawings: Drawing[];
   selectedId: string | null;
   indicators: IndicatorInstance[];
@@ -338,9 +370,14 @@ interface ChartViewportProps {
   onToggleLock: (id: string) => void;
   onToggleHide: (id: string) => void;
   registerExports?: (handlers: ExportHandlers) => void;
+  onChartReady?: (chart: IChartApi) => void;
   onUpdateIndicator?: (id: string, patch: Partial<IndicatorInstance>) => void;
   mockMode?: boolean;
   debugMode?: boolean;
+  workspaceMode?: boolean;
+  sidebarCollapsed?: boolean;
+  sidebarWidth?: number;
+  rightPanelActiveTab?: "indicators" | "objects" | "alerts" | null;
 }
 
 type CandlestickSeries = ISeriesApi<"Candlestick">;
@@ -367,6 +404,8 @@ export function ChartViewport({
   loading,
   symbol,
   timeframe,
+  chartType = "candles",
+  chartSettings,
   drawings,
   selectedId,
   indicators,
@@ -379,9 +418,14 @@ export function ChartViewport({
   onToggleLock,
   onToggleHide,
   registerExports,
+  onChartReady,
   onUpdateIndicator,
   mockMode = false,
   debugMode = false,
+  workspaceMode = false,
+  sidebarCollapsed = false,
+  sidebarWidth = 320,
+  rightPanelActiveTab = null,
 }: ChartViewportProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -389,7 +433,9 @@ export function ChartViewport({
   const chartRootRef = useRef<HTMLDivElement | null>(null);
   const toolbarRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<IChartApi | null>(null);
-  const candleSeriesRef = useRef<CandlestickSeries | null>(null);
+  const candleSeriesRef = useRef<BaseSeriesApi | null>(null);
+  const baseSeriesTypeRef = useRef<ChartTypeProp>("candles");
+  const chartTypeRef = useRef<ChartTypeProp>(chartType); // Track current chart type for dump()
   const volumeSeriesRef = useRef<VolumeSeries | null>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const compareLineSeriesRef = useRef<Map<string, LineSeries>>(new Map());
@@ -403,6 +449,21 @@ export function ChartViewport({
   const seriesLastValueRef = useRef<Map<string, { value: number; time: number }>>(new Map());
   const overlaySeriesRef = useRef<Map<string, LineSeries>>(new Map());
   const zeroLineSeriesRef = useRef<LineSeries | null>(null);
+
+  const resolveAppearance = useCallback(() => {
+    const settings = chartSettingsRef.current;
+    const appearance = settings?.appearance;
+    return {
+      upColor: appearance?.candleUpColor ?? theme.candleUp,
+      downColor: appearance?.candleDownColor ?? theme.candleDown,
+      borderUp: appearance?.borderVisible === false ? appearance?.candleUpColor ?? theme.candleUp : appearance?.candleUpColor ?? theme.candleUp,
+      borderDown: appearance?.borderVisible === false ? appearance?.candleDownColor ?? theme.candleDown : appearance?.candleDownColor ?? theme.candleDown,
+      wickUp: appearance?.wickVisible === false ? "transparent" : theme.wickUp,
+      wickDown: appearance?.wickVisible === false ? "transparent" : theme.wickDown,
+      wickVisible: appearance?.wickVisible ?? true,
+      borderVisible: appearance?.borderVisible ?? true,
+    };
+  }, [theme.candleDown, theme.candleUp, theme.wickDown, theme.wickUp]);
   const indicatorSeriesRef = useRef<Map<string, LineSeries | HistogramSeries>>(new Map());
   const ensureCompareSeriesDataRef = useRef<EnsureCompareSeriesDataFn>(async () => {});
   const ensureBaseSeriesRef = useRef<() => void>(() => {});
@@ -420,6 +481,22 @@ export function ChartViewport({
   const lastSnapshotRef = useRef<LastValueSnapshot>({ base: null, compares: {} });
   const updateLastValueLabelsRef = useRef<() => void>(() => {});
   const exportHandlersLocalRef = useRef<ExportHandlers>({});
+  
+  // Workspace layout refs (updated on every render to ensure dump() sees current values)
+  const workspaceModeRef = useRef(workspaceMode);
+  const sidebarCollapsedRef = useRef(sidebarCollapsed);
+  const sidebarWidthRef = useRef(sidebarWidth);
+  const rightPanelActiveTabRef = useRef<string | null>(rightPanelActiveTab);
+  const chartSettingsRef = useRef<ChartSettings | undefined>(chartSettings);
+  const appliedSettingsRef = useRef<AppliedSettingsSnapshot | null>(null); // TV-10.3: Track applied settings
+  const timeframeRef = useRef<string>(timeframe); // TV-11: Track current timeframe for dump()
+  workspaceModeRef.current = workspaceMode;
+  sidebarCollapsedRef.current = sidebarCollapsed;
+  sidebarWidthRef.current = sidebarWidth;
+  rightPanelActiveTabRef.current = rightPanelActiveTab;
+  chartTypeRef.current = chartType; // Sync current chartType prop to ref for dump()
+  chartSettingsRef.current = chartSettings; // Sync settings for dump()
+  timeframeRef.current = timeframe; // Sync timeframe for dump()
   const seriesPointCountsRef = useRef<{ price: number; volume: number; compares: Record<string, number> }>({
     price: 0,
     volume: 0,
@@ -427,13 +504,13 @@ export function ChartViewport({
   });
   const lastLoadedBaseRowsRef = useRef<NormalizedBar[]>([]);
   const currentSymbolRef = useRef(symbol);
-  const timeframeRef = useRef(timeframe);
   const baseScaleModeRef = useRef<PriceScaleMode>(PriceScaleMode.Normal);
   const barSpacingGuardRef = useRef<number | null>(null);
   const barSpacingRef = useRef<number | null>(null);
   const baseFetchAbortRef = useRef<AbortController | null>(null);
   const baseLoadSeqRef = useRef(0);
   const indicatorWorkerRef = useRef<Worker | null>(null);
+  const dataRevisionRef = useRef<number>(0); // TV-11: Incremented on timeframe change (test signal, not timestamp)
 
   // Percent mode anchor tracking
   const percentAnchorRef = useRef<{ time: number | null; index: number | null; baseClose: number | null; compareCloses: Record<string, number> }>({
@@ -475,6 +552,42 @@ export function ChartViewport({
 
   // Initialize inspectorStateRef after inspectorOpen and inspectorTab are defined to avoid TDZ error
   const inspectorStateRef = useRef<{ open: boolean; tab: InspectorTab }>({ open: inspectorOpen, tab: inspectorTab });
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<ContextMenuState>({
+    open: false,
+    x: 0,
+    y: 0,
+    selectedAction: null,
+  });
+  const contextMenuStateRef = useRef<ContextMenuState>(contextMenu);
+  const [lastContextAction, setLastContextAction] = useState<string | null>(null);
+
+  // OHLC strip visibility state
+  const [showOhlcStrip, setShowOhlcStrip] = useState<boolean>(true);
+  const [hoverBar, setHoverBar] = useState<NormalizedBar | null>(null);
+  const [hoverPrevClose, setHoverPrevClose] = useState<number | null>(null);
+
+  // Watermark visibility state
+  const [showWatermark, setShowWatermark] = useState<boolean>(true);
+
+  // Volume visibility state
+  const [showVolume, setShowVolume] = useState<boolean>(true);
+
+  // Crosshair visibility state (affects both overlay and chart crosshair)
+  const [showCrosshair, setShowCrosshair] = useState<boolean>(true);
+
+  // Crosshair position state for overlay
+  const [crosshairPosition, setCrosshairPosition] = useState<CrosshairPosition>({
+    x: 0,
+    y: 0,
+    price: null,
+    time: null,
+    visible: false,
+  });
+
+  // Last price line state
+  const [lastPriceY, setLastPriceY] = useState<number | null>(null);
 
   const setInspectorTabSafe = useCallback((value: unknown) => {
     const normalized = normalizeInspectorTab(value);
@@ -521,6 +634,7 @@ export function ChartViewport({
   const indicatorSeriesMap = indicatorSeriesRef.current;
   const [chartReady, setChartReady] = useState(false);
   const [baseLoading, setBaseLoading] = useState(false);
+  const lastErrorRef = useRef<string | null>(null);
   const [compareVersion, setCompareVersion] = useState(0);
   const [defaultCompareMode, setDefaultCompareMode] = useState<CompareMode>(() => loadPreferredCompareMode());
   const [defaultCompareTimeframe, setDefaultCompareTimeframe] = useState<Tf>(() =>
@@ -569,10 +683,137 @@ export function ChartViewport({
   }, []);
   const sizeWarnedRef = useRef(false);
   const tool = useChartControls((state) => state.tool);
+  const setTool = useChartControls((state) => state.setTool);
+
+  // TV-8.2: Alert markers state and fetching
+  interface AlertMarker {
+    id: number;
+    price: number;
+    label?: string;
+    isSelected?: boolean;
+  }
+  const [alerts, setAlerts] = useState<AlertMarker[]>([]);
+  const [selectedAlertId, setSelectedAlertId] = useState<number | null>(null);
+
+  const fetchAlerts = useCallback(async () => {
+    try {
+      const apiBaseClean = apiBase.replace(/\/$/, "");
+      const tfMap: Record<Tf, string> = {
+        "1m": "1m", "5m": "5m", "15m": "15m", "30m": "30m", "1h": "1h", "4h": "4h",
+        "1d": "D", "1w": "W", "1M": "M"
+      };
+      const bar = tfMap[timeframe] || "D";
+      const url = new URL(`${apiBaseClean}/alerts`);
+      url.searchParams.set("symbol", symbol);
+      url.searchParams.set("bar", bar);
+      const res = await fetch(url.toString());
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      const items = data?.items ?? data ?? [];
+      const markers: AlertMarker[] = Array.isArray(items)
+        ? items.map((item: any) => {
+            const price = item.geometry?.price ?? 0;
+            return {
+              id: item.id,
+              price: Number(price),
+              label: item.label || undefined,
+              isSelected: item.id === selectedAlertId,
+            };
+          })
+        : [];
+      setAlerts(markers);
+    } catch (err) {
+      console.warn("[ChartViewport] Alert fetch failed:", err);
+      setAlerts([]);
+    }
+  }, [apiBase, symbol, timeframe, selectedAlertId]);
+
+  // Fetch alerts on mount and when symbol/timeframe changes
+  useEffect(() => {
+    if (symbol) {
+      void fetchAlerts();
+    }
+  }, [symbol, timeframe, fetchAlerts]);
+
+  // TV-11: Increment data revision when timeframe changes (signals fetch trigger for tests)
+  useEffect(() => {
+    dataRevisionRef.current += 1;
+  }, [timeframe]);
+
+  // Auto-refresh alerts every 10 seconds (useful for triggered alerts)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      void fetchAlerts();
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [fetchAlerts]);
+
 const overlayWrapperClassName = "chartspro-overlay absolute inset-0 pointer-events-none";
 const overlayCanvasClassName = "chartspro-overlay__canvas absolute inset-0";
   const creationThemeRef = useRef(theme);
   creationThemeRef.current = theme;
+
+  // TV-3.7: Keyboard shortcuts for tool selection (Esc, H, V, T, C, R, N)
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Ignore if event is a repeat (holding down key)
+      if (event.repeat) return;
+
+      // Ignore if modifier keys are pressed (metaKey, ctrlKey, altKey)
+      // These are for OS/browser shortcuts, not our app
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+
+      // Ignore if focus is in input-like element
+      const target = event.target as HTMLElement;
+      
+      // Check if target is an input, textarea, or has contentEditable
+      const isEditable = 
+        target?.tagName === "INPUT" || 
+        target?.tagName === "TEXTAREA" || 
+        target?.isContentEditable || 
+        target?.closest('[contenteditable="true"]') !== null;
+      
+      if (isEditable) return;
+
+      const key = event.key.toLowerCase();
+      let nextTool: typeof tool | null = null;
+
+      switch (key) {
+        // NOTE: Esc is handled by DrawingLayer with priority (cancel operation first)
+        // Don't duplicate Esc here to avoid listener race conditions
+        case "h":
+          nextTool = "hline";
+          break;
+        case "v":
+          nextTool = "vline";
+          break;
+        case "t":
+          nextTool = "trendline";
+          break;
+        case "c":
+          nextTool = "channel";
+          break;
+        case "r":
+          nextTool = "rectangle";
+          break;
+        case "n":
+          nextTool = "text";
+          break;
+        default:
+          return;
+      }
+
+      event.preventDefault();
+      setTool(nextTool);
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("keydown", handleKeyDown);
+      return () => {
+        window.removeEventListener("keydown", handleKeyDown);
+      };
+    }
+  }, [setTool]);
   const visibleIndicators = useMemo(() => indicators.filter((indicator) => !indicator.hidden), [indicators]);
   const safeApiBase = useMemo(() => apiBase.replace(/\/$/, ""), [apiBase]);
   const isLoading = Boolean(loading || baseLoading);
@@ -675,6 +916,102 @@ const fitToContent = useCallback(() => {
     rebindTestApiWithSample();
   });
 }, [rebindTestApiWithSample, updateBarSpacingGuard]);
+
+  // Context menu handlers
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const newState: ContextMenuState = {
+      open: true,
+      x: e.clientX,
+      y: e.clientY,
+      selectedAction: null,
+    };
+    setContextMenu(newState);
+    contextMenuStateRef.current = newState;
+  }, []);
+
+  const handleContextMenuClose = useCallback(() => {
+    const newState: ContextMenuState = { open: false, x: 0, y: 0, selectedAction: null };
+    setContextMenu(newState);
+    contextMenuStateRef.current = newState;
+  }, []);
+
+  const handleContextMenuAction = useCallback((actionId: string) => {
+    const newState: ContextMenuState = { ...contextMenuStateRef.current, selectedAction: actionId, open: false };
+    setContextMenu(newState);
+    contextMenuStateRef.current = newState;
+    setLastContextAction(actionId);
+
+    switch (actionId) {
+      case "add-alert":
+        // Open alerts panel - integration point for AlertsPanel
+        toast.info("Add Alert: Feature integration pending");
+        break;
+      case "reset-scale":
+        chartRef.current?.priceScale("right").applyOptions({ autoScale: true });
+        break;
+      case "auto-scale":
+        chartRef.current?.priceScale("right").applyOptions({ autoScale: true });
+        break;
+      case "fit-content":
+        fitToContent();
+        break;
+      case "toggle-ohlc":
+        setShowOhlcStrip((prev) => !prev);
+        break;
+      case "toggle-volume":
+        setShowVolume((prev) => {
+          const newVal = !prev;
+          // Apply visibility to volume series
+          if (volumeSeriesRef.current) {
+            volumeSeriesRef.current.applyOptions({
+              visible: newVal,
+            });
+          }
+          return newVal;
+        });
+        break;
+      case "toggle-crosshair":
+        setShowCrosshair((prev) => {
+          const newVal = !prev;
+          // Toggle chart crosshair mode
+          if (chartRef.current) {
+            chartRef.current.applyOptions({
+              crosshair: {
+                mode: newVal ? CrosshairMode.Magnet : CrosshairMode.Hidden,
+              },
+            });
+          }
+          return newVal;
+        });
+        break;
+      case "toggle-watermark":
+        setShowWatermark((prev) => !prev);
+        break;
+      case "copy-price": {
+        const lastBar = lastLoadedBaseRowsRef.current[lastLoadedBaseRowsRef.current.length - 1];
+        if (lastBar) {
+          navigator.clipboard?.writeText(lastBar.close.toFixed(2)).then(() => {
+            toast.success(`Copied: ${lastBar.close.toFixed(2)}`);
+          }).catch(() => {
+            toast.error("Failed to copy price");
+          });
+        }
+        break;
+      }
+      case "export-png":
+        exportHandlersLocalRef.current.png?.();
+        break;
+      case "export-csv":
+        exportHandlersLocalRef.current.csv?.();
+        break;
+      case "settings":
+        toast.info("Settings: Feature pending");
+        break;
+      default:
+        break;
+    }
+  }, [fitToContent]);
 
   currentSymbolRef.current = symbol;
   timeframeRef.current = timeframe;
@@ -1014,13 +1351,16 @@ const fitToContent = useCallback(() => {
     const chart = chartRef.current;
     const baseSeries = candleSeriesRef.current;
     if (!chart || !baseSeries) return;
+    const appearance = resolveAppearance();
     baseSeries.applyOptions({
-      upColor: theme.candleUp,
-      downColor: theme.candleDown,
-      borderUpColor: theme.candleBorderUp ?? theme.candleUp,
-      borderDownColor: theme.candleBorderDown ?? theme.candleDown,
-      wickUpColor: theme.wickUp,
-      wickDownColor: theme.wickDown,
+      upColor: appearance.upColor,
+      downColor: appearance.downColor,
+      borderUpColor: appearance.borderVisible ? appearance.borderUp : appearance.upColor,
+      borderDownColor: appearance.borderVisible ? appearance.borderDown : appearance.downColor,
+      wickUpColor: appearance.wickUp,
+      wickDownColor: appearance.wickDown,
+      wickVisible: appearance.wickVisible,
+      borderVisible: appearance.borderVisible,
       priceScaleId: "right",
     });
     try {
@@ -1114,6 +1454,8 @@ const fitToContent = useCallback(() => {
         hoverStateRef.current = null;
         legendStateRef.current = { base: { value: null, color: null }, compares: {} };
         setDataWindowRows([]);
+        setHoverBar(null);
+        setHoverPrevClose(null);
         return null;
       }
       const bar = mainBarByTime.get(timeKey);
@@ -1121,8 +1463,21 @@ const fitToContent = useCallback(() => {
         hoverStateRef.current = null;
         legendStateRef.current = { base: { value: null, color: null }, compares: {} };
         setDataWindowRows([]);
+        setHoverBar(null);
+        setHoverPrevClose(null);
         return null;
       }
+      
+      // Calculate previous bar's close for change calculation
+      const sortedTimes = Array.from(mainBarByTime.keys()).sort((a, b) => a - b);
+      const barIndex = sortedTimes.indexOf(timeKey);
+      const prevBar = barIndex > 0 ? mainBarByTime.get(sortedTimes[barIndex - 1]) : null;
+      const prevClose = prevBar?.close ?? null;
+      
+      // Update OHLC strip state
+      setHoverBar(bar);
+      setHoverPrevClose(prevClose);
+      
       const changeRows: DataWindowRow[] = [];
       const infoRows: DataWindowRow[] = [
         { id: "open", group: "Price", label: "O", value: formatPrice(bar.open) },
@@ -1412,6 +1767,17 @@ const fitToContent = useCallback(() => {
         containerWH,
         panes,
       };
+      
+      // Day 18 diagnostics: host dimensions, canvas count, data length, last timestamp
+      const hostEl = chartRootRef.current;
+      const hostWH = {
+        w: hostEl?.clientWidth ?? 0,
+        h: hostEl?.clientHeight ?? 0,
+      };
+      const allCanvases = rootEl.querySelectorAll('canvas');
+      const canvasCount = allCanvases.length;
+      const lastBar = lastLoadedBaseRowsRef.current[lastLoadedBaseRowsRef.current.length - 1];
+      
       return {
         hasChart: Boolean(chartRef.current && seriesPointCountsRef.current.price > 0),
         timeframe: timeframeRef.current ?? null,
@@ -1433,6 +1799,7 @@ const fitToContent = useCallback(() => {
         scrollPosition,
         // Also expose a compact `scale` object to make QA assertions simpler
         scale: { barSpacing, visibleRange, scrollPosition },
+        seriesType: baseSeriesTypeRef.current,
         candlePalette: {
           up: themeSnapshot.candleUp,
           down: themeSnapshot.candleDown,
@@ -1442,6 +1809,15 @@ const fitToContent = useCallback(() => {
           wickDown: themeSnapshot.wickDown,
         },
         lwVersion: LIGHTWEIGHT_CHARTS_VERSION,
+        // Day 18 diagnostics
+        host: hostWH,
+        canvas: {
+          w: canvasWidth,
+          h: canvasHeight,
+          count: canvasCount,
+        },
+        dataLen: lastLoadedBaseRowsRef.current.length,
+        dataRevision: dataRevisionRef.current, // TV-11: Increments on timeframe change (test signal)
       };
     };
     const describeBindings = (): DebugBindingSnapshot => {
@@ -1615,14 +1991,52 @@ const fitToContent = useCallback(() => {
             compares: { ...percentLastValuesRef.current.compares },
           },
         } : null;
+        const compareStatusBySymbol: Record<string, { status: DataStatus; lastError: string | null; rows: number }> = {};
+        compareItemsRef.current.forEach((item) => {
+          const rows = compareSourceRowsRef.current.get(item.symbol)?.length ?? 0;
+          const status: DataStatus = rows > 0 ? "ready" : isLoading ? "loading" : "idle";
+          compareStatusBySymbol[item.symbol] = { status, lastError: null, rows };
+        });
+        const comparesReady =
+          Object.keys(compareStatusBySymbol).length === 0 ||
+          Object.values(compareStatusBySymbol).every((entry) => entry.status === "ready" || entry.status === "error");
+        const baseReady = data.length > 0;
+        const overallStatus: DataStatus = isLoading ? "loading" : baseReady ? "ready" : "idle";
         return {
           symbol: currentSymbolRef.current,
           timeframe: timeframeRef.current,
           pricePoints: seriesPointCountsRef.current.price,
           volumePoints: seriesPointCountsRef.current.volume,
+          data: {
+            api: { online: true, lastHealthCheck: null },
+            status: overallStatus,
+            lastError: lastErrorRef.current,
+            baseReady,
+            comparesReady,
+            compareStatusBySymbol,
+          },
           render: {
             ...describeRenderSnapshot(),
+                        appliedSettings: appliedSettingsRef.current, // TV-10.3: Expose applied settings for tests
             objects,
+            lastPrice: (() => {
+              const lastBar = lastLoadedBaseRowsRef.current[lastLoadedBaseRowsRef.current.length - 1];
+              if (!lastBar) return null;
+              const barDuration = getBarDurationSeconds(timeframeRef.current);
+              const now = Math.floor(Date.now() / 1000);
+              const barEndTime = Number(lastBar.time) + barDuration;
+              const countdownSec = Math.max(0, barEndTime - now);
+              return {
+                price: lastBar.close,
+                time: Number(lastBar.time),
+                countdownSec,
+              };
+            })(),
+            scale: {
+              barSpacing: barSpacingRef.current,
+              rightOffset: chartRef.current?.timeScale().scrollPosition() ?? 0,
+              priceScaleMode: describePriceScaleMode(baseScaleModeRef.current),
+            },
           },
           percent: percentBlock,
           compares: { ...seriesPointCountsRef.current.compares },
@@ -1635,7 +2049,11 @@ const fitToContent = useCallback(() => {
             ? {
                 time: hoverStateRef.current.time,
                 base: {
-                  price: hoverStateRef.current.base.close,
+                  open: hoverStateRef.current.base.open,
+                  high: hoverStateRef.current.base.high,
+                  low: hoverStateRef.current.base.low,
+                  close: hoverStateRef.current.base.close,
+                  volume: hoverStateRef.current.base.volume,
                   percent: hoverStateRef.current.base.percent,
                 },
                 compares: Object.fromEntries(
@@ -1644,6 +2062,14 @@ const fitToContent = useCallback(() => {
                     { price: entry.price, percent: entry.percent },
                   ]),
                 ),
+                ohlcStrip: {
+                  symbol: currentSymbolRef.current,
+                  timeframe: timeframeRef.current,
+                  open: hoverStateRef.current.base.open.toFixed(2),
+                  high: hoverStateRef.current.base.high.toFixed(2),
+                  low: hoverStateRef.current.base.low.toFixed(2),
+                  close: hoverStateRef.current.base.close.toFixed(2),
+                },
               }
             : null,
           legend: {
@@ -1669,9 +2095,127 @@ const fitToContent = useCallback(() => {
             })),
           },
           ui: {
+            activeTool: tool,
+            chartType: chartTypeRef.current,
+            timeframe: timeframeRef.current, // TV-11: Expose current timeframe
+            settings: chartSettingsRef.current ?? null,
             inspectorOpen,
             inspectorTab,
             compareScaleMode,
+            ohlcStripVisible: showOhlcStrip,
+            contextMenu: {
+              open: contextMenuStateRef.current.open,
+              x: contextMenuStateRef.current.x,
+              y: contextMenuStateRef.current.y,
+              selectedAction: contextMenuStateRef.current.selectedAction,
+            },
+            lastContextAction,
+            magnet: magnetEnabled,
+            snap: snapToClose,
+            watermarkVisible: showWatermark,
+            crosshair: {
+              visible: crosshairPosition.visible,
+              x: crosshairPosition.x,
+              y: crosshairPosition.y,
+              price: crosshairPosition.price,
+              time: crosshairPosition.time,
+            },
+            volumeVisible: showVolume,
+            crosshairEnabled: showCrosshair,
+            selectedObjectId: selectedId,
+            layout: {
+              workspaceMode: workspaceModeRef.current,
+              sidebarCollapsed: sidebarCollapsedRef.current,
+              sidebarWidth: sidebarWidthRef.current,
+              viewportWH: {
+                w: containerRef.current?.clientWidth ?? 0,
+                h: containerRef.current?.clientHeight ?? 0,
+              },
+              hasNestedScroll: (() => {
+                if (!rootRef.current) return false;
+                const root = rootRef.current;
+                const hasPageScroll = typeof window !== "undefined" && window.scrollY > 0;
+                const hasRootScroll = root.scrollTop > 0;
+                return hasPageScroll && hasRootScroll;
+              })(),
+            },
+            rightPanel: {
+              activeTab: rightPanelActiveTabRef.current,
+              collapsed: sidebarCollapsedRef.current,
+              width: sidebarWidthRef.current,
+            },
+            indicators: {
+              count: Array.isArray(indicators) ? indicators.length : 0,
+              names: Array.isArray(indicators) ? indicators.map((i) => i.kind) : [],
+              items: Array.isArray(indicators)
+                ? indicators.map((i) => ({
+                    id: i.id,
+                    name: i.kind.toUpperCase(),
+                    pane: i.pane,
+                    visible: !i.hidden,
+                    paramsSummary: indicatorParamsSummary(i),
+                  }))
+                : [],
+              addOpen: (() => {
+                try {
+                  const v = window.localStorage?.getItem("cp.indicators.addOpen");
+                  return v === "1";
+                } catch {
+                  return false;
+                }
+              })(),
+            },
+            alerts: {
+              count: alerts.length,
+              ids: alerts.map((a) => a.id),
+              selectedId: selectedAlertId,
+              items: alerts.map((a) => ({
+                id: a.id,
+                price: a.price,
+                label: a.label || null,
+                isSelected: a.id === selectedAlertId,
+              })),
+              visibleCount: (() => {
+                // Count how many alert markers are visible in current price range
+                if (!chartRef.current || !candleSeriesRef.current || !alerts.length) return 0;
+                try {
+                  const priceScale = chartRef.current.priceScale("right");
+                  if (!priceScale) return 0;
+                  const range = priceScale.getVisibleRange();
+                  if (!range) return alerts.length;
+                  let visibleCount = 0;
+                  alerts.forEach((alert) => {
+                    if (alert.price >= range.barHigh && alert.price <= range.barLow) {
+                      visibleCount++;
+                    }
+                  });
+                  return visibleCount;
+                } catch {
+                  return alerts.length;
+                }
+              })(),
+            },
+          },
+          // Objects (drawings) contract
+          objects: drawings.map((d) => ({
+            id: d.id,
+            type: d.kind,
+            symbol: d.symbol,
+            locked: d.locked ?? false,
+            hidden: d.hidden ?? false,
+            selected: d.id === selectedId,
+            label: d.label ?? null,
+            points: d.kind === "hline" 
+              ? [{ price: d.price }]
+              : d.kind === "vline"
+              ? [{ timeMs: d.timeMs }]
+              : d.kind === "trend"
+              ? [{ timeMs: d.p1.timeMs, price: d.p1.price }, { timeMs: d.p2.timeMs, price: d.p2.price }]
+              : [],
+          })),
+          // Alerts contract (count only for now, full list via API)
+          alerts: {
+            count: 0, // Populated by AlertsPanel via refetch
           },
         };
       },
@@ -1774,6 +2318,7 @@ const fitToContent = useCallback(() => {
     hoverCanvasAt,
     qaDebugEnabled,
     compareScaleMode,
+    tool,
   ]);
 
   bindTestApiRef.current = bindTestApi;
@@ -1958,10 +2503,14 @@ const fitToContent = useCallback(() => {
         low: bar.low,
         close: bar.close,
       }));
-      
+
+      const priceSeriesData = chartType === "line" || chartType === "area"
+        ? dataToApply.map((bar) => ({ time: bar.time, value: bar.close }))
+        : priceData;
+
       const priceBounds = describePointBounds(priceData);
       if (!priceBounds.count) {
-        candleSeriesRef.current.setData([]);
+        candleSeriesRef.current.setData([] as any);
         volumeSeriesRef.current.setData([]);
         seriesPointCountsRef.current.price = 0;
         seriesPointCountsRef.current.volume = 0;
@@ -1972,7 +2521,7 @@ const fitToContent = useCallback(() => {
         return;
       }
       
-      candleSeriesRef.current.setData(priceData);
+      candleSeriesRef.current.setData(priceSeriesData as any);
       
       // Volume stays in original scale (not percentified)
       const volumeData: HistogramData[] = bars.map((bar) => ({
@@ -1988,7 +2537,7 @@ const fitToContent = useCallback(() => {
       volumeSeriesRef.current.setData(volumeData);
       
       enforceBasePriceScale(bars);
-      seriesPointCountsRef.current.price = priceData.length;
+      seriesPointCountsRef.current.price = priceSeriesData.length;
       seriesPointCountsRef.current.volume = volumeData.length;
       fitToContent();
       setCompareVersion((tick) => tick + 1);
@@ -2010,6 +2559,7 @@ const fitToContent = useCallback(() => {
       theme.volumeUp,
       theme.wickDown,
       theme.wickUp,
+      chartType,
     ],
   );
 
@@ -2399,6 +2949,8 @@ const fitToContent = useCallback(() => {
     const chart = chartRef.current;
     if (!chart) return;
 
+    const appearance = resolveAppearance();
+
     chart.applyOptions({
       layout: { attributionLogo: false } as any,
       rightPriceScale: {
@@ -2409,26 +2961,45 @@ const fitToContent = useCallback(() => {
       },
     });
 
-    if (!candleSeriesRef.current) {
-      candleSeriesRef.current = chart.addCandlestickSeries({
-        upColor: theme.candleUp,
-        downColor: theme.candleDown,
-        borderUpColor: theme.candleBorderUp ?? theme.candleUp,
-        borderDownColor: theme.candleBorderDown ?? theme.candleDown,
-        wickUpColor: theme.wickUp,
-        wickDownColor: theme.wickDown,
-        priceScaleId: "right",
+    const targetType: FactoryChartType = chartType as FactoryChartType;
+    const needsNewSeries = !candleSeriesRef.current || baseSeriesTypeRef.current !== chartType;
+
+    if (needsNewSeries) {
+      if (chart && candleSeriesRef.current) {
+        try {
+          chart.removeSeries(candleSeriesRef.current);
+        } catch {
+          // ignore
+        }
+      }
+      const next = createBaseSeries(chart, targetType, {
+        upColor: appearance.upColor,
+        downColor: appearance.downColor,
+        borderUpColor: appearance.borderVisible ? appearance.borderUp : appearance.upColor,
+        borderDownColor: appearance.borderVisible ? appearance.borderDown : appearance.downColor,
+        wickUpColor: appearance.wickUp,
+        wickDownColor: appearance.wickDown,
       });
-    } else {
-      candleSeriesRef.current.applyOptions({
-        upColor: theme.candleUp,
-        downColor: theme.candleDown,
-        borderUpColor: theme.candleBorderUp ?? theme.candleUp,
-        borderDownColor: theme.candleBorderDown ?? theme.candleDown,
-        wickUpColor: theme.wickUp,
-        wickDownColor: theme.wickDown,
-        priceScaleId: "right",
-      });
+      candleSeriesRef.current = next;
+      baseSeriesTypeRef.current = chartType;
+    } else if (candleSeriesRef.current) {
+      const series = candleSeriesRef.current;
+      if (chartType === "candles" || chartType === "bars") {
+        series.applyOptions({
+          upColor: appearance.upColor,
+          downColor: appearance.downColor,
+          borderUpColor: appearance.borderVisible ? appearance.borderUp : appearance.upColor,
+          borderDownColor: appearance.borderVisible ? appearance.borderDown : appearance.downColor,
+          wickUpColor: appearance.wickUp,
+          wickDownColor: appearance.wickDown,
+          wickVisible: appearance.wickVisible,
+          borderVisible: appearance.borderVisible,
+          priceScaleId: "right",
+        } as any);
+      }
+      if (chartType === "line" || chartType === "area") {
+        series.applyOptions({ color: appearance.upColor } as any);
+      }
     }
 
     if (!volumeSeriesRef.current) {
@@ -2467,8 +3038,12 @@ const fitToContent = useCallback(() => {
       scaleMargins: { top: 0.8, bottom: 0 },
     });
     rebindTestApiWithSample();
-  }, [rebindTestApiWithSample, theme.candleBorderDown, theme.candleBorderUp, theme.candleDown, theme.candleUp, theme.volumeNeutral, theme.wickDown, theme.wickUp]);
+  }, [chartType, rebindTestApiWithSample, resolveAppearance, theme.volumeNeutral]);
   ensureBaseSeriesRef.current = ensureBaseSeries;
+
+  useEffect(() => {
+    ensureBaseSeries();
+  }, [ensureBaseSeries]);
 
   useLayoutEffect(() => {
     let destroyed = false;
@@ -2528,6 +3103,7 @@ const fitToContent = useCallback(() => {
       chartRef.current = chart;
       ensureBaseSeriesRef.current();
       setChartReady(true);
+      if (onChartReady) onChartReady(chart);
       rebindTestApiWithSample();
     };
     mountChart();
@@ -2565,6 +3141,21 @@ const fitToContent = useCallback(() => {
   useEffect(() => {
     updateLastValueLabelsRef.current();
   }, [theme, compareItems, chartReady]);
+
+  // Prime hover state once data is available so dump().hover is never null after initial load.
+  useEffect(() => {
+    if (!chartReady || hoverStateRef.current || !data.length) return;
+    if (!chartRef.current || !candleSeriesRef.current) return;
+
+    const last = data[data.length - 1];
+    const timeKey = Number((last as any)?.time);
+    if (!Number.isFinite(timeKey)) return;
+
+    const snapshot = applyHoverSnapshot(timeKey);
+    if (snapshot) {
+      chartRef.current.setCrosshairPosition(snapshot.base.close, snapshot.time, candleSeriesRef.current);
+    }
+  }, [chartReady, data, applyHoverSnapshot]);
 
   useEffect(() => {
     const host = containerRef.current;
@@ -2646,6 +3237,27 @@ const fitToContent = useCallback(() => {
       rebindTestApiWithSample();
     });
   }, [rebindTestApiWithSample, syncZeroLine, theme]);
+  // TV-10.3: Apply settings to rendering when chartSettings or chartType changes
+  useEffect(() => {
+    const chart = chartRef.current;
+    const series = candleSeriesRef.current;
+    if (!chart || !series || !chartSettings) return;
+
+    // Apply chart-level settings (background, grid, crosshair)
+    applyChartLevelSettings(chart, chartSettings, theme);
+
+    // Apply series-level settings (colors, borders, wicks)
+    applySeriesSettings(series, chartType, chartSettings, theme);
+
+    // Update applied settings snapshot for dump()
+    appliedSettingsRef.current = createAppliedSnapshot(chartSettings, chartType);
+
+    // Ensure test API reflects updated state
+    queueAfterNextPaint(() => {
+      rebindTestApiWithSample();
+    });
+  }, [chartSettings, chartType, theme, rebindTestApiWithSample]);
+
 
   useEffect(() => {
     if (!chartReady || !chartRef.current) return;
@@ -2869,20 +3481,71 @@ const fitToContent = useCallback(() => {
     });
   }, [chartReady, indicatorResults, indicatorSeriesMap, indicators]);
 
+  // Last price Y position tracking
+  useEffect(() => {
+    if (!chartReady || !candleSeriesRef.current || !data.length) {
+      setLastPriceY(null);
+      return;
+    }
+    
+    const lastBar = data[data.length - 1];
+    const series = candleSeriesRef.current;
+    
+    try {
+      // Get the Y coordinate for the last close price
+      const yCoord = series.priceToCoordinate(lastBar.close);
+      setLastPriceY(yCoord ?? null);
+    } catch {
+      setLastPriceY(null);
+    }
+  }, [chartReady, data]);
+
+  // Crosshair position tracking for overlay
   useEffect(() => {
     const chart = chartRef.current;
     if (!chart) return;
     const handler = (param: MouseEventParams<Time>) => {
-      if (!param || !param.time) {
+      if (!param || !param.time || !param.point) {
         applyHoverSnapshot(null);
+        setCrosshairPosition({ x: 0, y: 0, price: null, time: null, visible: false });
         return;
       }
       const timeKey = normalizeTimeKey(param.time);
       applyHoverSnapshot(timeKey ?? null);
+      
+      // Track crosshair position for overlay
+      const bar = timeKey != null ? mainBarByTime.get(timeKey) : null;
+      const price = bar?.close ?? null;
+      
+      // Format time based on timeframe
+      let timeStr: string | null = null;
+      if (typeof param.time === "number") {
+        const date = new Date(param.time * 1000);
+        const tf = timeframeRef.current;
+        if (tf === "1d" || tf === "1w" || tf === "1M") {
+          timeStr = date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+        } else {
+          timeStr = date.toLocaleString("en-US", { 
+            month: "short", 
+            day: "numeric", 
+            hour: "2-digit", 
+            minute: "2-digit",
+            hour12: false 
+          });
+        }
+      }
+      
+      setCrosshairPosition({
+        x: param.point.x,
+        y: param.point.y,
+        price,
+        time: timeStr,
+        visible: true,
+      });
     };
     chart.subscribeCrosshairMove(handler);
     return () => chart.unsubscribeCrosshairMove(handler);
-  }, [chartReady, applyHoverSnapshot]);
+  }, [chartReady, applyHoverSnapshot, mainBarByTime]);
 
   const indicatorLegendItems = useMemo(
     () =>
@@ -2975,9 +3638,48 @@ const fitToContent = useCallback(() => {
           </button>
         </div>
       </div>
-        <div ref={containerRef} className="chartspro-surface relative flex-1 min-h-0 overflow-hidden flex flex-col h-full">
-          <div className="flex-1 min-h-0 relative">
-            <div ref={chartRootRef} className="chartspro-price h-full">
+        <div ref={containerRef} className="chartspro-surface relative flex-1 min-h-0 overflow-hidden" onContextMenu={handleContextMenu} style={{ display: 'grid', gridTemplateRows: '1fr auto' }}>
+          <div className="min-h-0 min-w-0 relative" style={{ display: 'flex' }}>
+            <div
+              ref={chartRootRef}
+              className="chartspro-price"
+              style={{ flex: '1 1 0%', minHeight: 0, minWidth: 0, position: 'relative' }}
+            >
+        {/* Symbol watermark in background */}
+        <Watermark symbol={symbol} visible={showWatermark} theme={theme} />
+        
+        {/* TradingView-style OHLC Strip */}
+        {showOhlcStrip && (
+          <OhlcStrip
+            symbol={symbol}
+            timeframe={timeframe}
+            bar={hoverBar ?? (data.length ? data[data.length - 1] : null)}
+            prevClose={hoverPrevClose ?? (data.length > 1 ? data[data.length - 2]?.close ?? null : null)}
+            theme={theme}
+          />
+        )}
+        
+        {/* Crosshair overlay with testable pills */}
+        {showCrosshair && (
+          <CrosshairOverlay
+            position={crosshairPosition}
+            theme={theme}
+            chartWidth={containerRef.current?.clientWidth ?? 0}
+            chartHeight={containerRef.current?.clientHeight ?? 0}
+            priceScaleWidth={80}
+            timeScaleHeight={30}
+          />
+        )}
+        
+        {/* Last price line with countdown */}
+        <LastPriceLine
+          lastPrice={data.length ? data[data.length - 1].close : null}
+          lastTime={data.length ? Number(data[data.length - 1].time) : null}
+          timeframe={timeframe}
+          yPosition={lastPriceY}
+          theme={theme}
+          containerWidth={containerRef.current?.clientWidth ?? 0}
+        />
         {debugModeActive && debugSummary ? (
           <div className="absolute right-2 top-2 z-40 w-64 rounded border border-slate-700/70 bg-slate-900/90 p-2 text-[11px] text-slate-100 shadow-lg">
             <div className="flex items-center justify-between gap-2">
@@ -3009,7 +3711,7 @@ const fitToContent = useCallback(() => {
             <OverlayCanvasLayer
               containerRef={containerRef}
               className={overlayCanvasClassName}
-              pointerEvents="auto"
+              pointerEvents={"none"}
               onCanvasReady={(canvas) => {
                 overlayCanvasRef.current = canvas;
               }}
@@ -3033,8 +3735,18 @@ const fitToContent = useCallback(() => {
                 duplicateDrawing={duplicateDrawing}
                 onToggleLock={onToggleLock}
                 onToggleHide={onToggleHide}
+                setTool={setTool}
               />
             </OverlayCanvasLayer>
+            {/* TV-8.2: Alert markers layer – renders dashed lines + bell icons */}
+            <AlertMarkersLayer
+              chart={chartRef.current}
+              series={candleSeriesRef.current}
+              alerts={alerts}
+              selectedAlertId={selectedAlertId}
+              onMarkerClick={(alertId) => setSelectedAlertId(alertId)}
+              theme={theme.mode}
+            />
           </div>
         ) : null}
         {lastValueLabels.base || lastValueLabels.compares.length ? (
@@ -3080,6 +3792,7 @@ const fitToContent = useCallback(() => {
             )}
           </div>
         )}
+        {/* Data Window */}
         {groupedDataRows.length ? (
           <div className="chartspro-data-window absolute left-2 top-2">
             {groupedDataRows.map(([group, rows]) => (
@@ -3134,7 +3847,7 @@ const fitToContent = useCallback(() => {
           </div>
         ) : null}
             </div>
-        <div ref={panesContainerRef} className="overflow-y-auto border-t border-slate-700/30" />
+            <div ref={panesContainerRef} style={{ height: 0, overflow: 'hidden' }} />
         </div>
         <InspectorSidebar
           open={inspectorOpen}
@@ -3148,6 +3861,16 @@ const fitToContent = useCallback(() => {
           onRemove={handleInspectorRemove}
         />
       </div>
+      {/* Context Menu */}
+      <ContextMenu
+        open={contextMenu.open}
+        x={contextMenu.x}
+        y={contextMenu.y}
+        actions={DEFAULT_CHART_ACTIONS}
+        onAction={handleContextMenuAction}
+        onClose={handleContextMenuClose}
+        theme={theme}
+      />
     </div>
   );
 }

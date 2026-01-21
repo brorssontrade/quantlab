@@ -1,0 +1,141 @@
+# Day 3 Release Quality Gate
+#
+# This workflow validates release-readiness after Day 2 monitoring passes:
+#   A) Data freshness – OHLCV data is recent (last trading day)
+#   B) Performance – API latency within thresholds
+#   C) UI smoke tests – Optional Playwright tests (can skip)
+#
+# Prerequisites:
+#   - Day 2 monitoring must have passed (APPROVED status)
+#   - API server must be running and accessible
+#
+# Outputs:
+#   - docs/verification/DAY3_REPORT.json
+#   - docs/verification/DAY3_REPORT.md
+
+name: Day 3 Release Quality Gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      skip_ui_tests:
+        description: 'Skip UI smoke tests'
+        required: false
+        default: 'false'
+        type: boolean
+      latency_warn_ms:
+        description: 'Latency warning threshold (ms)'
+        required: false
+        default: '500'
+      latency_fail_ms:
+        description: 'Latency failure threshold (ms)'
+        required: false
+        default: '2000'
+  # Can be triggered after Day 2 passes:
+  workflow_run:
+    workflows: ["Day 2 Production Monitoring"]
+    types:
+      - completed
+
+# Only run Day 3 if Day 2 succeeded (when triggered by workflow_run)
+# Manual dispatch always runs
+
+jobs:
+  quality-gate:
+    name: Day 3 Quality Gate
+    runs-on: [self-hosted, Windows, X64, quantlab-local]
+    
+    # Skip if triggered by workflow_run and Day 2 failed
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    
+    env:
+      PYTHONUTF8: "1"
+      PYTHONIOENCODING: "utf-8"
+      # Use canonical secret names
+      BASE_URL: ${{ secrets.PROD_API_BASE_URL }}
+      # Thresholds from inputs or defaults
+      DAY3_LATENCY_WARN_MS: ${{ github.event.inputs.latency_warn_ms || '500' }}
+      DAY3_LATENCY_FAIL_MS: ${{ github.event.inputs.latency_fail_ms || '2000' }}
+      DAY3_SKIP_UI: ${{ github.event.inputs.skip_ui_tests || 'false' }}
+      DAY3_DEBUG: "0"
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Verify Python environment
+        shell: pwsh
+        run: |
+          Write-Host "=== Python Environment ===" -ForegroundColor Cyan
+          
+          $venvPython = ".\.venv\Scripts\python.exe"
+          if (Test-Path $venvPython) {
+            Write-Host "[OK] Virtual environment found" -ForegroundColor Green
+            & $venvPython --version
+          } else {
+            Write-Host "[FAIL] Virtual environment not found at $venvPython" -ForegroundColor Red
+            exit 1
+          }
+      
+      - name: Install dependencies (if needed)
+        shell: pwsh
+        run: |
+          $venvPip = ".\.venv\Scripts\pip.exe"
+          $venvPython = ".\.venv\Scripts\python.exe"
+          
+          # Check for requests
+          $hasRequests = & $venvPython -c "import requests; print('ok')" 2>$null
+          if ($hasRequests -ne "ok") {
+            Write-Host "[INFO] Installing requests..." -ForegroundColor Yellow
+            & $venvPip install requests --quiet
+          }
+          
+          Write-Host "[OK] Dependencies ready" -ForegroundColor Green
+      
+      - name: Run Day 3 Quality Gate
+        id: day3
+        shell: pwsh
+        run: |
+          Write-Host "=== Day 3 Quality Gate ===" -ForegroundColor Cyan
+          Write-Host "BASE_URL: $env:BASE_URL"
+          Write-Host "Latency warn: $env:DAY3_LATENCY_WARN_MS ms"
+          Write-Host "Latency fail: $env:DAY3_LATENCY_FAIL_MS ms"
+          Write-Host "Skip UI: $env:DAY3_SKIP_UI"
+          
+          $venvPython = ".\.venv\Scripts\python.exe"
+          
+          # Run the Day 3 check script
+          & $venvPython scripts/monitoring/day3_check.py
+          $exitCode = $LASTEXITCODE
+          
+          if ($exitCode -eq 0) {
+            Write-Host "[OK] Day 3 Quality Gate PASSED" -ForegroundColor Green
+          } else {
+            Write-Host "[FAIL] Day 3 Quality Gate FAILED (exit $exitCode)" -ForegroundColor Red
+          }
+          
+          exit $exitCode
+      
+      - name: Upload Day 3 Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: day3-report
+          path: |
+            docs/verification/DAY3_REPORT.json
+            docs/verification/DAY3_REPORT.md
+          retention-days: 30
+      
+      - name: Show Report Summary
+        if: always()
+        shell: pwsh
+        run: |
+          $reportMd = "docs/verification/DAY3_REPORT.md"
+          if (Test-Path $reportMd) {
+            Write-Host "=== Day 3 Report Summary ===" -ForegroundColor Cyan
+            Get-Content $reportMd
+          } else {
+            Write-Host "[WARN] No report generated" -ForegroundColor Yellow
+          }

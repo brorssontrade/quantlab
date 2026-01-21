@@ -383,11 +383,11 @@ export async function fetchOhlcv(
   try {
     const { limit = 500, source = 'yahoo' } = options;
 
-    const url = new URL(`${currentConfig.baseUrl}/api/chart/ohlcv`);
+    // Note: Backend endpoint is /chart/ohlcv (no /api prefix)
+    const url = new URL(`${currentConfig.baseUrl}/chart/ohlcv`);
     url.searchParams.set('symbol', symbol);
-    url.searchParams.set('timeframe', timeframe);
+    url.searchParams.set('bar', timeframe); // Backend uses 'bar' not 'timeframe'
     url.searchParams.set('limit', String(limit));
-    url.searchParams.set('source', source);
 
     const response = await fetchWithRetry(() =>
       fetchWithTimeout(url.toString(), { method: 'GET' })
@@ -419,7 +419,20 @@ export async function fetchOhlcv(
     }
 
     const json = await response.json();
-    const data: OhlcvBar[] = json.candles || json.data || [];
+    
+    // Backend returns json.rows with {t, o, h, l, c, v} format
+    // Map to frontend expected {time, open, high, low, close, volume}
+    const rawRows = json.rows || json.candles || json.data || [];
+    const data: OhlcvBar[] = rawRows.map((row: any) => ({
+      time: typeof row.time === 'number' ? row.time : 
+            typeof row.t === 'string' ? Math.floor(new Date(row.t).getTime() / 1000) : 
+            row.t || row.time || 0,
+      open: row.open ?? row.o ?? 0,
+      high: row.high ?? row.h ?? 0,
+      low: row.low ?? row.l ?? 0,
+      close: row.close ?? row.c ?? 0,
+      volume: row.volume ?? row.v ?? 0,
+    }));
 
     // Cache successful base rows for offline fallback
     if (data.length > 0) {
@@ -467,13 +480,13 @@ export async function fetchCompareOhlcv(
 ): Promise<FetchResult<OhlcvBar[]>> {
   // Compare fetch does NOT update global dataStatus (only base does)
   try {
-    const { limit = 500, source = 'yahoo' } = options;
+    const { limit = 500 } = options;
 
-    const url = new URL(`${currentConfig.baseUrl}/api/chart/ohlcv`);
+    // Note: Backend endpoint is /chart/ohlcv (no /api prefix)
+    const url = new URL(`${currentConfig.baseUrl}/chart/ohlcv`);
     url.searchParams.set('symbol', symbol);
-    url.searchParams.set('timeframe', timeframe);
+    url.searchParams.set('bar', timeframe); // Backend uses 'bar' not 'timeframe'
     url.searchParams.set('limit', String(limit));
-    url.searchParams.set('source', source);
 
     const response = await fetchWithRetry(() =>
       fetchWithTimeout(url.toString(), { method: 'GET' })

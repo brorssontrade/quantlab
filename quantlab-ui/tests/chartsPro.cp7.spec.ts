@@ -20,7 +20,7 @@ async function addCompare(page: Page, symbol: string, mode: string = "percent") 
   await page.waitForFunction(
     (sym) => {
       const dump = (window as any).__lwcharts?.dump?.();
-      return dump && dump.data?.comparesReady?.[sym] === true;
+      return dump && dump.data?.compareStatusBySymbol?.[sym]?.status === "ready";
     },
     symbol,
   );

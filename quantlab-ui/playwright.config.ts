@@ -22,7 +22,7 @@ export default defineConfig({
       PW_TEST: "1",
     },
     url: "http://127.0.0.1:4173/",
-    reuseExistingServer: true,
+    reuseExistingServer: process.env.PW_REUSE_SERVER !== "0", // Set PW_REUSE_SERVER=0 to force fresh build
     timeout: 180_000,
   },
 });

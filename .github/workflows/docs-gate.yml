@@ -1,0 +1,191 @@
+# Docs Gate – Enforces documentation updates
+#
+# This workflow fails if code changes are made without corresponding
+# documentation updates. Ensures docs stay in sync with code.
+#
+# Trigger: Pull requests to main branch
+#
+# Logic:
+#   1. IF changes in src/, app/, pages/, scripts/, engine/, quantlab-ui/src/
+#      AND no changes in docs/LLM.md, docs/LLM_TASKS.md, docs/FILE_INDEX.md, or docs/APP_WALKTHROUGH_REPORT.md
+#      THEN fail with guidance message
+#   2. IF new files added/moved
+#      AND no changes in docs/FILE_INDEX.md
+#      THEN fail with guidance message
+#
+# Escape hatch: Add [skip-docs] to PR title to bypass
+
+name: Docs Gate
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      # Watch for code changes
+      - 'src/**'
+      - 'app/**'
+      - 'pages/**'
+      - 'scripts/**'
+      - 'engine/**'
+      - 'quantlab-ui/src/**'
+      # Also watch for new file additions
+      - '**/*.py'
+      - '**/*.ts'
+      - '**/*.tsx'
+
+jobs:
+  check-docs:
+    name: Verify documentation updated
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for diff
+      
+      - name: Check for skip flag
+        id: skip-check
+        run: |
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          if [[ "$PR_TITLE" == *"[skip-docs]"* ]]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+            echo "✓ [skip-docs] flag found, bypassing docs check"
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Check for docs changes
+        if: steps.skip-check.outputs.skip == 'false'
+        id: docs-check
+        run: |
+          echo "Checking for documentation changes..."
+          
+          # Get list of changed files in this PR
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+          
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+          echo ""
+          
+          # Check if any code files changed
+          CODE_CHANGED=false
+          if echo "$CHANGED_FILES" | grep -qE '^(src/|app/|pages/|scripts/|engine/|quantlab-ui/src/)'; then
+            CODE_CHANGED=true
+            echo "✓ Code changes detected in watched directories"
+          else
+            echo "○ No code changes in watched directories"
+          fi
+          
+          # Check if UI files changed (requires APP_WALKTHROUGH update)
+          UI_CHANGED=false
+          if echo "$CHANGED_FILES" | grep -qE '^quantlab-ui/src/(App\.tsx|features/)'; then
+            UI_CHANGED=true
+            echo "✓ UI changes detected (App.tsx or features/)"
+          fi
+          
+          # Check if new files were added
+          ADDED_FILES=$(git diff --name-only --diff-filter=A origin/${{ github.base_ref }}...HEAD)
+          FILES_ADDED=false
+          if [ -n "$ADDED_FILES" ]; then
+            if echo "$ADDED_FILES" | grep -qE '\.(py|ts|tsx|yml|yaml)$'; then
+              FILES_ADDED=true
+              echo "✓ New code files added:"
+              echo "$ADDED_FILES" | grep -E '\.(py|ts|tsx|yml|yaml)$' | head -10
+            fi
+          fi
+          
+          # Check if any docs files changed
+          DOCS_CHANGED=false
+          if echo "$CHANGED_FILES" | grep -qE '^docs/(LLM\.md|LLM_TASKS\.md|FILE_INDEX\.md|APP_WALKTHROUGH_REPORT\.md)'; then
+            DOCS_CHANGED=true
+            echo "✓ Documentation changes detected"
+          else
+            echo "○ No core documentation changes"
+          fi
+          
+          # Check if FILE_INDEX.md was updated (for new files)
+          FILE_INDEX_UPDATED=false
+          if echo "$CHANGED_FILES" | grep -qE '^docs/FILE_INDEX\.md'; then
+            FILE_INDEX_UPDATED=true
+            echo "✓ FILE_INDEX.md was updated"
+          fi
+          
+          # Check if APP_WALKTHROUGH was updated (for UI changes)
+          WALKTHROUGH_UPDATED=false
+          if echo "$CHANGED_FILES" | grep -qE '^docs/APP_WALKTHROUGH_REPORT\.md'; then
+            WALKTHROUGH_UPDATED=true
+            echo "✓ APP_WALKTHROUGH_REPORT.md was updated"
+          fi
+          
+          # Set outputs
+          echo "code_changed=$CODE_CHANGED" >> $GITHUB_OUTPUT
+          echo "ui_changed=$UI_CHANGED" >> $GITHUB_OUTPUT
+          echo "files_added=$FILES_ADDED" >> $GITHUB_OUTPUT
+          echo "docs_changed=$DOCS_CHANGED" >> $GITHUB_OUTPUT
+          echo "file_index_updated=$FILE_INDEX_UPDATED" >> $GITHUB_OUTPUT
+          echo "walkthrough_updated=$WALKTHROUGH_UPDATED" >> $GITHUB_OUTPUT
+      
+      - name: Enforce docs update for code changes
+        if: steps.skip-check.outputs.skip == 'false' && steps.docs-check.outputs.code_changed == 'true' && steps.docs-check.outputs.docs_changed == 'false'
+        run: |
+          echo "❌ Documentation update required!"
+          echo ""
+          echo "You've made changes to code directories but haven't updated any documentation."
+          echo ""
+          echo "Please update at least ONE of these files:"
+          echo "  - docs/LLM.md (if architecture/API changed)"
+          echo "  - docs/LLM_TASKS.md (log your task as done)"
+          echo "  - docs/FILE_INDEX.md (if files added/moved/deleted)"
+          echo "  - docs/APP_WALKTHROUGH_REPORT.md (if UI behavior changed)"
+          echo ""
+          echo "This ensures our docs stay in sync with the codebase."
+          echo ""
+          echo "To bypass this check, add [skip-docs] to your PR title."
+          echo "⚠️  Only use [skip-docs] for truly trivial changes!"
+          exit 1
+      
+      - name: Enforce FILE_INDEX update for new files
+        if: steps.skip-check.outputs.skip == 'false' && steps.docs-check.outputs.files_added == 'true' && steps.docs-check.outputs.file_index_updated == 'false'
+        run: |
+          echo "❌ FILE_INDEX.md update required!"
+          echo ""
+          echo "You've added new files but haven't updated docs/FILE_INDEX.md."
+          echo ""
+          echo "Please add the new files to FILE_INDEX.md so developers can find them."
+          echo ""
+          echo "To bypass this check, add [skip-docs] to your PR title."
+          exit 1
+      
+      - name: Enforce APP_WALKTHROUGH update for UI changes
+        if: steps.skip-check.outputs.skip == 'false' && steps.docs-check.outputs.ui_changed == 'true' && steps.docs-check.outputs.walkthrough_updated == 'false'
+        run: |
+          echo "⚠️  UI changes detected without APP_WALKTHROUGH_REPORT.md update"
+          echo ""
+          echo "You've changed UI code (App.tsx or features/) but haven't updated"
+          echo "docs/APP_WALKTHROUGH_REPORT.md."
+          echo ""
+          echo "If you changed tab behavior, please update the walkthrough report."
+          echo "If this is a minor styling change, you can ignore this warning."
+          echo ""
+          echo "Note: This is a warning, not a failure. The PR can still merge."
+      
+      - name: Docs check passed
+        if: steps.skip-check.outputs.skip == 'true' || steps.docs-check.outputs.docs_changed == 'true' || steps.docs-check.outputs.code_changed == 'false'
+        run: |
+          echo "✅ Documentation check passed!"
+          echo ""
+          if [ "${{ steps.skip-check.outputs.skip }}" == "true" ]; then
+            echo "Reason: [skip-docs] flag in PR title"
+          elif [ "${{ steps.docs-check.outputs.docs_changed }}" == "true" ]; then
+            echo "Reason: Documentation was updated"
+          else
+            echo "Reason: No code changes requiring documentation"
+          fi
+        run: |
+          echo "✅ Docs gate passed!"
+          if [ "${{ steps.docs-check.outputs.docs_changed }}" == "true" ]; then
+            echo "   Documentation was updated alongside code changes."
+          else
+            echo "   No code changes in watched directories."
+          fi

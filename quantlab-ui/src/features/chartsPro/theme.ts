@@ -36,7 +36,7 @@ export const chartThemes: Record<ChartThemeName, ChartsTheme> = {
     grid: "#1f2937",
     subtleGrid: "rgba(31, 41, 55, 0.45)",
     axisText: "#e5e7eb",
-    crosshair: "#60a5fa",
+    crosshair: "#758696", // TradingView-style grey crosshair
     candleUp: "#10b981",
     candleDown: "#f87171",
     candleBorderUp: "#34d399",
@@ -47,7 +47,7 @@ export const chartThemes: Record<ChartThemeName, ChartsTheme> = {
     volumeDown: "rgba(239, 83, 80, 0.4)",
     volumeNeutral: "rgba(148, 163, 184, 0.35)",
     fontFamily: "'Inter', 'Satoshi', 'IBM Plex Mono', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-    crosshairLabelBg: "#0b1220",
+    crosshairLabelBg: "#131722", // TradingView-style black pill background
     priceLine: "#94a3b8",
     overlayLine: "#2962ff",
     overlaySelection: "#facc15",
@@ -63,7 +63,7 @@ export const chartThemes: Record<ChartThemeName, ChartsTheme> = {
     grid: "#eef2f7",
     subtleGrid: "rgba(148, 163, 184, 0.4)",
     axisText: "#1f2937",
-    crosshair: "#0ea5e9",
+    crosshair: "#9598a1", // TradingView-style grey crosshair
     candleUp: "#10b981",
     candleDown: "#ef4444",
     candleBorderUp: "#111827",
@@ -74,7 +74,7 @@ export const chartThemes: Record<ChartThemeName, ChartsTheme> = {
     volumeDown: "rgba(239, 83, 80, 0.35)",
     volumeNeutral: "rgba(148, 163, 184, 0.3)",
     fontFamily: "'Inter', 'Satoshi', 'IBM Plex Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-    crosshairLabelBg: "#e2e8f0",
+    crosshairLabelBg: "#1e222d", // TradingView-style dark pill background
     priceLine: "#64748b",
     overlayLine: "#2962ff",
     overlaySelection: "#0f172a",

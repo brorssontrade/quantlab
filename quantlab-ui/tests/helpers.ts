@@ -1,11 +1,17 @@
-import { Page, TestInfo } from "@playwright/test";
+import { Page, TestInfo, expect } from "@playwright/test";
 
 /**
  * Robust helper to navigate to the ChartsPro tab.
  * Tries multiple selectors in order (testid, role=tab, role=button, role=link).
  * If navigation fails, takes screenshot, dumps DOM, logs URL/body, and throws with clear error.
  */
-export async function gotoChartsPro(page: Page, testInfo: TestInfo): Promise<void> {
+type GotoOpts = { mock?: boolean };
+
+export async function gotoChartsPro(page: Page, testInfo: TestInfo, opts: GotoOpts = {}): Promise<void> {
+  const useMock = opts.mock ?? true;
+  // Navigate with deterministic flags - use "/" as base
+  const url = `/?mock=${useMock ? "1" : "0"}`;
+  await page.goto(url, { waitUntil: "networkidle" });
   const selectors = [
     { type: "testid", selector: page.getByTestId("tab-charts"), desc: "getByTestId('tab-charts')" },
     { type: "role-tab", selector: page.getByRole("tab", { name: /charts/i }), desc: "getByRole('tab', { name: /charts/i })" },
@@ -18,6 +24,18 @@ export async function gotoChartsPro(page: Page, testInfo: TestInfo): Promise<voi
     if (count > 0) {
       console.log(`[gotoChartsPro] Found Charts tab via ${desc}`);
       await selector.first().click();
+      // Wait for LW dump to be available and price canvas visible
+      await page.waitForFunction(() => typeof (window as any).__lwcharts?.dump === "function");
+      const canvas = page.locator(".tv-lightweight-charts canvas").first();
+      await canvas.waitFor({ state: "visible" });
+      await canvas.scrollIntoViewIfNeeded();
+      // Sanity: hover should update hover state
+      const box = await canvas.boundingBox();
+      if (box) {
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      }
+      const hover = await page.evaluate(() => (window as any).__lwcharts?.dump?.()?.hover ?? null);
+      expect(hover).not.toBeNull();
       return;
     }
   }

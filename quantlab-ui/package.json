@@ -11,12 +11,17 @@
     "test:unit": "vitest",
     "test:e2e": "playwright test",
     "test:all": "npm run test:unit && npm run test:e2e",
+    "test:smoke": "npx playwright test tests/smoke.dev.spec.ts --project=chromium --reporter=line",
     "test:chartspro": "npx playwright test tests/chartsPro.contract.spec.ts tests/chartsPro.cp2.spec.ts tests/chartsPro.cp7.spec.ts tests/chartsPro.cp8.spec.ts tests/chartsPro.compareModes.spec.ts --project=chromium --workers=1 --reporter=line",
     "test:chartspro:headed": "npx playwright test tests/chartsPro.contract.spec.ts tests/chartsPro.cp2.spec.ts tests/chartsPro.cp7.spec.ts tests/chartsPro.cp8.spec.ts tests/chartsPro.compareModes.spec.ts --project=chromium --workers=1 --headed --reporter=line,html",
+    "test:tvui": "npm run build && npm run test:smoke && npx playwright test tests/chartsPro.tvUi.*.spec.ts --project=chromium --workers=1 --reporter=line",
+    "test:tvui:headed": "npm run build && npx playwright test tests/chartsPro.tvUi.*.spec.ts --project=chromium --workers=1 --headed --reporter=line,html",
+    "test:tvui:deterministic": "npm run build && npx playwright test tests/chartsPro.tvUi.bottomBar.spec.ts --project=chromium --repeat-each=10 --reporter=line",
     "preview": "vite preview --host 127.0.0.1 --port 4173 --strictPort",
     "prepreview": "vite build"
   },
   "dependencies": {
+    "@radix-ui/react-context-menu": "^2.2.16",
     "@radix-ui/react-label": "^2.1.7",
     "@radix-ui/react-separator": "^1.1.7",
     "@radix-ui/react-slot": "^1.2.3",

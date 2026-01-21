@@ -12,7 +12,6 @@ import { toast } from "sonner";
 import { Loader2, Activity, Play, RefreshCcw, PlugZap, Send, X } from "lucide-react";
 
 import SearchableSelect from "@/components/SearchableSelect";
-import AlertsTab from "@/features/alerts/AlertsTab";
 import ChartsProTab from "@/features/chartsPro";
 import FundamentalsTab from "@/features/fundamentals/FundamentalsTab";
 import AssistantTab from "@/features/assistant/AssistantTab";
@@ -470,19 +469,26 @@ useEffect(() => {
   }, [apiBase]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 text-slate-900">
+    <div className="flex min-h-screen flex-col bg-gradient-to-b from-slate-50 to-slate-100 text-slate-900">
       <Toaster richColors />
 
-      <div className="sticky top-0 z-10 backdrop-blur supports-[backdrop-filter]:bg-white/70 bg-white/80 border-b">
-        <div className="mx-auto max-w-7xl px-4 py-3 flex items-center gap-3">
-          <Logo />
-          <Separator orientation="vertical" className="h-6" />
-          <div className="flex items-center gap-2">
+      <div className="sticky top-0 z-10 shrink-0 backdrop-blur supports-[backdrop-filter]:bg-white/70 bg-white/80 border-b">
+        <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center gap-3 px-4 py-3 md:flex-nowrap">
+          <div className="flex items-center gap-3">
+            <Logo />
+            <Separator orientation="vertical" className="hidden h-6 md:block" />
+          </div>
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 md:flex-nowrap">
             <Label htmlFor="api">API</Label>
-            <Input id="api" value={apiBase} onChange={(e)=>setApiBase(e.target.value)} className="w-[280px]" />
+            <Input
+              id="api"
+              value={apiBase}
+              onChange={(e)=>setApiBase(e.target.value)}
+              className="min-w-0 flex-1 md:w-[280px]"
+            />
             <HealthBadge apiBase={apiBase} />
           </div>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="flex w-full items-center justify-start gap-2 md:ml-auto md:w-auto md:justify-end">
             <Button variant="secondary" onClick={()=>{ reloadRuns(); reloadLive(); reloadMeta(); }}>
               <RefreshCcw className="h-4 w-4 mr-2"/> Refresh
             </Button>
@@ -490,28 +496,27 @@ useEffect(() => {
         </div>
       </div>
 
-      <div className="mx-auto max-w-7xl p-4 space-y-4">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="flex flex-wrap gap-2">
-            <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+      <div className="flex min-h-0 w-full flex-1 flex-col overflow-hidden">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex min-h-0 flex-1 flex-col">
+          <TabsList className="flex flex-wrap gap-2" data-testid="tab-list">
+            <TabsTrigger value="dashboard" data-testid="tab-dashboard">Dashboard</TabsTrigger>
             <TabsTrigger value="charts" data-testid="tab-charts">Charts</TabsTrigger>
-            <TabsTrigger value="fundamentals">Fundamentals</TabsTrigger>
-            <TabsTrigger value="assistant">Assistant</TabsTrigger>
-            <TabsTrigger value="library">Library</TabsTrigger>
-            <TabsTrigger value="optimize">Optimize</TabsTrigger>
-            <TabsTrigger value="report">Report</TabsTrigger>
-            <TabsTrigger value="signals">Signals</TabsTrigger>
-            <TabsTrigger value="alerts">Alerts</TabsTrigger>
-            <TabsTrigger value="live">Live</TabsTrigger>
-            <TabsTrigger value="journal">Journal</TabsTrigger>
-            <TabsTrigger value="breadth">Breadth</TabsTrigger>
-            <TabsTrigger value="movers">Movers</TabsTrigger>
-            <TabsTrigger value="hotlists">Hotlists</TabsTrigger>
-            <TabsTrigger value="post">Post</TabsTrigger>
-            <TabsTrigger value="pipeline">Pipeline</TabsTrigger>
+            <TabsTrigger value="fundamentals" data-testid="tab-fundamentals">Fundamentals</TabsTrigger>
+            <TabsTrigger value="assistant" data-testid="tab-assistant">Assistant</TabsTrigger>
+            <TabsTrigger value="library" data-testid="tab-library">Library</TabsTrigger>
+            <TabsTrigger value="optimize" data-testid="tab-optimize">Optimize</TabsTrigger>
+            <TabsTrigger value="report" data-testid="tab-report">Report</TabsTrigger>
+            <TabsTrigger value="signals" data-testid="tab-signals">Signals</TabsTrigger>
+            <TabsTrigger value="live" data-testid="tab-live">Live</TabsTrigger>
+            <TabsTrigger value="journal" data-testid="tab-journal">Journal</TabsTrigger>
+            <TabsTrigger value="breadth" data-testid="tab-breadth">Breadth</TabsTrigger>
+            <TabsTrigger value="movers" data-testid="tab-movers">Movers</TabsTrigger>
+            <TabsTrigger value="hotlists" data-testid="tab-hotlists">Hotlists</TabsTrigger>
+            <TabsTrigger value="post" data-testid="tab-post">Post</TabsTrigger>
+            <TabsTrigger value="pipeline" data-testid="tab-pipeline">Pipeline</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="dashboard" className="space-y-4">
+          <TabsContent value="dashboard" className="mx-auto w-full max-w-7xl space-y-4 p-4" data-testid="content-dashboard">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <StatCard title="Strategies" value={strategies.length} sub="from /meta/strategies" />
               <StatCard title="Effective cost (bps)" value={effectiveBps} sub="commission + slippage" />
@@ -536,23 +541,23 @@ useEffect(() => {
             </Card>
           </TabsContent>
 
-          <TabsContent value="charts" className="space-y-4">
+          <TabsContent value="charts" className="flex min-h-0 flex-1 flex-col overflow-hidden" data-testid="content-charts">
             <ChartsProTab apiBase={apiBase} />
           </TabsContent>
 
-          <TabsContent value="fundamentals" className="space-y-4">
+          <TabsContent value="fundamentals" className="mx-auto w-full max-w-7xl space-y-4 p-4" data-testid="content-fundamentals">
             <FundamentalsTab apiBase={apiBase} />
           </TabsContent>
 
-          <TabsContent value="assistant" className="space-y-4">
+          <TabsContent value="assistant" className="mx-auto w-full max-w-7xl space-y-4 p-4" data-testid="content-assistant">
             <AssistantTab apiBase={apiBase} lastRunId={reportRunId} lastSymbol={symbol || undefined} />
           </TabsContent>
 
-          <TabsContent value="library" className="space-y-4">
+          <TabsContent value="library" className="mx-auto w-full max-w-7xl space-y-4 p-4" data-testid="content-library">
             <LibraryTab />
           </TabsContent>
 
-          <TabsContent value="optimize" className="space-y-4">
+          <TabsContent value="optimize" className="mx-auto w-full max-w-7xl space-y-4 p-4" data-testid="content-optimize">
             <Card>
               <CardHeader className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <CardTitle>Optimize strategy</CardTitle>
@@ -771,7 +776,7 @@ useEffect(() => {
             </Card>
           </TabsContent>
 
-          <TabsContent value="report">
+          <TabsContent value="report" className="mx-auto w-full max-w-7xl p-4" data-testid="content-report">
             <Card>
               <CardHeader className="flex-row items-center justify-between gap-2">
                 <CardTitle>Backtest Report</CardTitle>
@@ -1012,11 +1017,7 @@ useEffect(() => {
             </Card>
           </TabsContent>
 
-          <TabsContent value="alerts" className="space-y-4">
-            <AlertsTab apiBase={apiBase} />
-          </TabsContent>
-
-          <TabsContent value="signals" className="space-y-4">
+          <TabsContent value="signals" className="mx-auto w-full max-w-7xl space-y-4 p-4" data-testid="content-signals">
             <Card>
               <CardHeader className="flex-row items-center justify-between">
                 <CardTitle>Latest signals</CardTitle>
@@ -1083,7 +1084,7 @@ useEffect(() => {
             </Card>
           </TabsContent>
 
-          <TabsContent value="live" className="space-y-4">
+          <TabsContent value="live" className="mx-auto w-full max-w-7xl space-y-4 p-4" data-testid="content-live">
             <Card>
               <CardHeader className="flex-row items-center justify-between">
                 <CardTitle>Schedule live job</CardTitle>
@@ -1185,11 +1186,11 @@ useEffect(() => {
             </Card>
           </TabsContent>
 
-          <TabsContent value="journal">
+          <TabsContent value="journal" className="mx-auto w-full max-w-7xl space-y-4 p-4" data-testid="content-journal">
             <JournalView apiBase={apiBase} />
           </TabsContent>
 
-          <TabsContent value="breadth" className="space-y-4">
+          <TabsContent value="breadth" className="mx-auto w-full max-w-7xl space-y-4 p-4" data-testid="content-breadth">
             <Card>
               <CardHeader className="flex-row items-center justify-between">
                 <CardTitle>Breadth snapshot</CardTitle>
@@ -1208,7 +1209,7 @@ useEffect(() => {
             </Card>
           </TabsContent>
 
-          <TabsContent value="movers" className="space-y-4">
+          <TabsContent value="movers" className="mx-auto w-full max-w-7xl space-y-4 p-4" data-testid="content-movers">
             <Card>
               <CardHeader className="flex-row items-center justify-between">
                 <CardTitle>Market movers</CardTitle>
@@ -1252,7 +1253,7 @@ useEffect(() => {
             </Card>
           </TabsContent>
 
-          <TabsContent value="hotlists" className="space-y-4">
+          <TabsContent value="hotlists" className="mx-auto w-full max-w-7xl space-y-4 p-4" data-testid="content-hotlists">
             <Card>
               <CardHeader className="flex-row items-center justify-between">
                 <CardTitle>Hotlists</CardTitle>
@@ -1290,7 +1291,7 @@ useEffect(() => {
             </Card>
           </TabsContent>
 
-          <TabsContent value="post" className="space-y-4">
+          <TabsContent value="post" className="mx-auto w-full max-w-7xl space-y-4 p-4" data-testid="content-post">
             <Card>
               <CardHeader className="flex-row items-center justify-between">
                 <CardTitle>Post notification</CardTitle>
@@ -1306,7 +1307,7 @@ useEffect(() => {
             </Card>
           </TabsContent>
 
-          <TabsContent value="pipeline">
+          <TabsContent value="pipeline" className="mx-auto w-full max-w-7xl space-y-4 p-4" data-testid="content-pipeline">
             <Card>
               <CardHeader className="flex-row items-center justify-between">
                 <CardTitle>Daily pipeline</CardTitle>

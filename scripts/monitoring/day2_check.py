@@ -41,29 +41,35 @@ except AttributeError:
 # Configuration
 # ============================================================================
 
+# Debug mode: set DAY2_DEBUG=1 for verbose diagnostics
+DEBUG = os.environ.get("DAY2_DEBUG", "").lower() in ("1", "true", "yes")
+
 # API_BASE_URL: Backend FastAPI (health, OHLCV endpoints) - port 8000
 # UI_BASE_URL: Frontend Vite (for future UI smoke tests) - port 5173
 #
 # Secrets mapping (priority order):
-#   1. PROD_API_BASE_URL / STAGING_API_BASE_URL (preferred)
-#   2. PROD_BASE_URL / STAGING_BASE_URL (legacy fallback)
+#   1. PROD_API_BASE_URL / STAGING_API_BASE_URL (preferred, canonical)
+#   2. PROD_BASE_URL / STAGING_BASE_URL (legacy, deprecated)
 #
 # Day2 checks currently only use API; UI checks can be added later.
 
 
 def resolve_api_url() -> tuple[str, str]:
     """Resolve API URL with deterministic priority. Returns (url, source_env_var)."""
-    # Priority 1: New-style API secrets
+    # Priority 1: New-style API secrets (canonical)
     candidates = [
-        ("PROD_API_BASE_URL", os.getenv("PROD_API_BASE_URL")),
-        ("STAGING_API_BASE_URL", os.getenv("STAGING_API_BASE_URL")),
-        # Priority 2: Legacy secrets (backwards compat)
-        ("PROD_BASE_URL", os.getenv("PROD_BASE_URL")),
-        ("STAGING_BASE_URL", os.getenv("STAGING_BASE_URL")),
+        ("PROD_API_BASE_URL", os.getenv("PROD_API_BASE_URL"), False),
+        ("STAGING_API_BASE_URL", os.getenv("STAGING_API_BASE_URL"), False),
+        # Priority 2: Legacy secrets (deprecated)
+        ("PROD_BASE_URL", os.getenv("PROD_BASE_URL"), True),
+        ("STAGING_BASE_URL", os.getenv("STAGING_BASE_URL"), True),
     ]
     
-    for env_name, value in candidates:
+    for env_name, value, is_legacy in candidates:
         if value:
+            if is_legacy:
+                print(f"[DEPRECATION WARNING] {env_name} is deprecated.", file=sys.stderr)
+                print(f"  Please migrate to PROD_API_BASE_URL or STAGING_API_BASE_URL.", file=sys.stderr)
             return value.rstrip("/"), env_name
     
     return "", ""
@@ -130,10 +136,17 @@ REPORT_MD = REPORT_DIR / "DAY2_REPORT.md"
 # ============================================================================
 
 
-def log(msg: str, level: Literal["INFO", "ERROR", "PASS", "FAIL"] = "INFO") -> None:
+def log(msg: str, level: Literal["INFO", "ERROR", "PASS", "FAIL", "WARN"] = "INFO") -> None:
     """Print timestamped log message."""
-    ts = datetime.now(timezone.utc).isoformat()
+    ts = datetime.now(timezone.utc).strftime("%H:%M:%S")
     print(f"[{ts}] [{level}] {msg}", flush=True)
+
+
+def debug(msg: str) -> None:
+    """Print debug message (only if DAY2_DEBUG=1)."""
+    if DEBUG:
+        ts = datetime.now(timezone.utc).strftime("%H:%M:%S")
+        print(f"[{ts}] [DEBUG] {msg}", flush=True)
 
 
 def check_health(endpoint: str) -> dict[str, Any]:
@@ -188,12 +201,12 @@ def check_ohlcv_fetch(symbol: str | None = None, timeframes: list[str] | None = 
             "end": end_date.strftime("%Y-%m-%dT23:59:59"),
             "limit": 500,
         }
-        log(f"[DIAG] OHLCV request: {url}")
-        log(f"[DIAG] OHLCV params: {params}")
+        debug(f"OHLCV request: {url}")
+        debug(f"OHLCV params: {params}")
         
         try:
             resp = requests.get(url, params=params, timeout=TIMEOUT_SEC)
-            log(f"[DIAG] HTTP status: {resp.status_code}")
+            debug(f"HTTP status: {resp.status_code}")
             resp.raise_for_status()
             
             data = resp.json()
@@ -220,13 +233,13 @@ def check_ohlcv_fetch(symbol: str | None = None, timeframes: list[str] | None = 
                 data_key = "<unknown-type>"
             
             rows = len(candles) if isinstance(candles, list) else 0
-            log(f"[DIAG] Response data_key={data_key}, row_count={rows}")
+            debug(f"Response data_key={data_key}, row_count={rows}")
             
             # FAIL if 0 candles - data pipeline not working
             if rows == 0:
                 # Log response body for debugging (capped)
                 body_preview = str(data)[:500] if data else "<empty>"
-                log(f"[DIAG] Response body (0 candles): {body_preview}", "ERROR")
+                debug(f"Response body (0 candles): {body_preview}")
                 log(f"[FAIL] {symbol}@{tf} -> 0 candles (expected data for last {lookback_days} days)", "FAIL")
                 results.append({
                     "timeframe": tf, 
@@ -236,11 +249,11 @@ def check_ohlcv_fetch(symbol: str | None = None, timeframes: list[str] | None = 
                     "response_preview": body_preview,
                 })
             else:
-                log(f"[OK] {symbol}@{tf} -> {rows} candles (from '{data_key}')", "PASS")
+                log(f"[OK] {symbol}@{tf} -> {rows} candles", "PASS")
                 results.append({"timeframe": tf, "status": "PASS", "rows": rows})
         except requests.exceptions.HTTPError as exc:
             body_preview = exc.response.text[:500] if exc.response else "<no response>"
-            log(f"[DIAG] HTTP error response: {body_preview}", "ERROR")
+            debug(f"HTTP error response: {body_preview}")
             log(f"[FAIL] {symbol}@{tf} -> {exc}", "FAIL")
             results.append({"timeframe": tf, "status": "FAIL", "error": str(exc), "response_preview": body_preview})
         except Exception as exc:
@@ -266,10 +279,10 @@ def run_pytest_suite(suite: str, markers: str | None = None) -> dict[str, Any]:
         env["PYTHONPATH"] = f"{src_path}{os.pathsep}{REPO_ROOT}"
     env["PYTHONUTF8"] = "1"  # Force UTF-8 on Windows
     
-    # First, run collection diagnostics
-    log(f"[DIAG] Python: {sys.executable}")
-    log(f"[DIAG] REPO_ROOT: {REPO_ROOT}")
-    log(f"[DIAG] PYTHONPATH: {env['PYTHONPATH']}")
+    # Debug info
+    debug(f"Python: {sys.executable}")
+    debug(f"REPO_ROOT: {REPO_ROOT}")
+    debug(f"PYTHONPATH: {env['PYTHONPATH']}")
     
     # Check if test file/dir exists
     test_path = REPO_ROOT / suite
@@ -277,35 +290,36 @@ def run_pytest_suite(suite: str, markers: str | None = None) -> dict[str, Any]:
         log(f"[FAIL] Test path does not exist: {test_path}", "FAIL")
         return {"status": "FAIL", "error": f"Test path not found: {suite}", "stderr": ""}
     
-    # First run --collect-only to see what pytest finds
-    collect_cmd = [sys.executable, "-m", "pytest", suite, "--collect-only", "-q"]
-    if markers:
-        collect_cmd.extend(["-m", markers])
-    
-    log(f"[DIAG] Running collect: {' '.join(collect_cmd)}")
-    try:
-        collect_result = subprocess.run(
-            collect_cmd,
-            capture_output=True,
-            text=True,
-            timeout=60,
-            cwd=REPO_ROOT,
-            env=env,
-        )
-        log(f"[DIAG] collect-only exit: {collect_result.returncode}")
-        if collect_result.stdout:
-            log(f"[DIAG] collected: {collect_result.stdout[:500]}")
-        if collect_result.returncode != 0 and collect_result.stderr:
-            log(f"[DIAG] collect stderr: {collect_result.stderr[:500]}", "ERROR")
-    except Exception as exc:
-        log(f"[DIAG] collect-only failed: {exc}", "ERROR")
+    # First run --collect-only to see what pytest finds (debug only)
+    if DEBUG:
+        collect_cmd = [sys.executable, "-m", "pytest", suite, "--collect-only", "-q"]
+        if markers:
+            collect_cmd.extend(["-m", markers])
+        
+        debug(f"Running collect: {' '.join(collect_cmd)}")
+        try:
+            collect_result = subprocess.run(
+                collect_cmd,
+                capture_output=True,
+                text=True,
+                timeout=60,
+                cwd=REPO_ROOT,
+                env=env,
+            )
+            debug(f"collect-only exit: {collect_result.returncode}")
+            if collect_result.stdout:
+                debug(f"collected: {collect_result.stdout[:500]}")
+            if collect_result.returncode != 0 and collect_result.stderr:
+                debug(f"collect stderr: {collect_result.stderr[:500]}")
+        except Exception as exc:
+            debug(f"collect-only failed: {exc}")
     
     # Run pytest with python -m to ensure correct environment
     cmd = [sys.executable, "-m", "pytest", suite, "-q", "--disable-warnings", "--tb=short"]
     if markers:
         cmd.extend(["-m", markers])
     
-    log(f"[DIAG] Running: {' '.join(cmd)}")
+    debug(f"Running: {' '.join(cmd)}")
     try:
         result = subprocess.run(
             cmd,
@@ -333,11 +347,11 @@ def run_pytest_suite(suite: str, markers: str | None = None) -> dict[str, Any]:
             status = "FAIL"
             log(f"[FAIL] pytest {suite} -> exit {result.returncode}", "FAIL")
         
-        # Always log stdout/stderr for debugging
-        if result.stdout:
-            log(f"[DIAG] stdout (last 500): {result.stdout[-500:]}")
-        if result.stderr:
-            log(f"[DIAG] stderr (last 500): {result.stderr[-500:]}", "ERROR")
+        # Log output on failure, or if debug mode
+        if result.stdout and (DEBUG or status == "FAIL"):
+            debug(f"stdout (last 500): {result.stdout[-500:]}")
+        if result.stderr and (DEBUG or status == "FAIL"):
+            debug(f"stderr (last 500): {result.stderr[-500:]}")
         
         return {
             "status": status,
@@ -357,7 +371,7 @@ def run_pytest_suite(suite: str, markers: str | None = None) -> dict[str, Any]:
 
 def find_parity_tests() -> str | None:
     """Auto-detect parity test file via glob search."""
-    log("[DIAG] Searching for parity test files...")
+    debug("Searching for parity test files...")
     
     # Helper to filter out .venv and other non-repo paths
     def is_repo_test(p: Path) -> bool:
@@ -367,15 +381,20 @@ def find_parity_tests() -> str | None:
         return not any(part in exclude_dirs for part in parts)
     
     # First, list ALL test files for diagnostics (excluding .venv)
-    log("[DIAG] All Python test files in repo (excluding .venv):")
-    all_tests_raw = list(REPO_ROOT.glob("**/test*.py")) + list(REPO_ROOT.glob("**/*_test.py"))
-    all_tests = [t for t in all_tests_raw if is_repo_test(t)]
-    for tf in all_tests[:20]:  # Show first 20
-        log(f"[DIAG]   - {tf.relative_to(REPO_ROOT)}")
-    if len(all_tests) > 20:
-        log(f"[DIAG]   ... and {len(all_tests) - 20} more")
-    if not all_tests:
-        log("[DIAG]   (no test files found)")
+    if DEBUG:
+        debug("All Python test files in repo (excluding .venv):")
+        all_tests_raw = list(REPO_ROOT.glob("**/test*.py")) + list(REPO_ROOT.glob("**/*_test.py"))
+        all_tests = [t for t in all_tests_raw if is_repo_test(t)]
+        for tf in all_tests[:20]:  # Show first 20
+            debug(f"  - {tf.relative_to(REPO_ROOT)}")
+        if len(all_tests) > 20:
+            debug(f"  ... and {len(all_tests) - 20} more")
+        if not all_tests:
+            debug("  (no test files found)")
+    else:
+        # Quick check for fallback
+        all_tests_raw = list(REPO_ROOT.glob("**/test*.py")) + list(REPO_ROOT.glob("**/*_test.py"))
+        all_tests = [t for t in all_tests_raw if is_repo_test(t)]
     
     # Search patterns in priority order (include repo root)
     patterns = [
@@ -391,17 +410,18 @@ def find_parity_tests() -> str | None:
         matches_raw = list(REPO_ROOT.glob(pattern))
         matches = [m for m in matches_raw if is_repo_test(m)]
         if matches:
-            log(f"[DIAG] Pattern '{pattern}' found {len(matches)} files:")
-            for m in matches[:5]:  # Show first 5
-                log(f"[DIAG]   - {m.relative_to(REPO_ROOT)}")
+            debug(f"Pattern '{pattern}' found {len(matches)} files")
+            if DEBUG:
+                for m in matches[:5]:  # Show first 5
+                    debug(f"  - {m.relative_to(REPO_ROOT)}")
             # Return first match
             return str(matches[0].relative_to(REPO_ROOT))
     
-    log("[DIAG] No parity/indicator test files found via glob")
+    debug("No parity/indicator test files found via glob")
     
     # Last resort: check if ANY tests exist and use keyword filter
     if all_tests:
-        log("[DIAG] Will use pytest keyword filter instead")
+        debug("Will use pytest keyword filter instead")
     
     return None
 

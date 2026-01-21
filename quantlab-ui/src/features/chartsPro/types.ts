@@ -290,6 +290,25 @@ export function indicatorDisplayName(kind: IndicatorKind) {
   return INDICATOR_LABELS[kind] ?? kind.toUpperCase();
 }
 
+/**
+ * Generate a human-readable summary of an indicator's parameters.
+ * E.g. "EMA(20)", "RSI(14)", "MACD(12,26,9)"
+ */
+export function indicatorParamsSummary(indicator: IndicatorInstance): string {
+  const name = indicatorDisplayName(indicator.kind);
+  switch (indicator.kind) {
+    case "ema":
+    case "sma":
+      return `${name}(${indicator.params.period})`;
+    case "rsi":
+      return `${name}(${indicator.params.period})`;
+    case "macd":
+      return `${name}(${indicator.params.fast},${indicator.params.slow},${indicator.params.signal})`;
+    default:
+      return name;
+  }
+}
+
 export function describeTrend(trend: Trend, tf: Tf) {
   const delta = trend.p2.price - trend.p1.price;
   const pct = trend.p1.price === 0 ? 0 : (delta / trend.p1.price) * 100;
