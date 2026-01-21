@@ -746,18 +746,19 @@
 
 | Status | Task ID | Task | Estimated | Dependencies |
 |--------|---------|------|-----------|---|
-| 📋 READY | TV-13.1 | Define spacing CSS variables (--cp-gap-xs/sm/md, --cp-pad-xs/sm) | 0.5h | None |
-| 📋 READY | TV-13.2 | Apply spacing to TopBar components | 0.75h | TV-13.1, TV-1.x |
-| 📋 READY | TV-13.3 | Apply spacing to LeftToolbar components | 0.5h | TV-13.1, TV-3.x |
-| 📋 READY | TV-13.4 | Apply spacing to RightPanel components | 0.75h | TV-13.1, TV-5.x |
+| ✅ DONE | TV-13.1 | Define spacing CSS variables (--cp-gap-xs/sm/md, --cp-pad-xs/sm) | 0.5h | None |
+| ✅ DONE | TV-13.2 | Apply spacing to TopBar components | 0.75h | TV-13.1, TV-1.x |
+| ✅ DONE | TV-13.3 | Apply spacing to LeftToolbar components | 0.5h | TV-13.1, TV-3.x |
+| ✅ DONE | TV-13.4 | Apply spacing to RightPanel components | 0.75h | TV-13.1, TV-5.x |
 | ✅ DONE | TV-13.5 | Apply spacing to BottomBar components | 0.5h | TV-13.1, TV-8.x |
-| 📋 READY | TV-13.6a | Toolbar compression (height tightening, min-height removal) | 0.25h | TV-13.2 |
+| ✅ DONE | TV-13.6a | Toolbar compression (height tightening, min-height removal) | 0.25h | TV-13.2 |
 | ✅ DONE | TV-13.6b | Eliminate chart dead-space: gridTemplateRows dynamic binding + layout audit | 1.0h | TV-13.5 |
 | ✅ DONE | TV-13.7 | Toolbar visual pass: min-height invariant + test coverage | 0.5h | TV-13.6a |
-| 📋 READY | TV-13.8 | Update docs + close TV-13 | 0.25h | TV-13.7 |
+| ✅ DONE | TV-13.8 | Update docs + close TV-13 | 0.25h | TV-13.7 |
+| ✅ DONE | TV-8.2-HYG | Test hygiene: remove describe.skip, gotoChartsPro, deterministic waits | 0.75h | TV-8.2 |
 
-**Total TV-13: 4.5h**  
-**Acceptance:** Consistent spacing, "tight" feel, no large margins.
+**Total TV-13: 5.75h (with test hygiene)**  
+**Acceptance:** Consistent spacing, "tight" feel, no large margins, alert markers tests active + deterministic.
 
 ---
 
