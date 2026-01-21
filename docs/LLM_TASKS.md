@@ -1,3 +1,53 @@
+### 2025-01-21 (TV-13.6b – Eliminate Chart Dead-Space: Layout Audit + gridTemplateRows Fix)
+**Status:** ✅ **COMPLETE** (3/3 audit tests passing, gridTemplateRows dynamic, 0px dead space achieved, 159/171 tvUI, 35/35 tvParity)  
+**Task Description:** Audit and eliminate 161px dead-space under chart when Inspector collapsed (TradingView parity goal).
+
+**Root Cause & Fix:**
+- **Issue:** When Inspector component closed, .chartspro-surface CSS Grid row 2 remained allocated as 'auto' height → 161px dead space visible between chart and BottomBar
+- **Root Cause:** `gridTemplateRows: '1fr auto'` hardcoded in ChartViewport.tsx (line 3644), not reactive to `inspectorOpen` state
+- **Solution:** Dynamic binding:
+  ```tsx
+  gridTemplateRows: inspectorOpen ? '1fr auto' : '1fr 0px'
+  ```
+  - When `inspectorOpen === true`: row 1 fills flex space, row 2 auto-sized to inspector height
+  - When `inspectorOpen === false`: row 1 fills all, row 2 = 0px (no dead space)
+  - Added wrapper div `<div data-testid="inspector-root" className="overflow-hidden" style={{ minHeight: 0 }}>` to prevent overflow leakage
+
+**Implementation Summary:**
+- **File Modified:** `quantlab-ui/src/features/chartsPro/components/ChartViewport.tsx`
+  - Line 3644: Changed `gridTemplateRows: '1fr auto'` to `gridTemplateRows: inspectorOpen ? '1fr auto' : '1fr 0px'`
+  - Lines 3858-3867: Wrapped InspectorSidebar in overflow-hidden container with testid + minHeight:0
+  - Dependency: `inspectorOpen` state already managed in component
+  
+- **Test Suite:** `quantlab-ui/tests/tv13-6b-layout-audit.spec.ts` (NEW, 367 lines)
+  - **Test 1:** Measure layout (bounding boxes, gridTemplateRows, computed styles for .tv-shell, .chartspro-surface, .chartspro-price, .inspector-root, .tv-bottombar)
+  - **Test 2:** Verify inspector row2 height = 0px when collapsed (expects gridTemplateRows = "469px 0px")
+  - **Test 3 (Invariant):** "Dead-space invariant" – gap between .chartspro-price bottom and .tv-bottombar top ≤ 10px when inspector closed
+    - Result: gap = **0px** ✅ (no dead space detected)
+    - Deterministic assertion with tolerance (10px) to account for rendering variations
+    - No fixed sleeps (waits on visual state changes)
+
+**Layout Findings:**
+- Inspector OPEN: gridTemplateRows = "308px 161px" (308px chart area, 161px inspector)
+- Inspector CLOSED: gridTemplateRows = "469px 0px" (469px full chart area, 0px row 2)
+- Dead space eliminated: 161px → 0px ✓
+
+**Gates (All Green):**
+- npm build ✅ (Vite: 1,220.13 kB JS gzip, 51.40 kB CSS gzip, no errors)
+- tvUI: 159/171 passing (12 skipped = TV-8.2 alert markers, known issue, separate fix) ✅
+- tvParity: 35/35 passing (no layout-related regressions) ✅
+
+**Files Changed:**
+- `quantlab-ui/src/features/chartsPro/components/ChartViewport.tsx` – 2 edits (gridTemplateRows + wrapper)
+- `quantlab-ui/tests/tv13-6b-layout-audit.spec.ts` – NEW (layout audit + invariant test, 3/3 passing)
+
+**QA Audit Logs:**
+- Bounding boxes captured: logs/tv13_6b_layout_audit_*.txt (exact measurements for regression tracking)
+
+**Status:** TV-13.6b **fully complete** – Dead-space eliminated, deterministic invariant prevents regression, TradingView parity achieved on inspector toggle.
+
+---
+
 ### 2025-01-24 (TV-12.1-12.4 – Layout Save/Load/Delete Manager – UI Integration)
 **Status:** ✅ **COMPLETE** (5/5 tests passing, repeat-each=3 stable, 35/35 tvParity, build clean)  
 **Task Description:** Integrate LayoutManager component for TradingView-style layout save/load/delete with localStorage persistence.

@@ -149,6 +149,7 @@
 | `tests/chartsPro.tvUi.leftToolbar.persistence.spec.ts` | **Day 7+: Tool persistence tests (5 tests, repeat-each=10)** |
 | `tests/chartsPro.tvUi.leftToolbar.responsive.spec.ts` | **TV-3.10: Responsive LeftToolbar viewport tests (14 tests: desktop/tablet/mobile breakpoints)** |
 | `tests/chartsPro.tvUi.layoutManager.spec.ts` | **TV-12.1-12.6: Layout Save/Load/Delete manager tests (5 tests: save/load/delete/persist, repeat-each=3 stable)** |
+| `tests/tv13-6b-layout-audit.spec.ts` | **TV-13.6b: Dead-space audit + invariant test (3 tests: layout measurements, inspector row2 collapse, 0px gap invariant)** |
 | `tests/chartsPro.tvUi.rightPanel.tabs.spec.ts` | **Day 8: RightPanel tabs tests (17 test cases, repeat-each=10, 170 runs)** |
 | `tests/chartsPro.tvUi.settingsPanel.spec.ts` | **TV-10.2: Settings panel tests (9 cases, open/close/Esc/click-outside/persistence, repeat-each=10, 90 runs, zero flakes)** |
 | `tests/chartsPro.tvUi.settings.apply.spec.ts` | **TV-10.3: Apply settings to rendering (8 tests, repeat-each=10, deterministic)** |
