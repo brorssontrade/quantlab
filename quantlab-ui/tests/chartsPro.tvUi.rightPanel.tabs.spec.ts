@@ -9,6 +9,7 @@
  * - Verification that legacy sidebar is not rendered in workspace mode
  */
 import { test, expect } from "@playwright/test";
+import { gotoChartsPro } from "./helpers/chartsProNav";
 
 type RightPanelTab = "indicators" | "objects" | "alerts";
 
@@ -312,5 +313,18 @@ test.describe("ChartsPro RightPanel Tabs (TV-4)", () => {
       await expect(objectsPanel).toBeVisible();
       await expect(objectsPanel).toContainText("Name");
     });
+  });
+});
+
+// TV-13.7 Layout Guard: ensure tv-shell no longer enforces desktop min-height
+test.describe("ChartsPro Layout Invariant (TV-13.7)", () => {
+  test("tv-shell min-height is not forced on desktop", async ({ page }) => {
+    await gotoChartsPro(page, { mock: true, workspaceMode: true });
+
+    const minHeight = await page
+      .locator('[data-testid="tv-shell"]')
+      .evaluate((el) => getComputedStyle(el).minHeight);
+
+    expect(minHeight).not.toBe("600px");
   });
 });
