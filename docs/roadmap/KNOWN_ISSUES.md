@@ -118,7 +118,8 @@
 |----|-----|-------------|--------|
 | CP-001 | Legend drag-drop sometimes drops at wrong position | Drag fast across multiple rows | Open |
 | CP-002 | Compare percent mode shows NaN for missing data | Add compare with gaps | Mitigated |
-| CP-003 | Inspector doesn't scroll for many objects | Add > 10 overlays | Open |
+| CP-003 | tvUI suite shows 12 skipped tests (TV-8.2 Alert Markers) due to disabled describe block using wrong preview port and missing gotoChartsPro helper | Run `npm run test:tvui`; alert markers suite is `test.describe.skip` with conditional `test.skip()` when no alerts | Open |
+| CP-004 | Inspector doesn't scroll for many objects | Add > 10 overlays | Open |
 
 ---
 
