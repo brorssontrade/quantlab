@@ -3607,8 +3607,11 @@ const fitToContent = useCallback(() => {
     <div ref={rootRef} className="chartspro-root flex h-full flex-col overflow-hidden rounded-lg bg-slate-900/5 dark:bg-slate-900">
       <div
         ref={toolbarRef}
-        className="flex-none border-b border-slate-800/40 bg-slate-950/40 px-3 py-2"
-        style={{ minHeight: "112px", maxHeight: "112px", overflowY: "auto" }}
+        className="flex-none border-b border-slate-800/40 bg-slate-950/40 flex flex-wrap items-center"
+        style={{
+          padding: "var(--cp-pad-sm) var(--cp-pad)",
+          gap: "var(--cp-gap)",
+        }}
       >
         <CompareToolbar
           items={compareItems}
@@ -3627,7 +3630,7 @@ const fitToContent = useCallback(() => {
           onCompareScaleModeChange={setCompareScaleMode}
         />
         <OverlayToggles state={overlayState} onToggle={toggleOverlay} />
-        <div className="mt-2">
+        <div>
           <button
             type="button"
             data-testid="chartspro-inspector-toggle"
@@ -3638,7 +3641,7 @@ const fitToContent = useCallback(() => {
           </button>
         </div>
       </div>
-        <div ref={containerRef} className="chartspro-surface relative flex-1 min-h-0 overflow-hidden" onContextMenu={handleContextMenu} style={{ display: 'grid', gridTemplateRows: '1fr auto' }}>
+        <div ref={containerRef} className="chartspro-surface relative flex-1 min-h-0 overflow-hidden" onContextMenu={handleContextMenu} style={{ display: 'grid', gridTemplateRows: inspectorOpen ? '1fr auto' : '1fr 0px' }}>
           <div className="min-h-0 min-w-0 relative" style={{ display: 'flex' }}>
             <div
               ref={chartRootRef}
@@ -3849,17 +3852,19 @@ const fitToContent = useCallback(() => {
             </div>
             <div ref={panesContainerRef} style={{ height: 0, overflow: 'hidden' }} />
         </div>
-        <InspectorSidebar
-          open={inspectorOpen}
-          tab={inspectorTab}
-          onTabChange={(t) => setInspectorTab(t)}
-          onClose={() => setInspectorOpen(false)}
-          objects={buildInspectorObjects()}
-          hover={hoverStateRef.current}
-          lastLegend={{ base: legendStateRef.current.base, compares: { ...legendStateRef.current.compares } }}
-          onToggleVisible={handleInspectorToggleVisible}
-          onRemove={handleInspectorRemove}
-        />
+        <div data-testid="inspector-root" className="overflow-hidden" style={{ minHeight: 0 }}>
+          <InspectorSidebar
+            open={inspectorOpen}
+            tab={inspectorTab}
+            onTabChange={(t) => setInspectorTab(t)}
+            onClose={() => setInspectorOpen(false)}
+            objects={buildInspectorObjects()}
+            hover={hoverStateRef.current}
+            lastLegend={{ base: legendStateRef.current.base, compares: { ...legendStateRef.current.compares } }}
+            onToggleVisible={handleInspectorToggleVisible}
+            onRemove={handleInspectorRemove}
+          />
+        </div>
       </div>
       {/* Context Menu */}
       <ContextMenu
