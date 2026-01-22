@@ -2036,6 +2036,15 @@ const fitToContent = useCallback(() => {
             comparesReady,
             compareStatusBySymbol,
           },
+          dataBounds: (() => {
+            const rows = lastLoadedBaseRowsRef.current;
+            if (!rows || rows.length === 0) return null;
+            return {
+              firstBarTime: Number(rows[0].time),
+              lastBarTime: Number(rows[rows.length - 1].time),
+              dataCount: rows.length,
+            };
+          })(),
           render: {
             ...describeRenderSnapshot(),
                         appliedSettings: appliedSettingsRef.current, // TV-10.3: Expose applied settings for tests

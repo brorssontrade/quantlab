@@ -917,7 +917,12 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
               {/* Bottom Bar */}
               <BottomBar 
                 chart={chartRef.current}
-                lastBarTime={data?.length > 0 ? Math.floor(new Date(data[data.length - 1].time).getTime() / 1000) : undefined}
+                dataBounds={data?.length > 0 ? {
+                  firstBarTime: Number(data[0].time),
+                  lastBarTime: Number(data[data.length - 1].time),
+                  dataCount: data.length,
+                  barTimes: data.map(d => Number(d.time)),
+                } : undefined}
                 timezone="UTC"
               />
             </div>

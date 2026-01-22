@@ -1,9 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Tf } from "../types";
 
+/** Data bounds for bar-index based range selection */
+interface DataBounds {
+  /** First bar time (UTCTimestamp - unix seconds) */
+  firstBarTime: number;
+  /** Last bar time (UTCTimestamp - unix seconds) */
+  lastBarTime: number;
+  /** Total number of bars */
+  dataCount: number;
+  /** Array of all bar times for index-based lookup */
+  barTimes: number[];
+}
+
 interface BottomBarProps {
   chart: any; // IChartApi | null
-  /** Last bar timestamp (unix seconds) */
+  /** Data bounds for bar-index based range (preferred over lastBarTime) */
+  dataBounds?: DataBounds | null;
+  /** @deprecated Use dataBounds instead. Last bar timestamp (unix seconds) */
   lastBarTime?: number | null;
   /** Timezone: "UTC" | "Local" */
   timezone?: string;
@@ -39,6 +53,7 @@ const RANGE_DAYS: Record<RangeKey, number | null> = {
  */
 export function BottomBar({
   chart,
+  dataBounds,
   lastBarTime,
   timezone = "UTC",
   scaleMode = "auto",
@@ -87,11 +102,30 @@ export function BottomBar({
     };
   }, [timezone]);
 
-  // Handle range click
+  // Bar count approximations for each range (trading days, not calendar days)
+  const RANGE_BARS: Record<RangeKey, number | null> = useMemo(() => ({
+    "1D": 1,
+    "5D": 5,
+    "1M": 22,   // ~22 trading days per month
+    "6M": 130,  // ~130 trading days in 6 months
+    "YTD": null, // Special: from Jan 1
+    "1Y": 252,  // ~252 trading days per year
+    "All": null, // Show all data
+  }), []);
+
+  // Handle range click - uses bar-index based range for robustness
   const handleRangeClick = useCallback(
     (range: RangeKey) => {
+      // Determine effective bounds
+      const bounds = dataBounds ?? (lastBarTime && lastBarTime > 0 ? {
+        firstBarTime: lastBarTime, // Fallback: same as last
+        lastBarTime: lastBarTime,
+        dataCount: 1,
+        barTimes: [lastBarTime],
+      } : null);
+
       // Validate before state update
-      if (!chart || !lastBarTime || lastBarTime <= 0) {
+      if (!chart || !bounds || bounds.dataCount <= 0) {
         // No data yet: update UI state but skip chart update
         setSelectedRange(range);
         try {
@@ -111,32 +145,33 @@ export function BottomBar({
       }
       if (onRangeChange) onRangeChange(range);
 
-      // Apply range to chart
-      if (chart && lastBarTime) {
-        const timeScale = chart.timeScale();
-        const daysDiff = RANGE_DAYS[range];
+      // Apply range to chart using bar-index based approach
+      const timeScale = chart.timeScale();
+      const { firstBarTime: minTime, lastBarTime: maxTime, dataCount, barTimes } = bounds;
 
-        if (range === "All") {
-          timeScale.fitContent();
-        } else if (daysDiff !== null) {
-          const endTime = lastBarTime;
-          const startTime = endTime - daysDiff * 24 * 60 * 60; // Seconds to days
-          // Clamp to ensure from < to
-          timeScale.setVisibleRange({ from: Math.min(startTime, endTime), to: Math.max(startTime, endTime) });
-        } else if (range === "YTD") {
-          const endTime = lastBarTime;
-          const year = timezone === "UTC" 
-            ? new Date(endTime * 1000).getUTCFullYear()
-            : new Date(endTime * 1000).getFullYear();
-          const yearStart = timezone === "UTC"
-            ? Math.floor(Date.UTC(year, 0, 1) / 1000)  // Jan 1 00:00 UTC
-            : Math.floor(new Date(year, 0, 1).getTime() / 1000); // Jan 1 00:00 Local
-          // Clamp
-          timeScale.setVisibleRange({ from: Math.min(yearStart, endTime), to: Math.max(yearStart, endTime) });
-        }
+      if (range === "All") {
+        // Show all bars
+        timeScale.setVisibleRange({ from: minTime, to: maxTime });
+      } else if (range === "YTD") {
+        // From Jan 1 of the year containing maxTime
+        const year = timezone === "UTC" 
+          ? new Date(maxTime * 1000).getUTCFullYear()
+          : new Date(maxTime * 1000).getFullYear();
+        const yearStartUnix = timezone === "UTC"
+          ? Math.floor(Date.UTC(year, 0, 1) / 1000)
+          : Math.floor(new Date(year, 0, 1).getTime() / 1000);
+        // Find first bar at or after yearStart using binary search
+        const fromTime = barTimes.find(t => t >= yearStartUnix) ?? minTime;
+        timeScale.setVisibleRange({ from: fromTime, to: maxTime });
+      } else {
+        // Bar-index based range: show last N bars
+        const barsToShow = RANGE_BARS[range] ?? dataCount;
+        const fromIndex = Math.max(0, dataCount - barsToShow);
+        const fromTime = barTimes[fromIndex] ?? minTime;
+        timeScale.setVisibleRange({ from: fromTime, to: maxTime });
       }
     },
-    [chart, lastBarTime, onRangeChange, timezone]
+    [chart, dataBounds, lastBarTime, onRangeChange, timezone, RANGE_BARS]
   );
 
   // Handle scale mode toggle
@@ -186,7 +221,7 @@ export function BottomBar({
       <div className="flex items-center" style={{ gap: "var(--cp-gap-sm)" }}>
         {RANGE_KEYS.map((range) => {
           const isSelected = selectedRange === range;
-          const canSelect = chart && lastBarTime && lastBarTime > 0;
+          const canSelect = chart && (dataBounds?.dataCount ?? 0) > 0;
           return (
             <button
               key={range}
