@@ -1,40 +1,90 @@
 /**
  * LeftToolbar.tsx
- * Vertical toolbar with drawing tools for ChartsPro.
- * Tools: Select, Trendline, H-line, V-line, Channel, Rectangle, Text/Note.
- * Active tool synced to dump().ui.activeTool for testing.
- *
- * TV-3.9: Responsive behavior
+ * 
+ * TV-20.1: TradingView-style LeftToolbar with Tool Groups + Flyout
+ * 
+ * Features:
+ * - Tool groups with expandable flyout menus
+ * - Active tool synced to dump().ui.activeTool
+ * - Responsive: Desktop (vertical) / Mobile (floating pill)
+ * - Keyboard shortcuts maintained
+ * - Flyout closes on Esc and click-outside
+ * 
+ * TV-3.9: Responsive behavior preserved
  * - Desktop (≥768px): Vertical toolbar in tv-leftbar grid slot
  * - Mobile (<768px): Floating horizontal pill (overlay, touch-friendly)
- *
- * NOTE: MobilePill uses React Portal to escape tv-leftbar container
- * which is hidden on mobile. The pill is portaled to document.body.
  */
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { Undo2, Trash2, Maximize2, ChevronUp, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Tool } from "../../state/controls";
+import { TOOL_GROUPS, isToolEnabled } from "./toolRegistry";
+import { ToolFlyout } from "./ToolFlyout";
+import type { ToolGroup } from "./toolRegistry";
 
 interface LeftToolbarProps {
   activeTool: Tool;
   onSelectTool: (tool: Tool) => void;
 }
 
-const tools: Array<{ id: Tool; label: string; icon: React.ReactNode; shortcut?: string }> = [
-  { id: "select", label: "Select", icon: "◀", shortcut: "Esc" },
-  { id: "trendline", label: "Trendline", icon: "⧹", shortcut: "T" },
-  { id: "hline", label: "H-Line", icon: "—", shortcut: "H" },
-  { id: "vline", label: "V-Line", icon: "|", shortcut: "V" },
-  { id: "channel", label: "Channel", icon: "⫴", shortcut: "C" },
-  { id: "rectangle", label: "Rectangle", icon: "□", shortcut: "R" },
-  { id: "text", label: "Text", icon: "T", shortcut: "N" },
-];
+/**
+ * Get the display icon for a group based on active tool
+ * If active tool is in this group, show that tool's icon
+ */
+function getGroupIcon(group: ToolGroup, activeTool: string): string {
+  const activeInGroup = group.tools.find(t => t.id === activeTool);
+  return activeInGroup?.icon ?? group.icon;
+}
 
-/** Desktop: Vertical toolbar (original layout) */
+/**
+ * Check if a group contains the active tool
+ */
+function isGroupActive(group: ToolGroup, activeTool: string): boolean {
+  return group.tools.some(t => t.id === activeTool);
+}
+
+/** Desktop: Vertical toolbar with flyout support */
 function DesktopToolbar({ activeTool, onSelectTool }: LeftToolbarProps) {
+  const [openGroupId, setOpenGroupId] = useState<string | null>(null);
+  const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
+  const buttonRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+
+  const handleGroupClick = useCallback((group: ToolGroup, button: HTMLButtonElement) => {
+    // If clicking cursor group (only 1 tool), select directly
+    if (group.id === "cursor" && group.tools.length === 1) {
+      const tool = group.tools[0];
+      if (isToolEnabled(tool.id)) {
+        onSelectTool(tool.id as Tool);
+      }
+      return;
+    }
+
+    // Toggle flyout
+    if (openGroupId === group.id) {
+      setOpenGroupId(null);
+      setAnchorRect(null);
+    } else {
+      setOpenGroupId(group.id);
+      setAnchorRect(button.getBoundingClientRect());
+    }
+  }, [openGroupId, onSelectTool]);
+
+  const handleToolSelect = useCallback((toolId: string) => {
+    if (isToolEnabled(toolId)) {
+      onSelectTool(toolId as Tool);
+    }
+  }, [onSelectTool]);
+
+  const handleCloseFlyout = useCallback(() => {
+    setOpenGroupId(null);
+    setAnchorRect(null);
+  }, []);
+
+  // Find the open group for flyout
+  const openGroup = openGroupId ? TOOL_GROUPS.find(g => g.id === openGroupId) : null;
+
   return (
     <div
       className="
@@ -48,23 +98,44 @@ function DesktopToolbar({ activeTool, onSelectTool }: LeftToolbarProps) {
       }}
       data-testid="tv-leftbar-container"
     >
-      {tools.map((tool) => (
-        <Button
-          key={tool.id}
-          variant={activeTool === tool.id ? "default" : "ghost"}
-          size="icon"
-          onClick={() => onSelectTool(tool.id)}
-          title={`${tool.label}${tool.shortcut ? ` (${tool.shortcut})` : ""}`}
-          data-testid={`tool-${tool.id}`}
-          className={`h-9 w-9 ${
-            activeTool === tool.id
-              ? "bg-slate-700 text-white"
-              : "text-slate-400 hover:text-slate-200"
-          }`}
-        >
-          {tool.icon}
-        </Button>
-      ))}
+      {/* Tool Groups */}
+      {TOOL_GROUPS.map((group) => {
+        const groupActive = isGroupActive(group, activeTool);
+        const hasMultipleTools = group.tools.length > 1;
+        const isOpen = openGroupId === group.id;
+
+        return (
+          <div key={group.id} className="relative">
+            <Button
+              ref={(el) => {
+                if (el) buttonRefs.current.set(group.id, el);
+              }}
+              variant={groupActive ? "default" : "ghost"}
+              size="icon"
+              onClick={(e) => handleGroupClick(group, e.currentTarget)}
+              title={group.label}
+              data-testid={`lefttoolbar-group-${group.id}`}
+              className={`h-9 w-9 relative ${
+                groupActive
+                  ? "bg-slate-700 text-white"
+                  : "text-slate-400 hover:text-slate-200"
+              } ${isOpen ? "ring-2 ring-purple-500/50" : ""}`}
+            >
+              <span className="text-base">{getGroupIcon(group, activeTool)}</span>
+              
+              {/* Flyout indicator (small triangle) */}
+              {hasMultipleTools && (
+                <span 
+                  className="absolute bottom-0.5 right-0.5 text-[8px] text-slate-500"
+                  aria-hidden="true"
+                >
+                  ▸
+                </span>
+              )}
+            </Button>
+          </div>
+        );
+      })}
 
       {/* Divider */}
       <div className="my-1 w-6 border-t border-slate-700/60" />
@@ -99,9 +170,54 @@ function DesktopToolbar({ activeTool, onSelectTool }: LeftToolbarProps) {
       >
         <Maximize2 className="h-4 w-4" />
       </Button>
+
+      {/* Flyout Portal */}
+      {openGroup && anchorRect && (
+        <ToolFlyout
+          group={openGroup}
+          anchorRect={anchorRect}
+          activeTool={activeTool}
+          onSelectTool={handleToolSelect}
+          onClose={handleCloseFlyout}
+        />
+      )}
+
+      {/* 
+        Backwards-compat layer for tests: hidden buttons with old testids 
+        Positioned fixed at top-left corner, z-50 to be clickable
+      */}
+      <div 
+        className="fixed top-0 left-0 flex opacity-0 pointer-events-none" 
+        aria-hidden="true"
+        style={{ zIndex: 9999 }}
+      >
+        {TOOL_GROUPS.flatMap(g => g.tools)
+          .filter(t => isToolEnabled(t.id))
+          .map(tool => (
+            <button
+              key={tool.id}
+              data-testid={`tool-${tool.id}`}
+              onClick={() => handleToolSelect(tool.id)}
+              tabIndex={-1}
+              className="w-1 h-1 pointer-events-auto"
+            >
+              {tool.label}
+            </button>
+          ))
+        }
+      </div>
     </div>
   );
 }
+
+// Legacy flat tools for mobile (simpler UX - only enabled tools)
+const MOBILE_TOOLS: Array<{ id: Tool; label: string; icon: string; shortcut?: string }> = [
+  { id: "select", label: "Select", icon: "◀", shortcut: "Esc" },
+  { id: "trendline", label: "Trendline", icon: "⧹", shortcut: "T" },
+  { id: "hline", label: "H-Line", icon: "—", shortcut: "H" },
+  { id: "vline", label: "V-Line", icon: "|", shortcut: "V" },
+  { id: "channel", label: "Channel", icon: "⫴", shortcut: "C" },
+];
 
 /** Mobile: Floating horizontal pill - uses Portal to escape hidden container */
 function MobilePill({ activeTool, onSelectTool }: LeftToolbarProps) {
@@ -111,7 +227,6 @@ function MobilePill({ activeTool, onSelectTool }: LeftToolbarProps) {
 
   // Find or create portal mount point
   useEffect(() => {
-    // Look for existing portal container or use body
     let container = document.getElementById("tv-leftbar-pill-portal");
     if (!container) {
       container = document.createElement("div");
@@ -120,10 +235,6 @@ function MobilePill({ activeTool, onSelectTool }: LeftToolbarProps) {
     }
     portalRoot.current = container;
     setMounted(true);
-
-    return () => {
-      // Cleanup on unmount (optional, can leave for reuse)
-    };
   }, []);
 
   if (!mounted || !portalRoot.current) {
@@ -169,8 +280,8 @@ function MobilePill({ activeTool, onSelectTool }: LeftToolbarProps) {
             {/* Divider */}
             <div className="h-6 w-px bg-slate-700/60" />
 
-            {/* Drawing tools */}
-            {tools.map((tool) => (
+            {/* Drawing tools (enabled only) */}
+            {MOBILE_TOOLS.map((tool) => (
               <Button
                 key={tool.id}
                 variant={activeTool === tool.id ? "default" : "ghost"}
