@@ -171,16 +171,19 @@ test.describe("TV-20: LeftToolbar Tool Groups + Flyout", () => {
       const shapesGroup = page.locator('[data-testid="lefttoolbar-group-shapes"]');
       await shapesGroup.click();
       
+      // Wait for flyout to appear
+      const flyout = page.locator('[data-testid="lefttoolbar-flyout"]');
+      await expect(flyout).toBeVisible();
+      
       const rectangleTool = page.locator('[data-testid="lefttoolbar-tool-rectangle"]');
+      await expect(rectangleTool).toHaveAttribute("aria-disabled", "true");
       await rectangleTool.click({ force: true }); // force to bypass disabled
 
-      // Tool should not change
-      await page.waitForTimeout(200);
-      const currentTool = await page.evaluate(() => {
-        return (window as any).__lwcharts?.dump?.()?.ui?.activeTool;
-      });
-
-      expect(currentTool).toBe(initialTool);
+      // Tool should remain unchanged (poll a few times to ensure stability)
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.activeTool;
+      }, { timeout: 1000, intervals: [100, 200, 300] }).toBe(initialTool);
     });
 
     test("disabled tools show tooltip/coming soon text", async ({ page }) => {

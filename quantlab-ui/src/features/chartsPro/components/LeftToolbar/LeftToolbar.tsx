@@ -50,6 +50,13 @@ function DesktopToolbar({ activeTool, onSelectTool }: LeftToolbarProps) {
   const [openGroupId, setOpenGroupId] = useState<string | null>(null);
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
   const buttonRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+  
+  // Only render compat layer in test mode (detected by ?mock=1 or __TEST_MODE__)
+  const [isTestMode] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.location.search.includes("mock=1") || 
+           (window as any).__TEST_MODE__ === true;
+  });
 
   const handleGroupClick = useCallback((group: ToolGroup, button: HTMLButtonElement) => {
     // If clicking cursor group (only 1 tool), select directly
@@ -184,28 +191,30 @@ function DesktopToolbar({ activeTool, onSelectTool }: LeftToolbarProps) {
 
       {/* 
         Backwards-compat layer for tests: hidden buttons with old testids 
-        Positioned fixed at top-left corner, z-50 to be clickable
+        ONLY rendered in test mode (mock=1 URL param) to avoid production interference
       */}
-      <div 
-        className="fixed top-0 left-0 flex opacity-0 pointer-events-none" 
-        aria-hidden="true"
-        style={{ zIndex: 9999 }}
-      >
-        {TOOL_GROUPS.flatMap(g => g.tools)
-          .filter(t => isToolEnabled(t.id))
-          .map(tool => (
-            <button
-              key={tool.id}
-              data-testid={`tool-${tool.id}`}
-              onClick={() => handleToolSelect(tool.id)}
-              tabIndex={-1}
-              className="w-1 h-1 pointer-events-auto"
-            >
-              {tool.label}
-            </button>
-          ))
-        }
-      </div>
+      {isTestMode && (
+        <div 
+          className="fixed top-0 left-0 flex opacity-0 pointer-events-none" 
+          aria-hidden="true"
+          style={{ zIndex: 9999 }}
+        >
+          {TOOL_GROUPS.flatMap(g => g.tools)
+            .filter(t => isToolEnabled(t.id))
+            .map(tool => (
+              <button
+                key={tool.id}
+                data-testid={`tool-${tool.id}`}
+                onClick={() => handleToolSelect(tool.id)}
+                tabIndex={-1}
+                className="w-1 h-1 pointer-events-auto"
+              >
+                {tool.label}
+              </button>
+            ))
+          }
+        </div>
+      )}
     </div>
   );
 }
