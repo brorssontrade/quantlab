@@ -2262,7 +2262,13 @@ const fitToContent = useCallback(() => {
               ? [{ timeMs: d.timeMs }]
               : d.kind === "trend"
               ? [{ timeMs: d.p1.timeMs, price: d.p1.price }, { timeMs: d.p2.timeMs, price: d.p2.price }]
+              : d.kind === "rectangle"
+              ? [{ timeMs: d.p1.timeMs, price: d.p1.price }, { timeMs: d.p2.timeMs, price: d.p2.price }]
+              : d.kind === "channel"
+              ? [] // Channel references trendId
               : [],
+            // Raw p1/p2 for rectangle tests
+            ...(d.kind === "rectangle" && { p1: d.p1, p2: d.p2 }),
           })),
           // Alerts contract (count only for now, full list via API)
           alerts: {

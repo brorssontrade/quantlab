@@ -16,7 +16,7 @@ type ChartPoint = {
   snapOrigin?: { timeMs: number; price: number };
 };
 
-type DragHandle = "line" | "p1" | "p2" | "upper" | "lower" | "hline" | "vline";
+type DragHandle = "line" | "p1" | "p2" | "upper" | "lower" | "hline" | "vline" | "rect_tl" | "rect_tr" | "rect_bl" | "rect_br";
 
 type HitResult = { drawing: Drawing; handle: DragHandle };
 
@@ -518,17 +518,23 @@ export function DrawingLayer({
           }
           case "rectangle": {
             const { x, y, w, h } = geometry;
-            // Check corner handles first (p1=top-left, p2=bottom-right conceptually)
-            // But since p1/p2 can be in any order, we use actual geometry corners
-            const x1 = x;
-            const y1 = y;
-            const x2 = x + w;
-            const y2 = y + h;
-            if (distance(point.x, point.y, x1, y1) <= HANDLE_RADIUS + 2) {
-              return { drawing, handle: "p1" };
+            // All 4 corners: top-left, top-right, bottom-left, bottom-right
+            const tl = { x: x, y: y };
+            const tr = { x: x + w, y: y };
+            const bl = { x: x, y: y + h };
+            const br = { x: x + w, y: y + h };
+            // Check all 4 corner handles
+            if (distance(point.x, point.y, tl.x, tl.y) <= HANDLE_RADIUS + 2) {
+              return { drawing, handle: "rect_tl" };
             }
-            if (distance(point.x, point.y, x2, y2) <= HANDLE_RADIUS + 2) {
-              return { drawing, handle: "p2" };
+            if (distance(point.x, point.y, tr.x, tr.y) <= HANDLE_RADIUS + 2) {
+              return { drawing, handle: "rect_tr" };
+            }
+            if (distance(point.x, point.y, bl.x, bl.y) <= HANDLE_RADIUS + 2) {
+              return { drawing, handle: "rect_bl" };
+            }
+            if (distance(point.x, point.y, br.x, br.y) <= HANDLE_RADIUS + 2) {
+              return { drawing, handle: "rect_br" };
             }
             // Check if inside rectangle (for move/line handle)
             if (point.x >= x && point.x <= x + w && point.y >= y && point.y <= y + h) {
@@ -759,16 +765,44 @@ export function DrawingLayer({
               }, { transient: true, select: false });
             }
             break;
-          case "rectangle":
-            if (state.handle === "p1") {
+          case "rectangle": {
+            // Determine which p1/p2 coordinates to update based on corner handle
+            // p1 and p2 define opposite corners, geometry normalizes to top-left origin
+            const { p1, p2 } = drawing;
+            const minTime = Math.min(p1.timeMs, p2.timeMs);
+            const maxTime = Math.max(p1.timeMs, p2.timeMs);
+            const minPrice = Math.min(p1.price, p2.price);
+            const maxPrice = Math.max(p1.price, p2.price);
+            
+            if (state.handle === "rect_tl") {
+              // Top-left: change minTime, maxPrice
               pushDraft({
                 ...drawing,
                 p1: { timeMs: targetPoint.timeMs, price: targetPoint.price },
+                p2: { timeMs: maxTime, price: minPrice },
                 updatedAt: Date.now(),
               }, { transient: true, select: false });
-            } else if (state.handle === "p2") {
+            } else if (state.handle === "rect_tr") {
+              // Top-right: change maxTime, maxPrice
               pushDraft({
                 ...drawing,
+                p1: { timeMs: minTime, price: targetPoint.price },
+                p2: { timeMs: targetPoint.timeMs, price: minPrice },
+                updatedAt: Date.now(),
+              }, { transient: true, select: false });
+            } else if (state.handle === "rect_bl") {
+              // Bottom-left: change minTime, minPrice
+              pushDraft({
+                ...drawing,
+                p1: { timeMs: targetPoint.timeMs, price: maxPrice },
+                p2: { timeMs: maxTime, price: targetPoint.price },
+                updatedAt: Date.now(),
+              }, { transient: true, select: false });
+            } else if (state.handle === "rect_br") {
+              // Bottom-right: change maxTime, minPrice
+              pushDraft({
+                ...drawing,
+                p1: { timeMs: minTime, price: maxPrice },
                 p2: { timeMs: targetPoint.timeMs, price: targetPoint.price },
                 updatedAt: Date.now(),
               }, { transient: true, select: false });
@@ -784,6 +818,7 @@ export function DrawingLayer({
               }, { transient: true, select: false });
             }
             break;
+          }
           default:
             break;
         }
@@ -1372,8 +1407,12 @@ function cursorForHandle(handle: DragHandle | null) {
     case "vline":
       return CURSORS.ew;
     case "p1":
+    case "rect_tl":
+    case "rect_br":
       return CURSORS.nwse;
     case "p2":
+    case "rect_tr":
+    case "rect_bl":
       return CURSORS.nesw;
     case "line":
       return CURSORS.grab;
