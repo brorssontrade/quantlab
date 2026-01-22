@@ -86,10 +86,13 @@
 |------|---------|-------------|
 | `features/chartsPro/` | Professional charting | ChartsProTab |
 | `features/chartsPro/ChartsProTab.tsx` | Main charts component | - |
+| `features/chartsPro/ChartsProTab.tsx` | **TV-18.1: Modal state (modalOpen, modalKind) managed here, passed to ChartViewport** | - |
 | `features/chartsPro/components/` | Chart subcomponents | ChartViewport, TopBar, LeftToolbar, Toolbar, **RightPanel** |
 | `features/chartsPro/components/TopBar/` | **TV-1+: TopBar (symbol/timeframe/type), TV-10.2: Settings overlay, TV-12: Layout Manager** | TopBar.tsx, PrimaryControls.tsx, SettingsPanel.tsx, LayoutManager.tsx |
 | `features/chartsPro/components/TopBar/SettingsPanel.tsx` | **TV-10.2: Settings gear panel (appearance + scales, localStorage cp.settings.*)** | SettingsPanel, ChartSettings, DEFAULT_SETTINGS |
 | `features/chartsPro/components/TopBar/LayoutManager.tsx` | **TV-12.1-12.4: Layout save/load/delete manager (overlay panel, localStorage cp.layouts.*, JSON schema)** | LayoutManager, SavedLayout, LayoutManagerState |
+| `features/chartsPro/components/Modal/` | **TV-18.1: Modal infrastructure (central portal for indicators, alerts, etc.)** | ModalPortal |
+| `features/chartsPro/components/Modal/ModalPortal.tsx` | **TV-18.1: Central modal component (portal, Esc + click-outside, focus trap, data-testid)** | ModalPortal |
 | `features/chartsPro/components/LeftToolbar/` | **Day 7+: Left toolbar (7 tools, keyboard shortcuts, persistence, TV-3.9: responsive mobile pill)** | LeftToolbar.tsx, MobilePill.tsx, ToolButton.tsx |
 | `features/chartsPro/components/BottomBar/` | **TV-9: Bottom bar (quick ranges, scale toggles, UTC clock, persistence)** | BottomBar.tsx, useBottomBarState |
 | `features/chartsPro/components/RightPanel/TabsPanel.tsx` | **Day 8+: RightPanel tabs (Indicators/Objects/Alerts, persistence)** | TabsPanel |
@@ -98,7 +101,7 @@
 | `features/chartsPro/components/RightPanel/AlertsTab.tsx` | **TV-8: TradingView-style Alerts tab (sticky header, list, create form, sorting, theme tokens)** | AlertsTab |
 | `features/chartsPro/components/AlertMarkersLayer.tsx` | **TV-8.2: Alert markers in chart (dashed lines + bell icons at prices)** | AlertMarkersLayer |
 | `features/chartsPro/components/RightPanel/IndicatorsTab.tsx` | **Day 9+: TradingView-style Indicators tab (TV-7)** | IndicatorsTab |
-| `features/chartsPro/components/ChartViewport.tsx` | dump().ui includes `alerts` (count), `indicators` (count, names[], addOpen), **`settings` (ChartSettings | null)** | ChartViewport |
+| `features/chartsPro/components/ChartViewport.tsx` | dump().ui includes `alerts` (count), `indicators` (count, names[], addOpen), **`settings` (ChartSettings | null)**, **`modal` (TV-18.1: { open, kind })** | ChartViewport |
 | `features/chartsPro/components/ChartViewport.tsx` | Main chart renderer (lightweight-charts) | ChartViewport |
 | `features/chartsPro/utils/applyChartSettings.ts` | **TV-10.3: Adapter mapping `ChartSettings` → lwcharts options; snapshot exposure** | applyChartLevelSettings, applySeriesSettings, createAppliedSnapshot |
 | `features/chartsPro/components/DrawingLayer.tsx` | Drawing interactions (Shift+H/L for hide/lock) | DrawingLayer |

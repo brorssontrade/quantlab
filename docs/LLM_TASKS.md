@@ -1,3 +1,66 @@
+### 2026-01-22 (TV-18.1 – Central Modal Framework: Portal Infrastructure)
+
+**Status:** ✅ **COMPLETE** (Modal framework deployed, dump().ui.modal integrated, gates green)
+
+**Task Description:** Create reusable portal-based modal component for TradingView-style central modals (indicators, alerts, settings, etc.). Establishes pattern for moving overlays from RightPanel to viewport center (functional parity goal).
+
+**Root Cause & Problem:**
+- Indicators picker in RightPanel gets clipped/hidden due to width constraints
+- TradingView opens modals centrally with overlay (high z-index, full viewport width)
+- Need generic modal infrastructure that doesn't affect layout
+
+**Solution & Implementation:**
+
+1. **ModalPortal.tsx (NEW, 99 lines)**
+   - React portal renders to document.body (z-index 100, above chart)
+   - Overlay: fixed inset-0, bg-black/60, backdrop-blur-sm
+   - Content: max-w-2xl, max-h-80vh, modal-like dialog role
+   - Keyboard handling: Esc to close (capture phase for priority)
+   - Click-outside: detect click on overlay itself → close
+   - Focus management: trap focus to first focusable element (optional initialFocusSelector)
+   - Props: `open`, `kind`, `onClose`, `children`, `initialFocusSelector`
+
+2. **ChartViewport Integration**
+   - New props: `modalOpen?: boolean`, `modalKind?: string | null`
+   - New refs: `modalOpenRef`, `modalKindRef` (for dump() visibility)
+   - Extended dump().ui.modal: `{ open: boolean, kind: string | null }`
+   - Refs synced on every render (same pattern as workspaceMode, rightPanel)
+
+3. **ChartsProTab State Management**
+   - New state: `modalState = { open: boolean, kind: string | null }`
+   - Setter: `setModalState()`
+   - Props passed to ChartViewport: `modalOpen={modalState.open}, modalKind={modalState.kind}`
+
+**Files Changed:**
+- `quantlab-ui/src/features/chartsPro/components/Modal/ModalPortal.tsx` (NEW)
+- `quantlab-ui/src/features/chartsPro/components/ChartViewport.tsx` (add props + refs + dump().ui.modal)
+- `quantlab-ui/src/features/chartsPro/ChartsProTab.tsx` (add modal state + pass props)
+
+**Test Results & Gates:**
+- npm build ✅ (2467 modules, 6.56s, no errors)
+- npm run test:tvui ✅ (169/171 passed, 2 skipped – NO regressions from TV-18.1)
+- npm run test:tvparity ✅ (35/35 passed – NO layout/dump regressions)
+
+**Commit:** 68b1b1f `feat(frontend): TV-18.1 central modal framework (portal, Esc + click-outside, dump().ui.modal)`
+
+**Benefits:**
+- Established generic portal modal pattern (reusable for TV-18.2 Indicators, future Settings/Alerts modals)
+- dump().ui.modal contract available for test assertions
+- Esc + click-outside handlers don't conflict with existing keyboard logic (capture phase)
+- Zero DOM impact: portal renders at document.body root, doesn't affect TopBar/RightPanel
+- Ready for TV-18.2 implementation (just wire TopBar button → setModalKind("indicators"))
+
+**Acceptance Criteria Met:**
+- ✅ Portal renders centrally (fixed inset-0, z-100)
+- ✅ Overlay click closes modal
+- ✅ Esc key closes modal
+- ✅ dump().ui.modal = { open, kind }
+- ✅ Focus management (optional trap)
+- ✅ No DOM/testid changes to existing components
+- ✅ Gates all green (build + tvUI 169/171 + tvParity 35/35)
+
+---
+
 ### 2025-01-24 (TV-8.2 Test Hygiene – Remove describe.skip, Use gotoChartsPro, Deterministic Waits)
 **Status:** ✅ **COMPLETE** (12 tests passing, alert markers test suite refactored, deterministic)
 **Task Description:** Refactor TV-8.2 alert markers test suite to remove describe.skip, use gotoChartsPro helper, and replace fixed sleeps with deterministic waits.

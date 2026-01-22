@@ -834,11 +834,17 @@
 
 | Status | Task ID | Task | Estimated | Dependencies |
 |--------|---------|------|-----------|---|
-| 📋 READY | TV-18.1 | Central Modal Framework (Portal, overlay, Esc + click-outside, data-testid, dump().ui.modal) | 2h | None |
+| ✅ DONE | TV-18.1 | Central Modal Framework (Portal, overlay, Esc + click-outside, data-testid, dump().ui.modal) | 2h | None |
 | 📋 READY | TV-18.2 | Indicators Modal (central, not RightPanel, TradingView-likt, 1–2 tests) | 2h | TV-18.1 |
 
 **Total TV-18: 4h**  
 **Acceptance:** Indicators öppnas centralt med portal, Esc/click-outside stänger, dump().ui.modal = { open, kind }, 1-2 tests passing.
+
+**TV-18.1 Completion (2026-01-22):**
+- Commit: 68b1b1f `feat(frontend): TV-18.1 central modal framework (portal, Esc + click-outside, dump().ui.modal)`
+- Files: `Modal/ModalPortal.tsx` (new), `ChartViewport.tsx` (props + dump().ui.modal), `ChartsProTab.tsx` (modal state)
+- Gates: build ✅ (2467 modules, 6.56s), tvUI ✅ (169/171 passed), tvParity ✅ (35/35 passed)
+- dump().ui.modal structure: `{ open: boolean, kind: string | null }`
 
 ---
 
