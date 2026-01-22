@@ -357,4 +357,90 @@ test.describe("TV-19: BottomBar Functions", () => {
       }, { timeout: 2000 }).toBe("Local");
     });
   });
+
+  test.describe("TV-19.4: Scale toggles affect LightweightCharts", () => {
+    test("clicking Log changes scale mode to Logarithmic", async ({ page }) => {
+      // Click Log button
+      const logBtn = page.locator('[data-testid="bottombar-toggle-log"]');
+      await logBtn.click();
+      
+      // Wait for both chart and bottomBar state to update
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.render?.scale?.priceScaleMode;
+      }, { timeout: 3000 }).toBe("Logarithmic");
+
+      // Wait for BottomBar dump state to propagate
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.bottomBar?.scaleMode;
+      }, { timeout: 3000 }).toBe("log");
+    });
+
+    test("clicking % changes scale mode to Percentage", async ({ page }) => {
+      // Click % button
+      const percentBtn = page.locator('[data-testid="bottombar-toggle-percent"]');
+      await percentBtn.click();
+
+      // Verify dump shows Percentage
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.render?.scale?.priceScaleMode;
+      }, { timeout: 3000 }).toBe("Percentage");
+
+      // Wait for BottomBar dump state to propagate
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.bottomBar?.scaleMode;
+      }, { timeout: 3000 }).toBe("percent");
+    });
+
+    test("clicking Auto resets scale mode to Normal with autoScale", async ({ page }) => {
+      // First switch to Log
+      const logBtn = page.locator('[data-testid="bottombar-toggle-log"]');
+      await logBtn.click();
+      await page.waitForTimeout(200);
+
+      // Then click Auto
+      const autoBtn = page.locator('[data-testid="bottombar-toggle-auto"]');
+      await autoBtn.click();
+
+      // Verify dump shows Normal
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.render?.scale?.priceScaleMode;
+      }, { timeout: 3000 }).toBe("Normal");
+
+      // Wait for BottomBar dump state to propagate
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.bottomBar?.scaleMode;
+      }, { timeout: 3000 }).toBe("auto");
+    });
+
+    test("scale mode persists to localStorage", async ({ page }) => {
+      // Click Log
+      const logBtn = page.locator('[data-testid="bottombar-toggle-log"]');
+      await logBtn.click();
+      
+      // Verify localStorage
+      await expect.poll(async () => {
+        return await page.evaluate(() => window.localStorage.getItem("cp.bottomBar.scaleMode"));
+      }, { timeout: 2000 }).toBe("log");
+
+      // Click %
+      const percentBtn = page.locator('[data-testid="bottombar-toggle-percent"]');
+      await percentBtn.click();
+      
+      await expect.poll(async () => {
+        return await page.evaluate(() => window.localStorage.getItem("cp.bottomBar.scaleMode"));
+      }, { timeout: 2000 }).toBe("percent");
+    });
+
+    test("ADJ button is disabled", async ({ page }) => {
+      const adjBtn = page.locator('[data-testid="bottombar-toggle-adj"]');
+      await expect(adjBtn).toBeVisible();
+      await expect(adjBtn).toBeDisabled();
+    });
+  });
 });

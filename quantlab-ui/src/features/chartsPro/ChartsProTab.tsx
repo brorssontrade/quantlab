@@ -251,6 +251,17 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
       return "UTC";
     }
   });
+  // TV-19.4: Scale mode (auto/log/percent) - controlled by ChartsProTab
+  const [scaleMode, setScaleMode] = useState<"auto" | "log" | "percent">(() => {
+    if (typeof window === "undefined") return "auto";
+    try {
+      const stored = window.localStorage?.getItem("cp.bottomBar.scaleMode");
+      if (stored === "log" || stored === "percent") return stored;
+      return "auto";
+    } catch {
+      return "auto";
+    }
+  });
   // TV-18.1: Modal state (central portal for indicators/other modals)
   const [modalState, setModalState] = useState<{ open: boolean; kind: string | null }>({ open: false, kind: null });
   const [workspaceMode, setWorkspaceMode] = useState(() => loadWorkspaceLayout().mode);
@@ -347,6 +358,17 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
     setTimezoneMode(mode);
     try {
       window.localStorage?.setItem("cp.bottomBar.timezoneMode", mode);
+    } catch {
+      // ignore storage errors
+    }
+  }, []);
+
+  // TV-19.4: Handle scale mode change (auto/log/percent)
+  const handleScaleModeChange = useCallback((mode: string) => {
+    const validMode = mode === "log" || mode === "percent" ? mode : "auto";
+    setScaleMode(validMode);
+    try {
+      window.localStorage?.setItem("cp.bottomBar.scaleMode", validMode);
     } catch {
       // ignore storage errors
     }
@@ -857,6 +879,7 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
                   timeframe={timeframe as Tf}
                   chartType={chartType}
                   chartSettings={settings}
+                  priceScaleMode={scaleMode}
                   drawings={drawingsStore.drawings}
                   selectedId={drawingsStore.selectedId}
                   indicators={drawingsStore.indicators}
@@ -947,6 +970,8 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
                 timezoneMode={timezoneMode}
                 onTimezoneToggle={handleTimezoneToggle}
                 marketStatus={loading ? "LOADING" : mode === "live" ? "LIVE" : mode === "demo" ? "DEMO" : "OFFLINE"}
+                scaleMode={scaleMode}
+                onScaleModeChange={handleScaleModeChange}
               />
             </div>
             {!workspaceMode && !isMobile && !sidebarCollapsed && (

@@ -358,6 +358,8 @@ interface ChartViewportProps {
   timeframe: Tf;
   chartType?: ChartTypeProp;
   chartSettings?: ChartSettings;
+  /** TV-19.4: Price scale mode controlled by BottomBar (auto/log/percent) */
+  priceScaleMode?: "auto" | "log" | "percent";
   drawings: Drawing[];
   selectedId: string | null;
   indicators: IndicatorInstance[];
@@ -409,6 +411,7 @@ export function ChartViewport({
   timeframe,
   chartType = "candles",
   chartSettings,
+  priceScaleMode = "auto",
   drawings,
   selectedId,
   indicators,
@@ -1376,13 +1379,14 @@ const fitToContent = useCallback(() => {
     });
     try {
       const rightScale = chart.priceScale("right");
+      // TV-19.4: Respect the current scale mode instead of forcing Normal
+      const currentMode = baseScaleModeRef.current ?? PriceScaleMode.Normal;
       rightScale.applyOptions({
-        mode: PriceScaleMode.Normal,
+        mode: currentMode,
         borderVisible: false,
         alignLabels: true,
         scaleMargins: { top: 0.1, bottom: 0.3 },
       });
-      baseScaleModeRef.current = PriceScaleMode.Normal;
     } catch {
       // ignore
     }
@@ -2998,10 +3002,21 @@ const fitToContent = useCallback(() => {
 
     const appearance = resolveAppearance();
 
+    // TV-19.4: Map priceScaleMode prop to LightweightCharts PriceScaleMode
+    const lwScaleMode = priceScaleMode === "log" 
+      ? PriceScaleMode.Logarithmic 
+      : priceScaleMode === "percent" 
+        ? PriceScaleMode.Percentage 
+        : PriceScaleMode.Normal;
+    
+    // Update ref for dump() exposure
+    baseScaleModeRef.current = lwScaleMode;
+
     chart.applyOptions({
       layout: { attributionLogo: false } as any,
       rightPriceScale: {
-        mode: PriceScaleMode.Normal,
+        mode: lwScaleMode,
+        autoScale: priceScaleMode === "auto",
         borderVisible: false,
         alignLabels: true,
         scaleMargins: { top: 0.1, bottom: 0.3 },
@@ -3069,12 +3084,13 @@ const fitToContent = useCallback(() => {
 
     try {
       chart.priceScale("right").applyOptions({
-        mode: PriceScaleMode.Normal,
+        mode: lwScaleMode,
+        autoScale: priceScaleMode === "auto",
         borderVisible: false,
         alignLabels: true,
         scaleMargins: { top: 0.1, bottom: 0.3 },
       });
-      baseScaleModeRef.current = PriceScaleMode.Normal;
+      baseScaleModeRef.current = lwScaleMode;
     } catch {
       // no-op if right scale is unavailable
     }
@@ -3085,7 +3101,7 @@ const fitToContent = useCallback(() => {
       scaleMargins: { top: 0.8, bottom: 0 },
     });
     rebindTestApiWithSample();
-  }, [chartType, rebindTestApiWithSample, resolveAppearance, theme.volumeNeutral]);
+  }, [chartType, priceScaleMode, rebindTestApiWithSample, resolveAppearance, theme.volumeNeutral]);
   ensureBaseSeriesRef.current = ensureBaseSeries;
 
   useEffect(() => {
