@@ -378,6 +378,9 @@ interface ChartViewportProps {
   sidebarCollapsed?: boolean;
   sidebarWidth?: number;
   rightPanelActiveTab?: "indicators" | "objects" | "alerts" | null;
+  // TV-18.1: Modal state (central portal)
+  modalOpen?: boolean;
+  modalKind?: string | null;
 }
 
 type CandlestickSeries = ISeriesApi<"Candlestick">;
@@ -426,6 +429,9 @@ export function ChartViewport({
   sidebarCollapsed = false,
   sidebarWidth = 320,
   rightPanelActiveTab = null,
+  // TV-18.1: Modal state
+  modalOpen = false,
+  modalKind = null,
 }: ChartViewportProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -487,6 +493,9 @@ export function ChartViewport({
   const sidebarCollapsedRef = useRef(sidebarCollapsed);
   const sidebarWidthRef = useRef(sidebarWidth);
   const rightPanelActiveTabRef = useRef<string | null>(rightPanelActiveTab);
+  // TV-18.1: Modal refs
+  const modalOpenRef = useRef(modalOpen);
+  const modalKindRef = useRef<string | null>(modalKind ?? null);
   const chartSettingsRef = useRef<ChartSettings | undefined>(chartSettings);
   const appliedSettingsRef = useRef<AppliedSettingsSnapshot | null>(null); // TV-10.3: Track applied settings
   const timeframeRef = useRef<string>(timeframe); // TV-11: Track current timeframe for dump()
@@ -494,6 +503,8 @@ export function ChartViewport({
   sidebarCollapsedRef.current = sidebarCollapsed;
   sidebarWidthRef.current = sidebarWidth;
   rightPanelActiveTabRef.current = rightPanelActiveTab;
+  modalOpenRef.current = modalOpen; // TV-18.1
+  modalKindRef.current = modalKind ?? null; // TV-18.1
   chartTypeRef.current = chartType; // Sync current chartType prop to ref for dump()
   chartSettingsRef.current = chartSettings; // Sync settings for dump()
   timeframeRef.current = timeframe; // Sync timeframe for dump()
@@ -2143,6 +2154,11 @@ const fitToContent = useCallback(() => {
               activeTab: rightPanelActiveTabRef.current,
               collapsed: sidebarCollapsedRef.current,
               width: sidebarWidthRef.current,
+            },
+            // TV-18.1: Modal state
+            modal: {
+              open: modalOpenRef.current,
+              kind: modalKindRef.current,
             },
             indicators: {
               count: Array.isArray(indicators) ? indicators.length : 0,

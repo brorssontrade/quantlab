@@ -238,6 +238,8 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
   const [settings, setSettings] = useState<ChartSettings>(() => loadSettings());
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
   const [layoutManagerOpen, setLayoutManagerOpen] = useState(false);
+  // TV-18.1: Modal state (central portal for indicators/other modals)
+  const [modalState, setModalState] = useState<{ open: boolean; kind: string | null }>({ open: false, kind: null });
   const [workspaceMode, setWorkspaceMode] = useState(() => loadWorkspaceLayout().mode);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => loadWorkspaceLayout().sidebarCollapsed);
   const [sidebarWidth] = useState(() => loadWorkspaceLayout().sidebarWidth);
@@ -884,6 +886,9 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
                   sidebarCollapsed={sidebarCollapsed}
                   sidebarWidth={sidebarWidth}
                   rightPanelActiveTab={workspaceMode ? rightPanelActiveTab : null}
+                  
+                  modalOpen={modalState.open}
+                  modalKind={modalState.kind}
                 />
               </div>
               
