@@ -94,4 +94,26 @@ test.describe("TV-18.2: Indicators Modal (central)", () => {
     expect(dumpAfter?.ui?.indicators?.count).toBe(initialCount + 1);
     expect(dumpAfter?.ui?.indicators?.names?.includes("sma")).toBe(true);
   });
+
+  test("TV-18.3: modal content bbox matches dialog bbox (no extra space)", async ({ page }, testInfo) => {
+    await page.goto("/?mock=1");
+    await gotoChartsPro(page, testInfo);
+
+    // Open modal
+    await page.getByTestId("topbar-indicators-btn").click();
+    await expect(page.getByTestId("indicators-modal")).toBeVisible();
+
+    // Get bboxes
+    const contentBox = await page.getByTestId("modal-content").boundingBox();
+    const dialogBox = await page.getByTestId("indicators-modal").boundingBox();
+
+    expect(contentBox).not.toBeNull();
+    expect(dialogBox).not.toBeNull();
+
+    if (contentBox && dialogBox) {
+      // Content wrapper should be approximately same width as dialog (tolerance 20px for margin/padding)
+      const widthDiff = Math.abs(contentBox.width - dialogBox.width);
+      expect(widthDiff).toBeLessThan(20);
+    }
+  });
 });

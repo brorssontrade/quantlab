@@ -91,7 +91,7 @@ export function ModalPortal({ open, kind, onClose, children, initialFocusSelecto
         ref={contentRef}
         data-testid="modal-content"
         data-modal-kind={kind}
-        className="relative max-h-[80vh] max-w-2xl w-full mx-4 bg-slate-900 border border-slate-700 rounded-lg shadow-2xl overflow-hidden"
+        className="relative max-h-[80vh] mx-4"
       >
         {children}
       </div>

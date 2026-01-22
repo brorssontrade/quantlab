@@ -45,7 +45,7 @@ export function IndicatorsModal({ onAdd, onClose }: IndicatorsModalProps) {
 
   return (
     <div
-      className="w-[400px] max-w-[90vw] rounded-lg border shadow-lg"
+      className="w-[400px] max-w-[90vw] rounded-lg border shadow-2xl"
       style={{
         backgroundColor: "var(--cp-panel-bg)",
         borderColor: "var(--cp-panel-border)",
