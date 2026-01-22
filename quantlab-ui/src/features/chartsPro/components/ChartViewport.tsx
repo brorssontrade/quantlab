@@ -1731,6 +1731,7 @@ const fitToContent = useCallback(() => {
       const timeScale = chartRef.current ? chartRef.current.timeScale() : null;
       let barSpacing: number | null = barSpacingRef.current ?? null;
       let visibleRange: { from: number | null; to: number | null } | null = null;
+      let visibleTimeRange: { from: number | null; to: number | null } | null = null;
       let scrollPosition: number | null = null;
       try {
         const opts = typeof timeScale?.options === "function" ? (timeScale as any).options?.() : null;
@@ -1740,6 +1741,14 @@ const fitToContent = useCallback(() => {
         const range = typeof timeScale?.getVisibleLogicalRange === "function" ? timeScale.getVisibleLogicalRange() : null;
         if (range && typeof range.from === "number" && typeof range.to === "number") {
           visibleRange = { from: range.from, to: range.to };
+        }
+        // Also get actual time range (unix timestamps) for TV-19.2 tests
+        const timeRange = typeof timeScale?.getVisibleRange === "function" ? timeScale.getVisibleRange() : null;
+        if (timeRange && (typeof timeRange.from === "number" || typeof (timeRange.from as any) === "number")) {
+          visibleTimeRange = { 
+            from: Number(timeRange.from), 
+            to: Number(timeRange.to) 
+          };
         }
         if (typeof timeScale?.scrollPosition === "function") {
           scrollPosition = timeScale.scrollPosition();
@@ -1807,9 +1816,10 @@ const fitToContent = useCallback(() => {
         bgColor,
         barSpacing,
         visibleRange,
+        visibleTimeRange,
         scrollPosition,
         // Also expose a compact `scale` object to make QA assertions simpler
-        scale: { barSpacing, visibleRange, scrollPosition },
+        scale: { barSpacing, visibleRange, visibleTimeRange, scrollPosition },
         seriesType: baseSeriesTypeRef.current,
         candlePalette: {
           up: themeSnapshot.candleUp,
@@ -2047,6 +2057,18 @@ const fitToContent = useCallback(() => {
               barSpacing: barSpacingRef.current,
               rightOffset: chartRef.current?.timeScale().scrollPosition() ?? 0,
               priceScaleMode: describePriceScaleMode(baseScaleModeRef.current),
+              visibleTimeRange: (() => {
+                try {
+                  const timeScale = chartRef.current?.timeScale();
+                  const range = timeScale?.getVisibleRange?.();
+                  if (range && range.from != null && range.to != null) {
+                    return { from: Number(range.from), to: Number(range.to) };
+                  }
+                } catch {
+                  // ignore
+                }
+                return null;
+              })(),
             },
           },
           percent: percentBlock,

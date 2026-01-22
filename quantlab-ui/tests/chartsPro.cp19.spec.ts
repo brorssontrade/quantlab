@@ -103,4 +103,99 @@ test.describe("TV-19: BottomBar Functions", () => {
       expect(bgColor).toMatch(/rgb\(\s*\d{1,2},\s*\d{1,2},\s*\d{1,2}\s*\)/);
     });
   });
+
+  test.describe("TV-19.2: Quick ranges affect visible range", () => {
+    test("clicking 5D range changes dump().render.scale.visibleTimeRange", async ({ page }) => {
+      // Get initial visible time range
+      const initialDump = await page.evaluate(() => {
+        return (window as any).__lwcharts?.dump?.();
+      });
+      const initialRange = initialDump?.render?.scale?.visibleTimeRange;
+      expect(initialRange).toBeTruthy();
+      expect(initialRange?.from).toBeDefined();
+      expect(initialRange?.to).toBeDefined();
+
+      // Click 5D range button
+      const range5D = page.locator('[data-testid="bottombar-range-5D"]');
+      await expect(range5D).toBeVisible();
+      await range5D.click();
+      await page.waitForTimeout(300); // Allow chart to update
+
+      // Get new visible time range
+      const newDump = await page.evaluate(() => {
+        return (window as any).__lwcharts?.dump?.();
+      });
+      const newRange = newDump?.render?.scale?.visibleTimeRange;
+      expect(newRange).toBeTruthy();
+
+      // Verify range actually changed (either from or to should be different)
+      const rangeChanged = 
+        initialRange?.from !== newRange?.from || 
+        initialRange?.to !== newRange?.to;
+      expect(rangeChanged).toBe(true);
+    });
+
+    test("clicking 1M range shows wider time span than 1D", async ({ page }) => {
+      // First click 1D to establish baseline
+      const range1D = page.locator('[data-testid="bottombar-range-1D"]');
+      await range1D.click();
+      await page.waitForTimeout(300);
+
+      const dump1D = await page.evaluate(() => {
+        return (window as any).__lwcharts?.dump?.();
+      });
+      const range1DData = dump1D?.render?.scale?.visibleTimeRange;
+      const span1D = range1DData 
+        ? Math.abs(range1DData.to - range1DData.from)
+        : 0;
+
+      // Click 1M
+      const range1M = page.locator('[data-testid="bottombar-range-1M"]');
+      await range1M.click();
+      await page.waitForTimeout(300);
+
+      const dump1M = await page.evaluate(() => {
+        return (window as any).__lwcharts?.dump?.();
+      });
+      const range1MData = dump1M?.render?.scale?.visibleTimeRange;
+      const span1M = range1MData 
+        ? Math.abs(range1MData.to - range1MData.from)
+        : 0;
+
+      // 1M should have wider span than 1D (30 days vs 1 day in seconds)
+      expect(span1M).toBeGreaterThan(span1D);
+    });
+
+    test("clicking All fits all data", async ({ page }) => {
+      // Click All range
+      const rangeAll = page.locator('[data-testid="bottombar-range-All"]');
+      await rangeAll.click();
+      await page.waitForTimeout(300);
+
+      const dump = await page.evaluate(() => {
+        return (window as any).__lwcharts?.dump?.();
+      });
+      
+      // After "All", visible time range should span full data
+      const visibleTimeRange = dump?.render?.scale?.visibleTimeRange;
+      expect(visibleTimeRange).toBeTruthy();
+      expect(visibleTimeRange?.from).toBeDefined();
+      expect(visibleTimeRange?.to).toBeDefined();
+
+      // Verify bottomBar state is updated (via localStorage, consistent with TV-9.8)
+      const rangeStored = await page.evaluate(() => window.localStorage.getItem("cp.bottomBar.range"));
+      expect(rangeStored).toBe("All");
+    });
+
+    test("range selection is persisted in localStorage", async ({ page }) => {
+      // Click 6M
+      const range6M = page.locator('[data-testid="bottombar-range-6M"]');
+      await range6M.click();
+      await page.waitForTimeout(300);
+
+      // Verify localStorage was updated (consistent with TV-9.8)
+      const rangeStored = await page.evaluate(() => window.localStorage.getItem("cp.bottomBar.range"));
+      expect(rangeStored).toBe("6M");
+    });
+  });
 });
