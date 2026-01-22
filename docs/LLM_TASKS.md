@@ -1,3 +1,56 @@
+### 2026-01-22 (TV-19.2b – Quick Ranges Hotfix: Bar-Index Based Window)
+
+**Status:** ✅ **COMPLETE** (Quick ranges work correctly, dates no longer drift to 1970)
+
+**Task Description:** Fix broken quick ranges (5D, 1M, All) that showed wrong dates (1980 artifacts, blank candles) in real UI despite tests passing.
+
+**Root Cause:**
+```tsx
+// BUG: data[...].time is already UTCTimestamp (seconds), but:
+Math.floor(new Date(data[data.length - 1].time).getTime() / 1000)
+// new Date(seconds) interprets seconds as milliseconds → 1970 dates
+```
+
+**Solution & Implementation:**
+
+1. **BottomBar.tsx**
+   - Added `DataBounds` interface: `{ firstBarTime, lastBarTime, dataCount, barTimes: number[] }`
+   - Replaced time-minus-days logic with bar-index based:
+     ```tsx
+     const RANGE_BARS = { "1D": 1, "5D": 5, "1M": 22, "6M": 130, "1Y": 252, "All": null, "YTD": null };
+     const fromIndex = Math.max(0, dataCount - barsToShow);
+     const fromTime = barTimes[fromIndex] ?? minTime;
+     timeScale.setVisibleRange({ from: fromTime, to: maxTime });
+     ```
+   - Updated `canSelect`: `(dataBounds?.dataCount ?? 0) > 0`
+
+2. **ChartsProTab.tsx**
+   - Fixed dataBounds prop (use `Number(data[...].time)` directly, no Date conversion)
+
+3. **ChartViewport.tsx**
+   - Exposed `dataBounds` in dump() for QA
+
+4. **chartsPro.cp19.spec.ts (TV-19.2b robust tests)**
+   - `visibleTimeRange.to ≈ dataBounds.lastBarTime` after any range click
+   - Year > 2000 sanity checks (catches 1970/1980 drift)
+   - `lastPrice.time` within visibleTimeRange
+
+**Files Changed:**
+- `quantlab-ui/src/features/chartsPro/components/BottomBar/BottomBar.tsx`
+- `quantlab-ui/src/features/chartsPro/ChartsProTab.tsx`
+- `quantlab-ui/src/features/chartsPro/components/ChartViewport/ChartViewport.tsx`
+- `quantlab-ui/tests/chartsPro.cp19.spec.ts`
+
+**Test Results & Gates:**
+- npm build ✅ (2469 modules)
+- chartsPro.cp19 ✅ (9/9 passed)
+- tvUI ✅ (169 passed, 2 skipped)
+- tvParity ✅ (36/36 passed)
+
+**Commit:** d0b2229 `fix(frontend): TV-19.2b quick ranges use bar-index window + robust invariants`
+
+---
+
 ### 2026-01-22 (TV-18.2 – Indicators Modal: Central, TradingView-Style)
 
 **Status:** ✅ **COMPLETE** (Indicators modal deployed, TopBar + RightPanel wiring, tests green)
