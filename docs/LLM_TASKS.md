@@ -1,3 +1,72 @@
+### 2026-01-22 (TV-18.2 – Indicators Modal: Central, TradingView-Style)
+
+**Status:** ✅ **COMPLETE** (Indicators modal deployed, TopBar + RightPanel wiring, tests green)
+
+**Task Description:** Move indicator picker from RightPanel overlay to central modal (TradingView-style). When clicking TopBar "Indicators" button or RightPanel "Add" button, open central IndicatorsModal via ModalPortal infrastructure from TV-18.1.
+
+**Root Cause & Problem:**
+- Indicators overlay in RightPanel (300px width) clips picker content
+- TradingView opens indicator picker in central modal (400px+, full viewport overlay)
+- Modal infrastructure (TV-18.1) ready, need to wire it for Indicators
+
+**Solution & Implementation:**
+
+1. **IndicatorsModal.tsx (NEW, 107 lines)**
+   - Extracted picker UI from IndicatorsTab overlay
+   - Search field with auto-focus (useEffect + setTimeout)
+   - Indicator list (SMA, EMA, RSI, MACD) with filter
+   - Click indicator → onAdd callback → onClose()
+   - Modal header with `id="modal-title"` (a11y match for ModalPortal)
+   - data-testid: `indicators-modal`, `indicators-modal-search`, `indicators-modal-add-{kind}`, `indicators-modal-close`
+
+2. **ChartsProTab Wiring**
+   - handleIndicatorsClick: `setModalState({ open: true, kind: "indicators" })`
+   - ModalPortal rendered at end of component: `<ModalPortal open={...} kind="indicators">...</ModalPortal>`
+   - IndicatorsModal receives `onAdd={drawingsStore.addIndicator}`, `onClose={setModalState close}`
+
+3. **IndicatorsTab Simplification (list view only)**
+   - Removed overlay code (238-321 lines deleted)
+   - Added `onOpenModal` prop for Add button
+   - Click Add → calls `onOpenModal()` → opens modal
+
+**Files Changed:**
+- `quantlab-ui/src/features/chartsPro/components/Modal/IndicatorsModal.tsx` (NEW)
+- `quantlab-ui/src/features/chartsPro/ChartsProTab.tsx` (imports + handleIndicatorsClick + ModalPortal render)
+- `quantlab-ui/src/features/chartsPro/components/RightPanel/IndicatorsTab.tsx` (simplified, overlay removed)
+- `quantlab-ui/tests/chartsPro.cp18.spec.ts` (NEW, 4 tests)
+- `quantlab-ui/tests/chartsPro.tvUi.indicators.tab.spec.ts` (updated for modal)
+- `quantlab-ui/tests/chartsPro.tvUi.topbar.actions.spec.ts` (updated for modal)
+
+**Test Results & Gates:**
+- npm build ✅ (2469 modules, no errors)
+- npm run test:tvui ✅ (169/171 passed, 2 skipped – NO regressions)
+- npm run test:tvparity ✅ (35/35 passed – NO layout regressions)
+
+**Commit:** c83351d `feat(frontend): TV-18.2 indicators modal (central, TradingView-style)`
+
+**Behavior Changes:**
+- TopBar Indicators button → opens modal (was: open RightPanel + addOpen)
+- RightPanel Add button → opens modal (was: internal overlay)
+- RightPanel Indicators tab → list view only (installed indicators management)
+- dump().ui.modal.kind === "indicators" when modal open
+
+**Tests Added/Updated:**
+- NEW `chartsPro.cp18.spec.ts` (4 tests): modal opens, Esc closes, X closes, add indicator
+- UPDATED `indicators.tab.spec.ts`: uses modal testids, removed overlay assertions
+- UPDATED `topbar.actions.spec.ts`: expects modal instead of RightPanel activeTab
+
+**Acceptance Criteria Met:**
+- ✅ TopBar Indicators opens central modal
+- ✅ RightPanel Add opens central modal
+- ✅ Modal has search field (auto-focused)
+- ✅ Adding indicator adds to chart + closes modal
+- ✅ Esc closes modal
+- ✅ X button closes modal
+- ✅ dump().ui.modal = { open: true, kind: "indicators" }
+- ✅ All tests green (169/171 + 35/35)
+
+---
+
 ### 2026-01-22 (TV-18.1 – Central Modal Framework: Portal Infrastructure)
 
 **Status:** ✅ **COMPLETE** (Modal framework deployed, dump().ui.modal integrated, gates green)

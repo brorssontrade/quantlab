@@ -835,9 +835,9 @@
 | Status | Task ID | Task | Estimated | Dependencies |
 |--------|---------|------|-----------|---|
 | ✅ DONE | TV-18.1 | Central Modal Framework (Portal, overlay, Esc + click-outside, data-testid, dump().ui.modal) | 2h | None |
-| 📋 READY | TV-18.2 | Indicators Modal (central, not RightPanel, TradingView-likt, 1–2 tests) | 2h | TV-18.1 |
+| ✅ DONE | TV-18.2 | Indicators Modal (central, not RightPanel, TradingView-likt, 1–2 tests) | 2h | TV-18.1 |
 
-**Total TV-18: 4h**  
+**Total TV-18: 4h** ✅ COMPLETE  
 **Acceptance:** Indicators öppnas centralt med portal, Esc/click-outside stänger, dump().ui.modal = { open, kind }, 1-2 tests passing.
 
 **TV-18.1 Completion (2026-01-22):**
@@ -845,6 +845,13 @@
 - Files: `Modal/ModalPortal.tsx` (new), `ChartViewport.tsx` (props + dump().ui.modal), `ChartsProTab.tsx` (modal state)
 - Gates: build ✅ (2467 modules, 6.56s), tvUI ✅ (169/171 passed), tvParity ✅ (35/35 passed)
 - dump().ui.modal structure: `{ open: boolean, kind: string | null }`
+
+**TV-18.2 Completion (2026-01-22):**
+- Commit: c83351d `feat(frontend): TV-18.2 indicators modal (central, TradingView-style)`
+- Files: `Modal/IndicatorsModal.tsx` (new), `ChartsProTab.tsx` (wiring), `IndicatorsTab.tsx` (simplified to list view)
+- Tests: `chartsPro.cp18.spec.ts` (4 new tests), updated `indicators.tab.spec.ts` + `topbar.actions.spec.ts`
+- Gates: build ✅ (2469 modules), tvUI ✅ (169/171 passed), tvParity ✅ (35/35 passed)
+- Behavior: TopBar Indicators + RightPanel Add button → opens modal, not overlay
 
 ---
 
