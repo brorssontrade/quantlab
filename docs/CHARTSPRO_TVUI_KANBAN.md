@@ -828,6 +828,68 @@
 
 ---
 
+## Phase 9: Modal Framework (Central Portal) — Functional Parity Week 4
+
+### 9.1 TV-18 Modal Infrastructure
+
+| Status | Task ID | Task | Estimated | Dependencies |
+|--------|---------|------|-----------|---|
+| 📋 READY | TV-18.1 | Central Modal Framework (Portal, overlay, Esc + click-outside, data-testid, dump().ui.modal) | 2h | None |
+| 📋 READY | TV-18.2 | Indicators Modal (central, not RightPanel, TradingView-likt, 1–2 tests) | 2h | TV-18.1 |
+
+**Total TV-18: 4h**  
+**Acceptance:** Indicators öppnas centralt med portal, Esc/click-outside stänger, dump().ui.modal = { open, kind }, 1-2 tests passing.
+
+---
+
+## Phase 10: BottomBar Functional Parity — Functional Parity Week 4
+
+### 10.1 TV-19 BottomBar Functions
+
+| Status | Task ID | Task | Estimated | Dependencies |
+|--------|---------|------|-----------|---|
+| 📋 READY | TV-19.1 | X-axis crosshair time label (black box, TradingView-style) | 1.5h | TV-9.x |
+| 📋 READY | TV-19.2 | Quick ranges (1D/5D/1M/…) affect chart visible range (dump().render.timeRange) | 1.5h | TV-9.x |
+| 📋 READY | TV-19.3 | Timezone + market status (UTC + RTH/EXT or OPEN/CLOSED stub) | 1h | TV-9.x |
+| 📋 READY | TV-19.4 | Scale toggles (Auto/Log/%/ADJ) affect chart options (dump().render.appliedSettings) | 1.5h | TV-9.x, TV-10.3 |
+
+**Total TV-19: 5.5h**  
+**Acceptance:** BottomBar controls affect chart state deterministiskt, dump() verifierar state, 1-2 tests per feature.
+
+---
+
+## Phase 11: LeftToolbar Extended (Drawings Reliability + New Tools) — Functional Parity Week 5
+
+### 11.1 TV-20 LeftToolbar Drawings
+
+| Status | Task ID | Task | Estimated | Dependencies |
+|--------|---------|------|-----------|---|
+| 📋 READY | TV-20.1 | ToolGroups UI (TradingView-likt flyout: Fibo/Gann, Shapes, Text, Patterns, Measure, Channels, Pitchforks) | 2h | TV-3.x |
+| 📋 READY | TV-20.2 | Shapes (Rectangle + Circle) MVP + 1–2 tests | 2h | TV-20.1 |
+| 📋 READY | TV-20.3 | Text tool MVP + 1 test | 1.5h | TV-20.1 |
+| 📋 READY | TV-20.4 | Measure tools (Price Range / Date Range / Date+Price) MVP + 1 test | 2h | TV-20.1 |
+| 📋 READY | TV-20.5 | Fibonacci Retracement MVP + 1 test | 2.5h | TV-20.1 |
+
+**Total TV-20: 10h**  
+**Acceptance:** ToolGroups UI + flyout, 5 nya tools implementerade med create/move/delete, dump().objects verifierar, 1-2 tests per tool.
+
+---
+
+## Phase 12: Chart Types (Transforms + Alternative Visualizations) — Functional Parity Week 6
+
+### 12.1 TV-21 Chart Types
+
+| Status | Task ID | Task | Estimated | Dependencies |
+|--------|---------|------|-----------|---|
+| 📋 READY | TV-21.1 | Heikin Ashi (transform OHLC → HA + render, 1 test) | 3h | None |
+
+**Total TV-21: 3h (initial)**  
+**Acceptance:** Heikin Ashi chart type funkar, transformation testad med fixture, dump() visar chartType.
+
+**Future Epics (TV-22.x):** Renko, Kagi, Point & Figure, Line Break, Range charts, Orderflow (Footprint, TPO, Session Volume Profile) – separate backlog.
+
+---
+
 ## Summary & Totals
 
 | Phase | Task Group | Hours | Week |
@@ -840,7 +902,11 @@
 | 6 | Settings + Layout Naming | 12h | Week 3 |
 | 7 | Visual Polish (spacing/borders/responsive) | 11.5h | Week 3 |
 | 8 | Playwright Test Suite | 9h | Week 3 |
-| **TOTAL** | | **82.25h** | **3 weeks** |
+| **9** | **Modal Framework (Indicators Central)** | **4h** | **Week 4** |
+| **10** | **BottomBar Functional Parity** | **5.5h** | **Week 4** |
+| **11** | **LeftToolbar Extended (Drawings + Tools)** | **10h** | **Week 5** |
+| **12** | **Chart Types (Heikin Ashi MVP)** | **3h** | **Week 6** |
+| **TOTAL (Phase 1-12)** | | **105.75h** | **6 weeks** |
 
 ---
 
