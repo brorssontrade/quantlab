@@ -45,7 +45,7 @@ export interface OhlcvResponse {
   meta?: Record<string, unknown>;
 }
 
-export type DrawingKind = "hline" | "vline" | "trend" | "channel";
+export type DrawingKind = "hline" | "vline" | "trend" | "channel" | "rectangle";
 
 export interface DrawingStyle {
   color: string;
@@ -97,7 +97,16 @@ export interface Channel extends DrawingBase {
   lockWidth?: boolean;
 }
 
-export type Drawing = HLine | VLine | Trend | Channel;
+/** Rectangle zone - two corners define the box */
+export interface Rectangle extends DrawingBase {
+  kind: "rectangle";
+  p1: TrendPoint; // top-left or start corner
+  p2: TrendPoint; // bottom-right or end corner
+  fillColor?: string;
+  fillOpacity?: number; // 0-1, default 0.1
+}
+
+export type Drawing = HLine | VLine | Trend | Channel | Rectangle;
 
 export interface CompareSeriesConfig {
   id: string;

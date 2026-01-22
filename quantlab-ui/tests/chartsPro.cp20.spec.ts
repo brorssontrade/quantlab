@@ -152,13 +152,13 @@ test.describe("TV-20: LeftToolbar Tool Groups + Flyout", () => {
 
   test.describe("TV-20.1: Disabled Tools", () => {
     test("disabled tools have aria-disabled attribute", async ({ page }) => {
-      // Open shapes group (rectangle is disabled)
+      // Open shapes group (circle is disabled)
       const shapesGroup = page.locator('[data-testid="lefttoolbar-group-shapes"]');
       await shapesGroup.click();
 
-      // Rectangle should be disabled
-      const rectangleTool = page.locator('[data-testid="lefttoolbar-tool-rectangle"]');
-      await expect(rectangleTool).toHaveAttribute("aria-disabled", "true");
+      // Circle should be disabled
+      const circleTool = page.locator('[data-testid="lefttoolbar-tool-circle"]');
+      await expect(circleTool).toHaveAttribute("aria-disabled", "true");
     });
 
     test("clicking disabled tool does not change active tool", async ({ page }) => {
@@ -167,7 +167,7 @@ test.describe("TV-20: LeftToolbar Tool Groups + Flyout", () => {
         return (window as any).__lwcharts?.dump?.()?.ui?.activeTool;
       });
 
-      // Open shapes group and try to click rectangle (disabled)
+      // Open shapes group and try to click circle (disabled)
       const shapesGroup = page.locator('[data-testid="lefttoolbar-group-shapes"]');
       await shapesGroup.click();
       
@@ -175,9 +175,9 @@ test.describe("TV-20: LeftToolbar Tool Groups + Flyout", () => {
       const flyout = page.locator('[data-testid="lefttoolbar-flyout"]');
       await expect(flyout).toBeVisible();
       
-      const rectangleTool = page.locator('[data-testid="lefttoolbar-tool-rectangle"]');
-      await expect(rectangleTool).toHaveAttribute("aria-disabled", "true");
-      await rectangleTool.click({ force: true }); // force to bypass disabled
+      const circleTool = page.locator('[data-testid="lefttoolbar-tool-circle"]');
+      await expect(circleTool).toHaveAttribute("aria-disabled", "true");
+      await circleTool.click({ force: true }); // force to bypass disabled
 
       // Tool should remain unchanged (poll a few times to ensure stability)
       await expect.poll(async () => {
@@ -262,6 +262,131 @@ test.describe("TV-20: LeftToolbar Tool Groups + Flyout", () => {
         return (window as any).__lwcharts?.dump?.()?.ui?.activeTool;
       });
       expect(activeTool).toBeTruthy();
+    });
+  });
+
+  test.describe("TV-20.2: Rectangle Tool", () => {
+    test("rectangle tool can be selected from shapes group", async ({ page }) => {
+      // Open shapes group
+      const shapesGroup = page.locator('[data-testid="lefttoolbar-group-shapes"]');
+      await shapesGroup.click();
+
+      // Click rectangle tool
+      await page.locator('[data-testid="lefttoolbar-tool-rectangle"]').click();
+
+      // Verify tool is selected
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.activeTool;
+      }, { timeout: 2000 }).toBe("rectangle");
+    });
+
+    test("rectangle tool draws rectangle on chart", async ({ page }) => {
+      // Capture browser console for debugging
+      page.on('console', msg => console.log('BROWSER:', msg.text()));
+
+      // Select rectangle tool via QA API for reliability
+      await page.evaluate(() => (window as any).__lwcharts?.set?.({ activeTool: "rectangle" }));
+      
+      // Wait for tool to be active
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.activeTool;
+      }, { timeout: 3000 }).toBe("rectangle");
+
+      // Get chart canvas for drawing
+      const lwCanvas = page.locator(".tv-lightweight-charts canvas").first();
+      await expect(lwCanvas).toBeVisible();
+      const box = await lwCanvas.boundingBox();
+      expect(box).toBeTruthy();
+
+      if (box) {
+        // Get initial objects count
+        const initialDump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        console.log("Initial objects:", initialDump?.objects?.length || 0, JSON.stringify(initialDump?.objects));
+
+        // Draw rectangle: click and drag
+        const startX = box.x + box.width * 0.3;
+        const startY = box.y + box.height * 0.3;
+        const endX = box.x + box.width * 0.6;
+        const endY = box.y + box.height * 0.6;
+
+        await page.mouse.move(startX, startY);
+        await page.waitForTimeout(100);
+        await page.mouse.down();
+        await page.waitForTimeout(100);
+        await page.mouse.move(endX, endY, { steps: 10 });
+        await page.waitForTimeout(100);
+        await page.mouse.up();
+        await page.waitForTimeout(500);
+
+        // Debug: dump the state after drawing
+        const afterDump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        console.log("After objects:", afterDump?.objects?.length || 0, JSON.stringify(afterDump?.objects));
+        console.log("Tool after:", afterDump?.ui?.activeTool);
+
+        // Wait for rectangle to appear in objects
+        await expect.poll(async () => {
+          const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+          const rectangles = dump?.objects?.filter((d: any) => d.type === "rectangle") || [];
+          return rectangles.length;
+        }, { timeout: 3000 }).toBeGreaterThan(0);
+      }
+    });
+
+    test("rectangle can be selected after drawing", async ({ page }) => {
+      // Select rectangle tool via QA API for reliability
+      await page.evaluate(() => (window as any).__lwcharts?.set?.({ activeTool: "rectangle" }));
+
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.activeTool;
+      }, { timeout: 3000 }).toBe("rectangle");
+
+      const lwCanvas = page.locator(".tv-lightweight-charts canvas").first();
+      await expect(lwCanvas).toBeVisible();
+      const box = await lwCanvas.boundingBox();
+      expect(box).toBeTruthy();
+
+      if (box) {
+        const startX = box.x + box.width * 0.3;
+        const startY = box.y + box.height * 0.3;
+        const endX = box.x + box.width * 0.6;
+        const endY = box.y + box.height * 0.6;
+
+        await page.mouse.move(startX, startY);
+        await page.waitForTimeout(100);
+        await page.mouse.down();
+        await page.waitForTimeout(100);
+        await page.mouse.move(endX, endY, { steps: 10 });
+        await page.waitForTimeout(100);
+        await page.mouse.up();
+
+        // Wait for rectangle to be created
+        await expect.poll(async () => {
+          const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+          return dump?.objects?.filter((d: any) => d.type === "rectangle")?.length || 0;
+        }, { timeout: 3000 }).toBeGreaterThan(0);
+
+        // Switch to select tool via QA API
+        await page.evaluate(() => (window as any).__lwcharts?.set?.({ activeTool: "select" }));
+
+        await expect.poll(async () => {
+          const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+          return dump?.ui?.activeTool;
+        }, { timeout: 2000 }).toBe("select");
+
+        // Click in center of rectangle to select it
+        const centerX = (startX + endX) / 2;
+        const centerY = (startY + endY) / 2;
+        await page.mouse.click(centerX, centerY);
+
+        // Rectangle should be selected (via selectedObjectId)
+        await expect.poll(async () => {
+          const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+          return dump?.ui?.selectedObjectId;
+        }, { timeout: 2000 }).toBeTruthy();
+      }
     });
   });
 });

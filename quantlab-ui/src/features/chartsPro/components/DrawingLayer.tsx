@@ -36,7 +36,8 @@ type DrawingGeometry =
   | { kind: "hline"; segment: SegmentGeometry }
   | { kind: "vline"; segment: SegmentGeometry }
   | { kind: "trend"; segment: SegmentGeometry }
-  | { kind: "channel"; base?: SegmentGeometry | null; upper?: SegmentGeometry | null; lower?: SegmentGeometry | null };
+  | { kind: "channel"; base?: SegmentGeometry | null; upper?: SegmentGeometry | null; lower?: SegmentGeometry | null }
+  | { kind: "rectangle"; x: number; y: number; w: number; h: number; path: Path2D };
 
 type PointerState =
   | { mode: "idle" }
@@ -48,6 +49,7 @@ const COLORS: Record<Drawing["kind"], string> = {
   vline: "#0ea5e9",
   trend: "#0ea5e9",
   channel: "#a855f7",
+  rectangle: "#22c55e",
 };
 
 const HIT_TOLERANCE = 8;
@@ -271,6 +273,9 @@ export function DrawingLayer({
           break;
         case "channel":
           drawChannel(ctx, drawing, geometry, selectedId === drawing.id, colors);
+          break;
+        case "rectangle":
+          drawRectangle(ctx, drawing, geometry, selectedId === drawing.id, colors);
           break;
         default:
           break;
@@ -511,6 +516,26 @@ export function DrawingLayer({
             }
             break;
           }
+          case "rectangle": {
+            const { x, y, w, h } = geometry;
+            // Check corner handles first (p1=top-left, p2=bottom-right conceptually)
+            // But since p1/p2 can be in any order, we use actual geometry corners
+            const x1 = x;
+            const y1 = y;
+            const x2 = x + w;
+            const y2 = y + h;
+            if (distance(point.x, point.y, x1, y1) <= HANDLE_RADIUS + 2) {
+              return { drawing, handle: "p1" };
+            }
+            if (distance(point.x, point.y, x2, y2) <= HANDLE_RADIUS + 2) {
+              return { drawing, handle: "p2" };
+            }
+            // Check if inside rectangle (for move/line handle)
+            if (point.x >= x && point.x <= x + w && point.y >= y && point.y <= y + h) {
+              return { drawing, handle: "line" };
+            }
+            break;
+          }
           default:
             break;
         }
@@ -607,6 +632,28 @@ export function DrawingLayer({
           requestRender();
           break;
         }
+        case "rectangle": {
+          const drawing: Drawing = {
+            id: createId(),
+            kind: "rectangle",
+            symbol,
+            tf: timeframe,
+            p1: { timeMs: point.timeMs, price: point.price },
+            p2: { timeMs: point.timeMs, price: point.price },
+            fillColor: COLORS.rectangle,
+            fillOpacity: 0.1,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            z: Date.now(),
+            style: { color: COLORS.rectangle, width: 1 },
+          };
+          pushDraft(drawing);
+          pointerState.current = { mode: "drawing", id: drawing.id, kind: "rectangle" };
+          draftIdRef.current = drawing.id;
+          pendingCommitRef.current = true;
+          requestRender();
+          break;
+        }
         default:
           break;
       }
@@ -642,6 +689,13 @@ export function DrawingLayer({
             ...drawing,
             offsetTop: diff >= 0 ? diff : drawing.offsetTop,
             offsetBottom: diff < 0 ? Math.abs(diff) : drawing.offsetBottom,
+            updatedAt: Date.now(),
+          };
+          pushDraft(next, { transient: true, select: false });
+        } else if (drawing.kind === "rectangle") {
+          const next: Drawing = {
+            ...drawing,
+            p2: { timeMs: targetPoint.timeMs, price: targetPoint.price },
             updatedAt: Date.now(),
           };
           pushDraft(next, { transient: true, select: false });
@@ -701,6 +755,31 @@ export function DrawingLayer({
               pushDraft({
                 ...drawing,
                 offsetBottom: Math.max(0, valueOnTrend(base, targetPoint.timeMs) - targetPoint.price),
+                updatedAt: Date.now(),
+              }, { transient: true, select: false });
+            }
+            break;
+          case "rectangle":
+            if (state.handle === "p1") {
+              pushDraft({
+                ...drawing,
+                p1: { timeMs: targetPoint.timeMs, price: targetPoint.price },
+                updatedAt: Date.now(),
+              }, { transient: true, select: false });
+            } else if (state.handle === "p2") {
+              pushDraft({
+                ...drawing,
+                p2: { timeMs: targetPoint.timeMs, price: targetPoint.price },
+                updatedAt: Date.now(),
+              }, { transient: true, select: false });
+            } else if (state.handle === "line" && pointerOrigin.current) {
+              const dt = targetPoint.timeMs - pointerOrigin.current.timeMs;
+              const dp = targetPoint.price - pointerOrigin.current.price;
+              pointerOrigin.current = targetPoint;
+              pushDraft({
+                ...drawing,
+                p1: { timeMs: drawing.p1.timeMs + dt, price: drawing.p1.price + dp },
+                p2: { timeMs: drawing.p2.timeMs + dt, price: drawing.p2.price + dp },
                 updatedAt: Date.now(),
               }, { transient: true, select: false });
             }
@@ -987,6 +1066,42 @@ function drawChannel(
   }
 }
 
+function drawRectangle(
+  ctx: CanvasRenderingContext2D,
+  drawing: Drawing,
+  geometry: Extract<DrawingGeometry, { kind: "rectangle" }>,
+  selected: boolean,
+  colors: OverlayColors,
+) {
+  if (drawing.kind !== "rectangle") return;
+  const { x, y, w, h, path } = geometry;
+  const stroke = drawing.style?.color || colors.rectangle;
+  const baseWidth = drawing.style?.width ?? LINE_WIDTH;
+  const fillColor = drawing.fillColor || colors.rectangle;
+  const fillOpacity = drawing.fillOpacity ?? 0.15;
+  
+  // Fill rectangle
+  ctx.save();
+  ctx.globalAlpha = fillOpacity;
+  ctx.fillStyle = fillColor;
+  ctx.fill(path);
+  ctx.restore();
+  
+  // Stroke rectangle
+  ctx.strokeStyle = selected ? colors.selection : stroke;
+  ctx.lineWidth = selected ? SELECTED_LINE_WIDTH : baseWidth;
+  ctx.setLineDash(drawing.style?.dash || []);
+  ctx.stroke(path);
+  
+  // Draw corner handles when selected
+  if (selected) {
+    drawHandleCircle(ctx, x, y, colors);
+    drawHandleCircle(ctx, x + w, y, colors);
+    drawHandleCircle(ctx, x, y + h, colors);
+    drawHandleCircle(ctx, x + w, y + h, colors);
+  }
+}
+
 interface GeometryViewport {
   width: number;
   height: number;
@@ -1014,6 +1129,8 @@ function geometrySignature(drawing: Drawing, viewport: GeometryViewport) {
       return `${drawing.id}:${drawing.updatedAt}:${drawing.p1.timeMs}:${drawing.p1.price}:${drawing.p2.timeMs}:${drawing.p2.price}:${base}`;
     case "channel":
       return `${drawing.id}:${drawing.updatedAt}:${drawing.trendId}:${drawing.offsetTop}:${drawing.offsetBottom}:${base}`;
+    case "rectangle":
+      return `${drawing.id}:${drawing.updatedAt}:${drawing.p1.timeMs}:${drawing.p1.price}:${drawing.p2.timeMs}:${drawing.p2.price}:${base}`;
     default:
       return base;
   }
@@ -1066,6 +1183,20 @@ function buildDrawingGeometry({
         upper: upper ? createSegment(upper.x1, upper.y1, upper.x2, upper.y2) : null,
         lower: lower ? createSegment(lower.x1, lower.y1, lower.x2, lower.y2) : null,
       };
+    }
+    case "rectangle": {
+      const x1 = coordinateFromTime(chart, drawing.p1.timeMs, width);
+      const y1 = resolveYCoordinate(series, drawing.p1.price, height);
+      const x2 = coordinateFromTime(chart, drawing.p2.timeMs, width);
+      const y2 = resolveYCoordinate(series, drawing.p2.price, height);
+      if (x1 == null || y1 == null || x2 == null || y2 == null) return null;
+      const x = Math.min(x1, x2);
+      const y = Math.min(y1, y2);
+      const w = Math.abs(x2 - x1);
+      const h = Math.abs(y2 - y1);
+      const path = new Path2D();
+      path.rect(x, y, w, h);
+      return { kind: "rectangle", x, y, w, h, path };
     }
     default:
       return null;

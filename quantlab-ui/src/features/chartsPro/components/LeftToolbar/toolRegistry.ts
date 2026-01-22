@@ -75,7 +75,7 @@ export const TOOL_GROUPS: ToolGroup[] = [
     label: "Shapes",
     icon: "□",
     tools: [
-      { id: "rectangle", label: "Rectangle", icon: "□", shortcut: "R", status: "disabled", tooltip: "Engine support coming" },
+      { id: "rectangle", label: "Rectangle", icon: "□", shortcut: "R", status: "enabled" },
       { id: "circle", label: "Circle", icon: "○", status: "disabled", tooltip: "Coming soon" },
       { id: "ellipse", label: "Ellipse", icon: "◯", status: "disabled", tooltip: "Coming soon" },
       { id: "triangle", label: "Triangle", icon: "△", status: "disabled", tooltip: "Coming soon" },

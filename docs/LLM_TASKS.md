@@ -1,3 +1,56 @@
+### 2026-01-23 (TV-20.2 – Rectangle Drawing Tool)
+
+**Status:** ✅ **COMPLETE** (Rectangle tool fully functional: draw, select, move, delete)
+
+**Task Description:** Implement rectangle drawing tool (zones) for ChartsPro. Users can draw rectangles on the chart, select them, move them, and delete them.
+
+**Implementation Summary:**
+
+1. **Type definitions (types.ts)**
+   - Added `"rectangle"` to `DrawingKind` union
+   - Created `Rectangle` interface: `{ p1: TrendPoint, p2: TrendPoint, fillColor?, fillOpacity? }`
+   - Updated `Drawing` union to include `Rectangle` type
+
+2. **DrawingLayer.tsx (canvas rendering)**
+   - Added `rectangle` case in `beginDrawing`: creates rectangle with p1/p2 at same point
+   - Added `rectangle` case in `updateDrawing` (drawing-mode): updates p2 on drag
+   - Added `rectangle` case in `updateDrawing` (drag-mode): handles p1, p2, line handles for move
+   - Added `buildDrawingGeometry` case: calculates x, y, w, h from p1/p2 coordinates
+   - Added `drawRectangle` render function: filled rect with stroke and corner handles
+   - Added rectangle render case in main render loop
+   - Added rectangle hitTest: returns p1/p2 handles for corners, "line" handle for interior
+   - Added rectangle in `geometrySignature` for cache key
+
+3. **toolRegistry.ts**
+   - Changed rectangle from `status: "disabled"` to `status: "enabled"`
+
+4. **drawings.ts (persistence store)**
+   - Added `"rectangle": "Rectangle"` to `KIND_LABEL` constant (fixes default labels)
+   - Updated `cloneDrawing` to deep-clone p1/p2 for rectangles (like trend lines)
+
+5. **ChartViewport.tsx (QA API)**
+   - Fixed stale closure bug: added `drawings` and `selectedId` to `bindTestApi` dependency array
+   - This fix ensures `dump().objects` always returns current drawings (was returning stale empty array)
+
+**Files Changed:**
+- `quantlab-ui/src/features/chartsPro/types.ts` (DrawingKind, Rectangle interface)
+- `quantlab-ui/src/features/chartsPro/components/DrawingLayer.tsx` (all drawing logic)
+- `quantlab-ui/src/features/chartsPro/state/toolRegistry.ts` (enable rectangle)
+- `quantlab-ui/src/features/chartsPro/state/drawings.ts` (KIND_LABEL, cloneDrawing)
+- `quantlab-ui/src/features/chartsPro/components/ChartViewport.tsx` (stale closure fix)
+- `quantlab-ui/tests/chartsPro.cp20.spec.ts` (TV-20.2 tests)
+
+**Test Results & Gates:**
+- npm build ✅ (2471 modules)
+- chartsPro.cp20 ✅ (17/17 passed)
+- tvUI ✅ (169 passed, 2 skipped)
+- tvParity ✅ (35/35 passed)
+
+**Key Bug Fix:**
+The `dump().objects` was returning an empty array even after creating drawings. Root cause: `bindTestApi` useCallback had `drawings` prop not in dependency array, causing stale closure. Fixed by adding `drawings` and `selectedId` to deps.
+
+---
+
 ### 2026-01-22 (TV-19.2c – Quick Ranges: Time Window, Timeframe-Agnostic)
 
 **Status:** ✅ **COMPLETE** (5D = 5 calendar days, not 5 bars)

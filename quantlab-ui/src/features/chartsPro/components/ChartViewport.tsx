@@ -2370,6 +2370,8 @@ const fitToContent = useCallback(() => {
     qaDebugEnabled,
     compareScaleMode,
     tool,
+    drawings,
+    selectedId,
   ]);
 
   bindTestApiRef.current = bindTestApi;
