@@ -1,3 +1,56 @@
+### 2026-01-22 (TV-19.2c – Quick Ranges: Time Window, Timeframe-Agnostic)
+
+**Status:** ✅ **COMPLETE** (5D = 5 calendar days, not 5 bars)
+
+**Task Description:** Fix quick ranges (5D/1M/6M) that showed wrong span when timeframe ≠ 1D. With 1h timeframe, clicking 5D should show last 5 calendar days of hourly candles.
+
+**Root Cause (TV-19.2b):**
+```tsx
+// WRONG: used bar-index based logic
+const RANGE_BARS = { "5D": 5, ... }; // 5D = 5 bars
+const fromIndex = dataCount - barsToShow;
+// With 1h timeframe: 5D → 5 bars → 5 hours (BUG!)
+```
+
+**Solution:**
+```tsx
+// CORRECT: calendar-based time window (seconds)
+const RANGE_SECONDS = {
+  "1D": 1 * 86400,
+  "5D": 5 * 86400,   // 5 calendar days
+  "1M": 30 * 86400,
+  "6M": 180 * 86400,
+  "1Y": 365 * 86400,
+  "YTD": null,        // Jan 1 UTC
+  "All": null,        // Full span
+};
+
+// Binary search for first bar at or after target time
+const findFirstBarAtOrAfter = (targetUnix: number) => { ... };
+
+// Apply: from = findFirstBarAtOrAfter(maxTime - rangeSeconds)
+```
+
+**Files Changed:**
+- `quantlab-ui/src/features/chartsPro/components/BottomBar.tsx` (RANGE_SECONDS, binary search)
+- `quantlab-ui/tests/chartsPro.cp19.spec.ts` (6 tests for timeframe-agnostic behavior)
+
+**Test Results & Gates:**
+- npm build ✅ (2469 modules)
+- chartsPro.cp19 ✅ (10/10 passed)
+- tvUI ✅ (169 passed, 2 skipped)
+- tvParity ✅ (35/35 passed)
+
+**Commit:** b7a012f `fix(frontend): TV-19.2c quick ranges use time window (timeframe-agnostic)`
+
+**Logs:**
+- `logs/tv19_2c_build.txt`
+- `logs/tv19_2c_cp19.txt`
+- `logs/tv19_2c_tvui.txt`
+- `logs/tv19_2c_tvparity.txt`
+
+---
+
 ### 2026-01-22 (TV-19.2b – Quick Ranges Hotfix: Bar-Index Based Window)
 
 **Status:** ✅ **COMPLETE** (Quick ranges work correctly, dates no longer drift to 1970)
