@@ -1,7 +1,7 @@
-import { useMemo, useState, useEffect, useRef } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Eye, EyeOff, Trash2, Settings } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import type { IndicatorInstance, IndicatorKind, IndicatorPane } from "../../types";
 import { indicatorDisplayName, indicatorParamsSummary, defaultIndicatorParams } from "../../types";
 
@@ -14,62 +14,17 @@ interface IndicatorsTabProps {
   ) => IndicatorInstance;
   onUpdate: (id: string, patch: Partial<IndicatorInstance>) => void;
   onRemove: (id: string) => void;
-  // TV-12: controlled addOpen state
-  addOpen?: boolean;
-  onChangeAddOpen?: (value: boolean) => void;
+  // TV-18.2: Open central modal for adding indicators
+  onOpenModal?: () => void;
 }
 
-const ALL_KINDS: IndicatorKind[] = ["sma", "ema", "rsi", "macd"];
-
-export function IndicatorsTab({ indicators, onAdd, onUpdate, onRemove, addOpen: addOpenProp, onChangeAddOpen }: IndicatorsTabProps) {
-  const [localAddOpen, setLocalAddOpen] = useState(() => {
-    try {
-      return window.localStorage?.getItem("cp.indicators.addOpen") === "1";
-    } catch {
-      return false;
-    }
-  });
-
-  const addOpen = addOpenProp !== undefined ? addOpenProp : localAddOpen;
-
-  const [query, setQuery] = useState("");
+export function IndicatorsTab({ indicators, onAdd, onUpdate, onRemove, onOpenModal }: IndicatorsTabProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
-  const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-focus search input when add overlay opens
-  useEffect(() => {
-    if (addOpen && searchInputRef.current) {
-      setTimeout(() => searchInputRef.current?.focus(), 50);
+  const handleOpenAdd = () => {
+    if (onOpenModal) {
+      onOpenModal();
     }
-  }, [addOpen]);
-
-  const filteredKinds = useMemo(
-    () => ALL_KINDS.filter((k) => indicatorDisplayName(k).toLowerCase().includes(query.toLowerCase())),
-    [query],
-  );
-
-  const setAddOpen = (value: boolean) => {
-    if (onChangeAddOpen) {
-      onChangeAddOpen(value);
-    } else {
-      setLocalAddOpen(value);
-      try {
-        window.localStorage?.setItem("cp.indicators.addOpen", value ? "1" : "0");
-      } catch {
-        // ignore
-      }
-    }
-  };
-
-  const handleOpenAdd = () => setAddOpen(true);
-  const handleCloseAdd = () => setAddOpen(false);
-
-  const handleAddKind = (kind: IndicatorKind) => {
-    const defaults = defaultIndicatorParams(kind);
-    const pane: IndicatorPane = kind === "rsi" || kind === "macd" ? "separate" : "price";
-    onAdd(kind, defaults as Partial<IndicatorInstance["params"]>, { pane });
-    setQuery("");
-    handleCloseAdd();
   };
 
   return (
@@ -235,86 +190,7 @@ export function IndicatorsTab({ indicators, onAdd, onUpdate, onRemove, addOpen: 
           })
         )}
       </div>
-
-      {/* Add overlay - constrained to RightPanel (not full screen) */}
-      {addOpen && (
-        <div className="absolute inset-0 z-40 flex items-center justify-center backdrop-blur-sm pointer-events-none" data-testid="indicators-overlay">
-          <div
-            className="w-80 rounded-lg border shadow-lg z-50 pointer-events-auto"
-            style={{
-              backgroundColor: "var(--cp-panel-bg)",
-              borderColor: "var(--cp-panel-border)",
-              color: "var(--cp-panel-text)",
-            }}
-            data-testid="indicators-add-form"
-          >
-            {/* Overlay header - pointer-events-none to prevent interception, children use pointer-events-auto */}
-            <div
-              className="flex items-center justify-between px-3 py-2 border-b pointer-events-none"
-              style={{
-                backgroundColor: "var(--cp-panel-header-bg)",
-                borderColor: "var(--cp-panel-border)",
-              }}
-            >
-              <span className="text-xs font-medium pointer-events-auto">Add Indicator</span>
-              <button
-                type="button"
-                onClick={() => {
-                  console.log("[IndicatorsTab] X button clicked, calling handleCloseAdd");
-                  handleCloseAdd();
-                }}
-                className="relative z-10 h-5 w-5 flex items-center justify-center text-xs hover:bg-slate-700 rounded pointer-events-auto"
-                aria-label="Close add indicator"
-                data-testid="indicators-close-overlay"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Overlay content */}
-            <div className="p-3 space-y-3 max-h-96 overflow-y-auto" data-testid="indicators-overlay-content">
-              <Input
-                ref={searchInputRef}
-                placeholder="Search (SMA, EMA, RSI, MACD)"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                className="h-8 text-xs"
-                data-testid="indicators-search"
-              />
-
-              <div className="space-y-1">
-                {filteredKinds.map((k) => (
-                  <button
-                    key={k}
-                    type="button"
-                    className="w-full text-left rounded px-3 py-2 text-sm transition capitalize"
-                    style={{
-                      color: "var(--cp-panel-text)",
-                    }}
-                    onMouseEnter={(e) => {
-                      (e.currentTarget as HTMLButtonElement).style.backgroundColor =
-                        "var(--cp-panel-hover-bg)";
-                    }}
-                    onMouseLeave={(e) => {
-                      (e.currentTarget as HTMLButtonElement).style.backgroundColor =
-                        "transparent";
-                    }}
-                    onClick={() => handleAddKind(k)}
-                    data-testid={`indicators-add-${k}`}
-                  >
-                    {indicatorDisplayName(k)}
-                  </button>
-                ))}
-                {filteredKinds.length === 0 && (
-                  <p className="text-xs text-center py-2" style={{ color: "var(--cp-panel-text-muted)" }}>
-                    No matches
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* TV-18.2: Overlay removed - indicator picker now opens in central modal */}
     </div>
   );
 }

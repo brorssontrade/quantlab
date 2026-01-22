@@ -1,20 +1,14 @@
 import { test, expect, Page } from "@playwright/test";
 import { gotoChartsPro } from "./helpers";
 
-// TV-12: Helper to close Indicators add overlay before clicking TopBar actions
-async function closeIndicatorsOverlay(page: Page) {
-  const closeBtn = page.locator('[data-testid="indicators-close-overlay"]');
-  if (await closeBtn.isVisible()) {
-    // Force-click bypasses pointer interception from parent div
-    try {
-      await closeBtn.click({ force: true });
-    } catch (e) {
-      // Fallback: use keyboard (Escape key)
-      await page.keyboard.press("Escape");
-    }
-    await page.waitForTimeout(100);
-  }
-}
+/**
+ * TV-12 / TV-18.2: TopBar Actions tests
+ * 
+ * After TV-18.2:
+ * - TopBar Indicators button opens central modal (not RightPanel)
+ * - Alerts button opens RightPanel with activeTab=alerts
+ * - Objects button opens RightPanel with activeTab=objects
+ */
 
 test.describe("TV-12: TopBar Actions - RightPanel", () => {
   test.beforeEach(async ({ page }, testInfo) => {
@@ -22,51 +16,41 @@ test.describe("TV-12: TopBar Actions - RightPanel", () => {
     // TV-12: Clear RightPanel state to start clean
     await page.evaluate(() => {
       window.localStorage?.setItem("cp.rightPanel.activeTab", "");
-      window.localStorage?.setItem("cp.indicators.addOpen", "0");
     });
     await page.reload();
     await page.waitForTimeout(300);
   });
 
-  test("1. Indicators button opens RightPanel with activeTab=indicators", async ({
-    page,
-  }) => {
+  test("1. Indicators button opens modal (TV-18.2)", async ({ page }) => {
     // Find and click Indicators button
     const indicatorsButton = page.locator('[data-testid="topbar-indicators-btn"]');
     expect(indicatorsButton).toBeVisible();
     await indicatorsButton.click();
     await page.waitForTimeout(300);
 
-    // Verify RightPanel opened with correct tab
+    // TV-18.2: Opens modal, NOT RightPanel
     const dump = await page.evaluate(() => window.__lwcharts?.dump?.());
-    expect(dump?.ui?.rightPanel?.activeTab).toBe("indicators");
+    expect(dump?.ui?.modal?.open).toBe(true);
+    expect(dump?.ui?.modal?.kind).toBe("indicators");
   });
 
-  test("2. Indicators button sets addOpen=true (form visible)", async ({
-    page,
-  }) => {
+  test("2. Indicators modal shows search field (TV-18.2)", async ({ page }) => {
     await page.click('[data-testid="topbar-indicators-btn"]');
     await page.waitForTimeout(300);
 
-    const dump = await page.evaluate(() => window.__lwcharts?.dump?.());
-    expect(dump?.ui?.indicators?.addOpen).toBe(true);
-
-    // Verify add-form is in DOM (use await for async visibility check)
-    const addForm = page.locator('[data-testid="indicators-add-form"]');
-    await expect(addForm).toBeVisible({ timeout: 3000 });
+    // Verify modal opened with search
+    await expect(page.locator('[data-testid="indicators-modal"]')).toBeVisible();
+    await expect(page.locator('[data-testid="indicators-modal-search"]')).toBeVisible();
   });
 
-  test("3. Indicators search field is focused after button click", async ({
-    page,
-  }) => {
+  test("3. Indicators modal search is focused (TV-18.2)", async ({ page }) => {
     await page.click('[data-testid="topbar-indicators-btn"]');
     await page.waitForTimeout(300);
 
-    // Verify overlay opened
-    const overlay = page.locator('[data-testid="indicators-overlay"]');
-    await expect(overlay).toBeVisible({ timeout: 3000 });
+    // Verify modal opened
+    await expect(page.locator('[data-testid="indicators-modal"]')).toBeVisible();
 
-    const searchInput = page.locator('[data-testid="indicators-search"]');
+    const searchInput = page.locator('[data-testid="indicators-modal-search"]');
     await expect(searchInput).toBeVisible({ timeout: 2000 });
     await expect(searchInput).toBeFocused();
   });
@@ -139,13 +123,13 @@ test.describe("TV-12: TopBar Actions - RightPanel", () => {
   });
 
   test("7. RightPanel activeTab persists across reload", async ({ page }) => {
-    // Set Indicators tab
-    await page.click('[data-testid="topbar-indicators-btn"]');
+    // Set Alerts tab (indicators no longer opens RightPanel)
+    await page.click('[data-testid="topbar-alerts-btn"]');
     await page.waitForTimeout(300);
 
     // Verify set
     let dump = await page.evaluate(() => window.__lwcharts?.dump?.());
-    expect(dump?.ui?.rightPanel?.activeTab).toBe("indicators");
+    expect(dump?.ui?.rightPanel?.activeTab).toBe("alerts");
 
     // Reload
     await page.reload();
@@ -153,35 +137,35 @@ test.describe("TV-12: TopBar Actions - RightPanel", () => {
 
     // Verify persisted
     dump = await page.evaluate(() => window.__lwcharts?.dump?.());
-    expect(dump?.ui?.rightPanel?.activeTab).toBe("indicators");
+    expect(dump?.ui?.rightPanel?.activeTab).toBe("alerts");
   });
 
-  test("8. Indicators addOpen=true persists across reload", async ({ page }) => {
-    // Open add form
+  test("8. Indicators modal closes with Escape (TV-18.2)", async ({ page }) => {
+    // Open modal
     await page.click('[data-testid="topbar-indicators-btn"]');
     await page.waitForTimeout(300);
 
     let dump = await page.evaluate(() => window.__lwcharts?.dump?.());
-    expect(dump?.ui?.indicators?.addOpen).toBe(true);
+    expect(dump?.ui?.modal?.open).toBe(true);
 
-    // Reload
-    await page.reload();
-    await page.waitForTimeout(500);
+    // Press Escape to close
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(200);
 
-    // Verify persisted
+    // Verify closed
     dump = await page.evaluate(() => window.__lwcharts?.dump?.());
-    expect(dump?.ui?.indicators?.addOpen).toBe(true);
+    expect(dump?.ui?.modal?.open).toBe(false);
   });
 
-  test("9. Switching tabs (Indicators - Alerts) updates activeTab correctly", async ({
+  test("9. Switching tabs (Objects - Alerts) updates activeTab correctly", async ({
     page,
   }) => {
-    // Open Indicators
-    await page.click('[data-testid="topbar-indicators-btn"]');
+    // Open Objects
+    await page.click('[data-testid="topbar-objects-btn"]');
     await page.waitForTimeout(200);
 
     let dump = await page.evaluate(() => window.__lwcharts?.dump?.());
-    expect(dump?.ui?.rightPanel?.activeTab).toBe("indicators");
+    expect(dump?.ui?.rightPanel?.activeTab).toBe("objects");
 
     // Switch to Alerts
     await page.click('[data-testid="topbar-alerts-btn"]');
@@ -191,77 +175,51 @@ test.describe("TV-12: TopBar Actions - RightPanel", () => {
     expect(dump?.ui?.rightPanel?.activeTab).toBe("alerts");
   });
 
-  test("10. Clicking same button twice closes RightPanel (toggle)", async ({
+  test("10. Clicking Objects button twice closes RightPanel (toggle)", async ({
     page,
   }) => {
-    // Open Indicators
-    await page.click('[data-testid="topbar-indicators-btn"]');
+    // Open Objects
+    await page.click('[data-testid="topbar-objects-btn"]');
     await page.waitForTimeout(200);
 
     let dump = await page.evaluate(() => window.__lwcharts?.dump?.());
-    expect(dump?.ui?.rightPanel?.activeTab).toBe("indicators");
+    expect(dump?.ui?.rightPanel?.activeTab).toBe("objects");
 
     // Click again to close
-    await page.click('[data-testid="topbar-indicators-btn"]');
+    await page.click('[data-testid="topbar-objects-btn"]');
     await page.waitForTimeout(200);
 
     dump = await page.evaluate(() => window.__lwcharts?.dump?.());
     expect(dump?.ui?.rightPanel?.activeTab).toBeNull();
   });
 
-  test("11. Indicators add form can close via X button (addOpen=false)", async ({
+  test("11. Indicators modal close button works (TV-18.2)", async ({
     page,
   }) => {
-    // Open add form
+    // Open modal
     await page.click('[data-testid="topbar-indicators-btn"]');
     await page.waitForTimeout(300);
 
     let dump = await page.evaluate(() => window.__lwcharts?.dump?.());
-    expect(dump?.ui?.indicators?.addOpen).toBe(true);
+    expect(dump?.ui?.modal?.open).toBe(true);
 
-    // Wait for overlay to be visible first
-    const overlay = page.locator('[data-testid="indicators-overlay"]');
-    await expect(overlay).toBeVisible({ timeout: 3000 });
-
-    // Click close button via JS click (native DOM click works with React handlers)
-    // Note: Playwright's force:true doesn't properly trigger React synthetic events
-    const closeBtn = page.locator('[data-testid="indicators-close-overlay"]');
-    await expect(closeBtn).toBeVisible({ timeout: 2000 });
-    
-    await page.evaluate(() => {
-      const btn = document.querySelector('[data-testid="indicators-close-overlay"]') as HTMLButtonElement;
-      btn?.click();
-    });
-    await page.waitForTimeout(300);
+    // Click X button to close
+    await page.click('[data-testid="indicators-modal-close"]');
+    await page.waitForTimeout(200);
 
     dump = await page.evaluate(() => window.__lwcharts?.dump?.());
-    expect(dump?.ui?.indicators?.addOpen).toBe(false);
+    expect(dump?.ui?.modal?.open).toBe(false);
 
-    // Verify overlay is gone
-    await expect(page.locator('[data-testid="indicators-add-form"]')).not.toBeVisible();
+    // Verify modal is gone
+    await expect(page.locator('[data-testid="indicators-modal"]')).not.toBeVisible();
   });
 
   test("12. RightPanel visibility matches activeTab state", async ({ page }) => {
-    // Note: RightPanel component renders always (never hidden), but activeTab controls content
     // Initially activeTab should be null (from beforeEach reset)
     let dump = await page.evaluate(() => window.__lwcharts?.dump?.());
     expect(dump?.ui?.rightPanel?.activeTab).toBeNull();
 
-    // Open Indicators
-    await page.click('[data-testid="topbar-indicators-btn"]');
-    await page.waitForTimeout(300);
-
-    dump = await page.evaluate(() => window.__lwcharts?.dump?.());
-    expect(dump?.ui?.rightPanel?.activeTab).toBe("indicators");
-    
-    const indicatorsTab = page.locator('[data-testid="rightpanel-tab-indicators"]');
-    await expect(indicatorsTab).toHaveAttribute("aria-pressed", "true");
-
-    // Close Indicators overlay before clicking Alerts
-    await closeIndicatorsOverlay(page);
-    await page.waitForTimeout(300);
-
-    // Switch to Alerts
+    // Open Alerts
     await page.click('[data-testid="topbar-alerts-btn"]');
     await page.waitForTimeout(300);
 
@@ -270,5 +228,15 @@ test.describe("TV-12: TopBar Actions - RightPanel", () => {
     
     const alertsTab = page.locator('[data-testid="rightpanel-tab-alerts"]');
     await expect(alertsTab).toHaveAttribute("aria-pressed", "true");
+
+    // Switch to Objects
+    await page.click('[data-testid="topbar-objects-btn"]');
+    await page.waitForTimeout(300);
+
+    dump = await page.evaluate(() => window.__lwcharts?.dump?.());
+    expect(dump?.ui?.rightPanel?.activeTab).toBe("objects");
+    
+    const objectsTab = page.locator('[data-testid="rightpanel-tab-objects"]');
+    await expect(objectsTab).toHaveAttribute("aria-pressed", "true");
   });
 });

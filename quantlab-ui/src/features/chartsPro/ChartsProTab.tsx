@@ -17,6 +17,8 @@ import { AlertsTab } from "./components/RightPanel/AlertsTab";
 import { SettingsPanel, type ChartSettings, DEFAULT_SETTINGS } from "./components/TopBar/SettingsPanel";
 import { LayoutManager, type SavedLayout } from "./components/TopBar/LayoutManager";
 import { ApiStatusBadge } from "./components/ApiStatusBadge";
+import { ModalPortal } from "./components/Modal/ModalPortal";
+import { IndicatorsModal } from "./components/Modal/IndicatorsModal";
 import { useOhlcvQuery } from "./hooks/useOhlcv";
 import { getLastHealthCheck, setQAForceDataMode } from "./runtime/dataClient";
 import type { LwChartsApi } from "./qaTypes";
@@ -264,16 +266,7 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
     }
   });
 
-  // TV-12: Indicators "add indicator" form state
-  const [indicatorsAddOpen, setIndicatorsAddOpen] = useState(() => {
-    if (typeof window === "undefined") return false;
-    try {
-      const raw = window.localStorage?.getItem("cp.indicators.addOpen");
-      return raw === "1"; // Match ChartViewport dump() expectation
-    } catch {
-      return false;
-    }
-  });
+  // TV-18.2: indicatorsAddOpen state removed - modal state handles this now
 
   const controls = useChartControls();
   // Responsive breakpoints: mobile <768, tablet 768-1279, desktop ≥1280
@@ -296,29 +289,11 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
   }, [buildTimeIso]);
 
   // TV-12: TopBar actions -> RightPanel wiring
+  // TV-18.2: Indicators button opens central modal (TradingView-style)
   const handleIndicatorsClick = useCallback(() => {
-    if (rightPanelActiveTab === "indicators") {
-      // Toggle off if already open
-      setRightPanelActiveTab(null);
-      setIndicatorsAddOpen(false);
-      try {
-        window.localStorage?.setItem("cp.rightPanel.activeTab", "");
-        window.localStorage?.setItem("cp.indicators.addOpen", "0");
-      } catch {
-        // ignore
-      }
-    } else {
-      setRightPanelActiveTab("indicators");
-      setIndicatorsAddOpen(true);
-      // Persist
-      try {
-        window.localStorage?.setItem("cp.rightPanel.activeTab", "indicators");
-        window.localStorage?.setItem("cp.indicators.addOpen", "1");
-      } catch {
-        // ignore
-      }
-    }
-  }, [rightPanelActiveTab]);
+    // Open indicators modal (portal), keep RightPanel as list view
+    setModalState({ open: true, kind: "indicators" });
+  }, []);
 
   const handleAlertsClick = useCallback(() => {
     if (rightPanelActiveTab === "alerts") {
@@ -902,13 +877,7 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
                         onAdd={drawingsStore.addIndicator}
                         onUpdate={drawingsStore.updateIndicator}
                         onRemove={drawingsStore.removeIndicator}
-                        addOpen={indicatorsAddOpen}
-                        onChangeAddOpen={(v) => {
-                          setIndicatorsAddOpen(v);
-                          try {
-                            window.localStorage?.setItem("cp.indicators.addOpen", v ? "1" : "0");
-                          } catch {}
-                        }}
+                        onOpenModal={() => setModalState({ open: true, kind: "indicators" })}
                       />
                     }
                     objectsPanel={
@@ -1093,6 +1062,18 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
           ) : null}
         </CardContent>
       </Card>
+
+      {/* TV-18.2: Indicators modal (central, TradingView-style) */}
+      <ModalPortal
+        open={modalState.open && modalState.kind === "indicators"}
+        kind="indicators"
+        onClose={() => setModalState({ open: false, kind: null })}
+      >
+        <IndicatorsModal
+          onAdd={drawingsStore.addIndicator}
+          onClose={() => setModalState({ open: false, kind: null })}
+        />
+      </ModalPortal>
     </div>
   );
 }

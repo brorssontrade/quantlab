@@ -1,5 +1,12 @@
 import { test, expect } from "@playwright/test";
 
+/**
+ * TV-7 / TV-18.2: Indicators Tab tests
+ * 
+ * After TV-18.2, "Add" button opens central modal (not RightPanel overlay).
+ * Tests updated to use modal test-ids: indicators-modal, indicators-modal-search, indicators-modal-add-{kind}
+ */
+
 test.describe("ChartsPro Indicators Tab (TV-7)", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/?mock=1");
@@ -17,42 +24,43 @@ test.describe("ChartsPro Indicators Tab (TV-7)", () => {
     const dump = await page.evaluate(() => window.__lwcharts.dump());
     expect(dump.ui.indicators.count).toBe(0);
     expect(dump.ui.indicators.names.length).toBe(0);
-    expect(dump.ui.indicators.addOpen).toBeFalsy();
   });
 
-  test("add button opens search overlay", async ({ page }) => {
+  test("add button opens search modal (TV-18.2)", async ({ page }) => {
     await page.locator('[data-testid="rightpanel-tab-indicators"]').click();
     await page.locator('[data-testid="indicators-add-btn"]').click();
     
-    await expect(page.locator('[data-testid="indicators-overlay"]')).toBeVisible();
-    await expect(page.locator('[data-testid="indicators-search"]')).toBeVisible();
+    // TV-18.2: Now opens modal instead of overlay
+    await expect(page.locator('[data-testid="indicators-modal"]')).toBeVisible();
+    await expect(page.locator('[data-testid="indicators-modal-search"]')).toBeVisible();
 
     const dump = await page.evaluate(() => window.__lwcharts.dump());
-    expect(dump.ui.indicators.addOpen).toBeTruthy();
+    expect(dump.ui.modal.open).toBe(true);
+    expect(dump.ui.modal.kind).toBe("indicators");
   });
 
   test("search filters indicator list", async ({ page }) => {
     await page.locator('[data-testid="rightpanel-tab-indicators"]').click();
     await page.locator('[data-testid="indicators-add-btn"]').click();
-    await expect(page.locator('[data-testid="indicators-overlay"]')).toBeVisible();
+    await expect(page.locator('[data-testid="indicators-modal"]')).toBeVisible();
 
     // Filter to EMA
-    await page.locator('[data-testid="indicators-search"]').fill("ema");
-    await expect(page.locator('[data-testid="indicators-add-ema"]')).toBeVisible();
+    await page.locator('[data-testid="indicators-modal-search"]').fill("ema");
+    await expect(page.locator('[data-testid="indicators-modal-add-ema"]')).toBeVisible();
     
     // Should not have other options
-    const smaBtn = page.locator('[data-testid="indicators-add-sma"]');
+    const smaBtn = page.locator('[data-testid="indicators-modal-add-sma"]');
     await expect(smaBtn).not.toBeVisible();
   });
 
-  test("add EMA indicator via overlay", async ({ page }) => {
+  test("add EMA indicator via modal", async ({ page }) => {
     await page.locator('[data-testid="rightpanel-tab-indicators"]').click();
     
     const countBefore = await page.evaluate(() => window.__lwcharts.dump().ui.indicators.count);
     
     await page.locator('[data-testid="indicators-add-btn"]').click();
-    await expect(page.locator('[data-testid="indicators-overlay"]')).toBeVisible();
-    await page.locator('[data-testid="indicators-add-ema"]').click();
+    await expect(page.locator('[data-testid="indicators-modal"]')).toBeVisible();
+    await page.locator('[data-testid="indicators-modal-add-ema"]').click();
     await page.waitForTimeout(300);
 
     const dump = await page.evaluate(() => window.__lwcharts.dump());
@@ -69,7 +77,7 @@ test.describe("ChartsPro Indicators Tab (TV-7)", () => {
   test("add RSI indicator to separate pane", async ({ page }) => {
     await page.locator('[data-testid="rightpanel-tab-indicators"]').click();
     await page.locator('[data-testid="indicators-add-btn"]').click();
-    await page.locator('[data-testid="indicators-add-rsi"]').click();
+    await page.locator('[data-testid="indicators-modal-add-rsi"]').click();
     await page.waitForTimeout(300);
 
     const dump = await page.evaluate(() => window.__lwcharts.dump());
@@ -83,7 +91,7 @@ test.describe("ChartsPro Indicators Tab (TV-7)", () => {
     
     // Add indicator first
     await page.locator('[data-testid="indicators-add-btn"]').click();
-    await page.locator('[data-testid="indicators-add-sma"]').click();
+    await page.locator('[data-testid="indicators-modal-add-sma"]').click();
     await page.waitForTimeout(300);
 
     const dumpBefore = await page.evaluate(() => window.__lwcharts.dump());
@@ -107,7 +115,7 @@ test.describe("ChartsPro Indicators Tab (TV-7)", () => {
     
     // Add indicator
     await page.locator('[data-testid="indicators-add-btn"]').click();
-    await page.locator('[data-testid="indicators-add-ema"]').click();
+    await page.locator('[data-testid="indicators-modal-add-ema"]').click();
     await page.waitForTimeout(300);
 
     const dump = await page.evaluate(() => window.__lwcharts.dump());
@@ -133,7 +141,7 @@ test.describe("ChartsPro Indicators Tab (TV-7)", () => {
     
     // Add SMA
     await page.locator('[data-testid="indicators-add-btn"]').click();
-    await page.locator('[data-testid="indicators-add-sma"]').click();
+    await page.locator('[data-testid="indicators-modal-add-sma"]').click();
     await page.waitForTimeout(300);
 
     const dumpBefore = await page.evaluate(() => window.__lwcharts.dump());
@@ -158,11 +166,11 @@ test.describe("ChartsPro Indicators Tab (TV-7)", () => {
     
     // Add two indicators
     await page.locator('[data-testid="indicators-add-btn"]').click();
-    await page.locator('[data-testid="indicators-add-sma"]').click();
+    await page.locator('[data-testid="indicators-modal-add-sma"]').click();
     await page.waitForTimeout(300);
 
     await page.locator('[data-testid="indicators-add-btn"]').click();
-    await page.locator('[data-testid="indicators-add-ema"]').click();
+    await page.locator('[data-testid="indicators-modal-add-ema"]').click();
     await page.waitForTimeout(300);
 
     const dumpBefore = await page.evaluate(() => window.__lwcharts.dump());
@@ -180,25 +188,21 @@ test.describe("ChartsPro Indicators Tab (TV-7)", () => {
     expect(dumpAfter.ui.indicators.count).toBe(1);
   });
 
-  test("overlay state persists in localStorage", async ({ page }) => {
+  test("modal closes after adding indicator (TV-18.2)", async ({ page }) => {
     await page.locator('[data-testid="rightpanel-tab-indicators"]').click();
     
-    // Open add overlay
+    // Open modal
     await page.locator('[data-testid="indicators-add-btn"]').click();
-    await expect(page.locator('[data-testid="indicators-overlay"]')).toBeVisible();
-
-    // Verify localStorage was set
-    const stored = await page.evaluate(() => window.localStorage.getItem("cp.indicators.addOpen"));
-    expect(stored).toBe("1");
-
-    // Close overlay using native DOM click (React synthetic events need native click)
-    await page.evaluate(() => {
-      const btn = document.querySelector('[data-testid="indicators-close-overlay"]') as HTMLButtonElement;
-      btn?.click();
-    });
-    await page.waitForTimeout(200);
-    const stored2 = await page.evaluate(() => window.localStorage.getItem("cp.indicators.addOpen"));
-    expect(stored2).toBe("0");
+    await expect(page.locator('[data-testid="indicators-modal"]')).toBeVisible();
+    
+    // Add indicator
+    await page.locator('[data-testid="indicators-modal-add-sma"]').click();
+    
+    // Modal should close after adding
+    await expect(page.locator('[data-testid="indicators-modal"]')).not.toBeVisible();
+    
+    const dump = await page.evaluate(() => window.__lwcharts.dump());
+    expect(dump.ui.modal.open).toBe(false);
   });
 
   test("all indicator kinds render correctly", async ({ page }) => {
@@ -208,7 +212,7 @@ test.describe("ChartsPro Indicators Tab (TV-7)", () => {
     
     for (const kind of kinds) {
       await page.locator('[data-testid="indicators-add-btn"]').click();
-      await page.locator(`[data-testid="indicators-add-${kind}"]`).click();
+      await page.locator(`[data-testid="indicators-modal-add-${kind}"]`).click();
       await page.waitForTimeout(300);
     }
 
@@ -229,11 +233,11 @@ test("Indicators Tab - repeat determinism check", { tag: "@determinism" }, async
   await page.locator('[data-testid="rightpanel-tab-indicators"]').click();
   
   await page.locator('[data-testid="indicators-add-btn"]').click();
-  await page.locator('[data-testid="indicators-add-ema"]').click();
+  await page.locator('[data-testid="indicators-modal-add-ema"]').click();
   await page.waitForTimeout(300);
   
   await page.locator('[data-testid="indicators-add-btn"]').click();
-  await page.locator('[data-testid="indicators-add-rsi"]').click();
+  await page.locator('[data-testid="indicators-modal-add-rsi"]').click();
   await page.waitForTimeout(300);
 
   const dump = await page.evaluate(() => window.__lwcharts.dump());
