@@ -13,14 +13,24 @@ interface DataBounds {
   barTimes: number[];
 }
 
+/** Timezone modes */
+type TimezoneMode = "UTC" | "Local";
+
+/** Market status based on data source state */
+type MarketStatus = "LIVE" | "DEMO" | "OFFLINE" | "LOADING";
+
 interface BottomBarProps {
   chart: any; // IChartApi | null
   /** Data bounds for bar-index based range (preferred over lastBarTime) */
   dataBounds?: DataBounds | null;
   /** @deprecated Use dataBounds instead. Last bar timestamp (unix seconds) */
   lastBarTime?: number | null;
-  /** Timezone: "UTC" | "Local" */
-  timezone?: string;
+  /** Timezone mode (controlled): "UTC" | "Local" */
+  timezoneMode?: TimezoneMode;
+  /** Callback when timezone is toggled */
+  onTimezoneToggle?: (mode: TimezoneMode) => void;
+  /** Market/data status: "LIVE" | "DEMO" | "OFFLINE" | "LOADING" */
+  marketStatus?: MarketStatus;
   /** Scale mode: "auto" | "log" | "percent" | "adj" */
   scaleMode?: string;
   onScaleModeChange?: (mode: string) => void;
@@ -61,7 +71,9 @@ export function BottomBar({
   chart,
   dataBounds,
   lastBarTime,
-  timezone = "UTC",
+  timezoneMode = "UTC",
+  onTimezoneToggle,
+  marketStatus = "OFFLINE",
   scaleMode = "auto",
   onScaleModeChange,
   onRangeChange,
@@ -87,7 +99,7 @@ export function BottomBar({
     }
   }, []);
 
-  // Update clock every second
+  // Update clock every second based on timezoneMode
   useEffect(() => {
     const updateClock = () => {
       const now = new Date();
@@ -96,7 +108,7 @@ export function BottomBar({
         minute: "2-digit",
         second: "2-digit",
         hour12: false,
-        timeZone: timezone === "Local" ? undefined : "UTC",
+        timeZone: timezoneMode === "Local" ? undefined : "UTC",
       });
       setClockText(formatter.format(now));
     };
@@ -106,7 +118,15 @@ export function BottomBar({
     return () => {
       if (clockIntervalRef.current) clearInterval(clockIntervalRef.current);
     };
-  }, [timezone]);
+  }, [timezoneMode]);
+
+  // Handle timezone toggle
+  const handleTimezoneToggle = useCallback(() => {
+    const nextMode: TimezoneMode = timezoneMode === "UTC" ? "Local" : "UTC";
+    if (onTimezoneToggle) {
+      onTimezoneToggle(nextMode);
+    }
+  }, [timezoneMode, onTimezoneToggle]);
 
   // Handle range click - uses TIME-BASED range (calendar days, timeframe-agnostic)
   // 5D = last 5 calendar days, regardless of whether timeframe is 1h or 1D
@@ -173,10 +193,10 @@ export function BottomBar({
         timeScale.setVisibleRange({ from: minTime, to: maxTime });
       } else if (range === "YTD") {
         // From Jan 1 of the year containing maxTime
-        const year = timezone === "UTC" 
+        const year = timezoneMode === "UTC" 
           ? new Date(maxTime * 1000).getUTCFullYear()
           : new Date(maxTime * 1000).getFullYear();
-        const yearStartUnix = timezone === "UTC"
+        const yearStartUnix = timezoneMode === "UTC"
           ? Math.floor(Date.UTC(year, 0, 1) / 1000)
           : Math.floor(new Date(year, 0, 1).getTime() / 1000);
         // Find first bar at or after yearStart
@@ -195,7 +215,7 @@ export function BottomBar({
         }
       }
     },
-    [chart, dataBounds, lastBarTime, onRangeChange, timezone]
+    [chart, dataBounds, lastBarTime, onRangeChange, timezoneMode]
   );
 
   // Handle scale mode toggle
@@ -213,24 +233,49 @@ export function BottomBar({
     [onScaleModeChange]
   );
 
-  // Expose dump() state
+  // Expose dump() state for QA - use direct merge to ensure state is always available
   useEffect(() => {
     if (typeof window !== "undefined") {
       const w = window as any;
-      if (w.__lwcharts && w.__lwcharts._applyPatch) {
+      const bottomBarState = {
+        rangeKey: selectedRange,
+        scaleMode: displayMode,
+        timezoneMode: timezoneMode,
+        marketStatus: marketStatus,
+        clockText,
+      };
+      
+      // Try _applyPatch first (preferred for deep merge)
+      if (w.__lwcharts && typeof w.__lwcharts._applyPatch === "function") {
         w.__lwcharts._applyPatch({
-          ui: {
-            bottomBar: {
-              rangeKey: selectedRange,
-              scaleMode: displayMode,
-              tzMode: timezone,
-              clockText,
-            },
-          },
+          ui: { bottomBar: bottomBarState },
         });
       }
+      
+      // Also directly set on __lwcharts to ensure availability even if _applyPatch not ready
+      if (!w.__lwcharts) w.__lwcharts = {};
+      if (!w.__lwcharts._state) w.__lwcharts._state = {};
+      if (!w.__lwcharts._state.ui) w.__lwcharts._state.ui = {};
+      w.__lwcharts._state.ui.bottomBar = bottomBarState;
+      
+      // Ensure dump() returns this state
+      const existingDump = w.__lwcharts.dump;
+      if (typeof existingDump !== "function" || !existingDump._hasBottomBar) {
+        const originalDump = existingDump;
+        w.__lwcharts.dump = function() {
+          const base = typeof originalDump === "function" ? originalDump() : {};
+          return {
+            ...base,
+            ui: {
+              ...(base?.ui ?? {}),
+              bottomBar: w.__lwcharts._state?.ui?.bottomBar ?? bottomBarState,
+            },
+          };
+        };
+        w.__lwcharts.dump._hasBottomBar = true;
+      }
     }
-  }, [selectedRange, displayMode, timezone, clockText]);
+  }, [selectedRange, displayMode, timezoneMode, marketStatus, clockText]);
 
   return (
     <div className="tv-bottombar flex items-center justify-between text-sm" style={{
@@ -301,14 +346,54 @@ export function BottomBar({
         })}
       </div>
 
-      {/* Right: Clock + Timezone */}
-      <div className="flex items-center gap-2 ml-auto">
-        <span data-testid="bottombar-tz" className="text-xs" style={{ color: "var(--cp-text-secondary, rgb(148, 163, 184))" }}>
-          {timezone}
+      {/* Right: Market status + Clock + Timezone toggle */}
+      <div className="flex items-center gap-3 ml-auto">
+        {/* Market status indicator */}
+        <span 
+          data-testid="bottombar-market-status"
+          className="text-xs font-medium px-2 py-0.5 rounded"
+          style={{
+            backgroundColor: marketStatus === "LIVE" 
+              ? "rgba(34, 197, 94, 0.2)" 
+              : marketStatus === "DEMO" 
+                ? "rgba(234, 179, 8, 0.2)" 
+                : marketStatus === "LOADING"
+                  ? "rgba(59, 130, 246, 0.2)"
+                  : "rgba(239, 68, 68, 0.2)",
+            color: marketStatus === "LIVE" 
+              ? "rgb(74, 222, 128)" 
+              : marketStatus === "DEMO" 
+                ? "rgb(250, 204, 21)" 
+                : marketStatus === "LOADING"
+                  ? "rgb(96, 165, 250)"
+                  : "rgb(248, 113, 113)",
+          }}
+        >
+          {marketStatus === "LIVE" ? "● LIVE" : marketStatus === "DEMO" ? "◐ DEMO" : marketStatus === "LOADING" ? "◌ LOADING" : "○ OFFLINE"}
         </span>
-        <span className="font-mono text-xs" style={{ color: "var(--cp-text-primary, rgb(226, 232, 240))" }}>
+
+        {/* Clock */}
+        <span 
+          data-testid="bottombar-clock"
+          className="font-mono text-xs" 
+          style={{ color: "var(--cp-text-primary, rgb(226, 232, 240))" }}
+        >
           {clockText || "--:--:--"}
         </span>
+
+        {/* Timezone toggle button */}
+        <button
+          data-testid="bottombar-tz-toggle"
+          onClick={handleTimezoneToggle}
+          className="text-xs px-2 py-0.5 rounded transition-colors hover:bg-slate-700/50"
+          style={{ 
+            color: "var(--cp-text-secondary, rgb(148, 163, 184))",
+            border: "1px solid var(--cp-border, rgb(51, 65, 85))",
+          }}
+          title={`Switch to ${timezoneMode === "UTC" ? "Local" : "UTC"} time`}
+        >
+          {timezoneMode}
+        </button>
       </div>
     </div>
   );

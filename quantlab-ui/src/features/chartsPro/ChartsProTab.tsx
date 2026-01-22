@@ -240,6 +240,17 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
   const [settings, setSettings] = useState<ChartSettings>(() => loadSettings());
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
   const [layoutManagerOpen, setLayoutManagerOpen] = useState(false);
+  // TV-19.3: Timezone mode (UTC / Local) - controlled by ChartsProTab, passed to BottomBar
+  const [timezoneMode, setTimezoneMode] = useState<"UTC" | "Local">(() => {
+    if (typeof window === "undefined") return "UTC";
+    try {
+      const stored = window.localStorage?.getItem("cp.bottomBar.timezoneMode");
+      if (stored === "Local") return "Local";
+      return "UTC";
+    } catch {
+      return "UTC";
+    }
+  });
   // TV-18.1: Modal state (central portal for indicators/other modals)
   const [modalState, setModalState] = useState<{ open: boolean; kind: string | null }>({ open: false, kind: null });
   const [workspaceMode, setWorkspaceMode] = useState(() => loadWorkspaceLayout().mode);
@@ -330,6 +341,16 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
       }
     }
   }, [rightPanelActiveTab]);
+
+  // TV-19.3: Handle timezone toggle (UTC <-> Local)
+  const handleTimezoneToggle = useCallback((mode: "UTC" | "Local") => {
+    setTimezoneMode(mode);
+    try {
+      window.localStorage?.setItem("cp.bottomBar.timezoneMode", mode);
+    } catch {
+      // ignore storage errors
+    }
+  }, []);
 
   const handleSymbolChange = useCallback(
     (value: string) => {
@@ -923,7 +944,9 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
                   dataCount: data.length,
                   barTimes: data.map(d => Number(d.time)),
                 } : undefined}
-                timezone="UTC"
+                timezoneMode={timezoneMode}
+                onTimezoneToggle={handleTimezoneToggle}
+                marketStatus={loading ? "LOADING" : mode === "live" ? "LIVE" : mode === "demo" ? "DEMO" : "OFFLINE"}
               />
             </div>
             {!workspaceMode && !isMobile && !sidebarCollapsed && (

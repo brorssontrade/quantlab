@@ -247,4 +247,114 @@ test.describe("TV-19: BottomBar Functions", () => {
       expect(rangeStored).toBe("6M");
     });
   });
+
+  test.describe("TV-19.3: Timezone + Market status", () => {
+    test("timezone toggle changes dump().ui.bottomBar.timezoneMode", async ({ page }) => {
+      // Wait for bottomBar to be initialized in dump
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.bottomBar?.timezoneMode;
+      }, { timeout: 5000 }).toBeTruthy();
+
+      // Get initial timezone mode
+      const initialDump = await page.evaluate(() => {
+        return (window as any).__lwcharts?.dump?.();
+      });
+      const initialTz = initialDump?.ui?.bottomBar?.timezoneMode;
+      expect(initialTz).toBe("UTC"); // Default
+
+      // Click timezone toggle
+      const tzToggle = page.locator('[data-testid="bottombar-tz-toggle"]');
+      await expect(tzToggle).toBeVisible();
+      await tzToggle.click();
+
+      // Wait for dump to update
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.bottomBar?.timezoneMode;
+      }, { timeout: 2000 }).toBe("Local");
+
+      // Toggle back
+      await tzToggle.click();
+
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.bottomBar?.timezoneMode;
+      }, { timeout: 2000 }).toBe("UTC");
+    });
+
+    test("timezone mode persists in localStorage", async ({ page }) => {
+      // Wait for bottomBar to be ready
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.bottomBar?.timezoneMode;
+      }, { timeout: 5000 }).toBeTruthy();
+
+      // Toggle to Local
+      const tzToggle = page.locator('[data-testid="bottombar-tz-toggle"]');
+      await tzToggle.click();
+
+      // Wait for localStorage update
+      await expect.poll(async () => {
+        return await page.evaluate(() => window.localStorage.getItem("cp.bottomBar.timezoneMode"));
+      }, { timeout: 2000 }).toBe("Local");
+
+      // Toggle back to UTC
+      await tzToggle.click();
+
+      await expect.poll(async () => {
+        return await page.evaluate(() => window.localStorage.getItem("cp.bottomBar.timezoneMode"));
+      }, { timeout: 2000 }).toBe("UTC");
+    });
+
+    test("market status indicator is visible and matches dump()", async ({ page }) => {
+      // Market status indicator should be visible
+      const marketStatus = page.locator('[data-testid="bottombar-market-status"]');
+      await expect(marketStatus).toBeVisible();
+
+      // Wait for marketStatus in dump
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.bottomBar?.marketStatus;
+      }, { timeout: 5000 }).toBeTruthy();
+
+      // Get status from dump
+      const dump = await page.evaluate(() => {
+        return (window as any).__lwcharts?.dump?.();
+      });
+      const statusFromDump = dump?.ui?.bottomBar?.marketStatus;
+
+      // Status should be one of expected values
+      expect(["LIVE", "DEMO", "OFFLINE", "LOADING"]).toContain(statusFromDump);
+
+      // UI element should exist and have text
+      const text = await marketStatus.textContent();
+      expect(text).toBeTruthy();
+    });
+
+    test("clock element exists and displays time", async ({ page }) => {
+      const clock = page.locator('[data-testid="bottombar-clock"]');
+      await expect(clock).toBeVisible();
+
+      // Clock should display time in HH:MM:SS format
+      const text = await clock.textContent();
+      expect(text).toMatch(/\d{2}:\d{2}:\d{2}/);
+    });
+
+    test("timezone toggle button displays current mode", async ({ page }) => {
+      const tzToggle = page.locator('[data-testid="bottombar-tz-toggle"]');
+      await expect(tzToggle).toBeVisible();
+
+      // Should show "UTC" by default
+      let text = await tzToggle.textContent();
+      expect(text).toBe("UTC");
+
+      // Toggle and verify
+      await tzToggle.click();
+      
+      await expect.poll(async () => {
+        return await tzToggle.textContent();
+      }, { timeout: 2000 }).toBe("Local");
+    });
+  });
 });

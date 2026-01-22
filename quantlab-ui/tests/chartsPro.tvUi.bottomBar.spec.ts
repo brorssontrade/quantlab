@@ -93,11 +93,11 @@ test.describe("TV-9: BottomBar – Quick Ranges + Scale Toggles + Clock", () => 
   });
 
   test("TV-9.5: Clock displays time in HH:MM:SS format", async ({ page }) => {
-    // Check timezone label
-    await expect(page.locator('[data-testid="bottombar-tz"]')).toHaveText("UTC");
+    // Check timezone toggle (TV-19.3: now a toggle button)
+    await expect(page.locator('[data-testid="bottombar-tz-toggle"]')).toHaveText("UTC");
 
-    // Check clock text format (HH:MM:SS)
-    const clockText = await page.locator('.tv-bottombar .font-mono').textContent();
+    // Check clock text format (HH:MM:SS) via dedicated testid
+    const clockText = await page.locator('[data-testid="bottombar-clock"]').textContent();
     expect(clockText).toMatch(/^\d{2}:\d{2}:\d{2}$/);
   });
 
