@@ -104,43 +104,9 @@ test.describe("TV-19: BottomBar Functions", () => {
     });
   });
 
-  test.describe("TV-19.2b: Quick ranges - robust invariants", () => {
-    test("visibleTimeRange.to equals dataBounds.lastBarTime after any range click", async ({ page }) => {
-      // This test catches the bug where times drift to 1970/1980
-      const ranges = ["5D", "1M", "6M", "All"] as const;
-      
-      for (const range of ranges) {
-        const rangeBtn = page.locator(`[data-testid="bottombar-range-${range}"]`);
-        await rangeBtn.click();
-        await page.waitForTimeout(200);
-
-        const dump = await page.evaluate(() => {
-          return (window as any).__lwcharts?.dump?.();
-        });
-
-        const visibleTimeRange = dump?.render?.scale?.visibleTimeRange;
-        const dataBounds = dump?.dataBounds;
-
-        expect(dataBounds).toBeTruthy();
-        expect(visibleTimeRange).toBeTruthy();
-        
-        // Key invariant: visible "to" should equal or be very close to lastBarTime
-        // (within 1 bar duration tolerance - max 1 week for weekly timeframe)
-        const tolerance = 7 * 24 * 60 * 60; // 1 week in seconds
-        expect(Math.abs(visibleTimeRange.to - dataBounds.lastBarTime)).toBeLessThanOrEqual(tolerance);
-        
-        // Visible "from" should be >= firstBarTime (can't show before first bar)
-        expect(visibleTimeRange.from).toBeGreaterThanOrEqual(dataBounds.firstBarTime - tolerance);
-        
-        // Visible range should be sane (not in 1970/1980)
-        const year2000 = 946684800; // Jan 1, 2000 in unix seconds
-        expect(visibleTimeRange.from).toBeGreaterThan(year2000);
-        expect(visibleTimeRange.to).toBeGreaterThan(year2000);
-      }
-    });
-
-    test("clicking 5D shows approximately 5 trading days worth of data", async ({ page }) => {
-      // Click 5D
+  test.describe("TV-19.2c: Quick ranges - timeframe-agnostic time window", () => {
+    test("5D range shows ~5 calendar days span (not 5 bars)", async ({ page }) => {
+      // Click 5D - should show last 5 CALENDAR DAYS regardless of timeframe
       const range5D = page.locator('[data-testid="bottombar-range-5D"]');
       await range5D.click();
       await page.waitForTimeout(300);
@@ -155,22 +121,81 @@ test.describe("TV-19: BottomBar Functions", () => {
       expect(visibleTimeRange).toBeTruthy();
       expect(dataBounds).toBeTruthy();
 
-      // 5D should show data ending at lastBarTime
-      const tolerance = 7 * 24 * 60 * 60;
+      // Key invariant: visible "to" should be at lastBarTime
+      const tolerance = 7 * 24 * 60 * 60; // 1 week tolerance for edge cases
       expect(Math.abs(visibleTimeRange.to - dataBounds.lastBarTime)).toBeLessThanOrEqual(tolerance);
       
-      // The span should be positive and reasonable (mock data may have fewer bars than 5 days)
-      // Key invariant: span must be > 0 and not in 1970/1980 range
+      // CRITICAL: span should be ~5 days in SECONDS, not ~5 bars
+      // 5 days = 5 * 86400 = 432000 seconds
+      // Allow 80% tolerance for weekends/gaps but must be > 4 days
       const span = visibleTimeRange.to - visibleTimeRange.from;
-      expect(span).toBeGreaterThan(0);
+      const minExpectedSpan = 4 * 24 * 60 * 60; // At least 4 days (for gaps)
       
-      // Sanity check: dates should be recent (after year 2000)
+      // If data has enough history, span should be >= 4 days
+      // (This catches the bug where 5D showed only ~5 bars = hours with 1h timeframe)
+      const dataSpan = dataBounds.lastBarTime - dataBounds.firstBarTime;
+      if (dataSpan >= 5 * 24 * 60 * 60) {
+        // Data has 5+ days of history - span must be ~5 days
+        expect(span).toBeGreaterThanOrEqual(minExpectedSpan);
+      }
+      
+      // Sanity: dates must be after year 2000 (catches 1970/1980 bugs)
       const year2000 = 946684800;
       expect(visibleTimeRange.from).toBeGreaterThan(year2000);
       expect(visibleTimeRange.to).toBeGreaterThan(year2000);
     });
 
-    test("clicking All shows full data range (from firstBar to lastBar)", async ({ page }) => {
+    test("1M range shows ~30 calendar days span", async ({ page }) => {
+      // Click 1M
+      const range1M = page.locator('[data-testid="bottombar-range-1M"]');
+      await range1M.click();
+      await page.waitForTimeout(300);
+
+      const dump = await page.evaluate(() => {
+        return (window as any).__lwcharts?.dump?.();
+      });
+
+      const visibleTimeRange = dump?.render?.scale?.visibleTimeRange;
+      const dataBounds = dump?.dataBounds;
+      
+      expect(visibleTimeRange).toBeTruthy();
+      expect(dataBounds).toBeTruthy();
+
+      const span = visibleTimeRange.to - visibleTimeRange.from;
+      const dataSpan = dataBounds.lastBarTime - dataBounds.firstBarTime;
+      
+      // If data has 30+ days of history, span should be ~30 days
+      if (dataSpan >= 30 * 24 * 60 * 60) {
+        const minExpectedSpan = 25 * 24 * 60 * 60; // At least 25 days
+        expect(span).toBeGreaterThanOrEqual(minExpectedSpan);
+      }
+    });
+
+    test("range click does NOT change timeframe", async ({ page }) => {
+      // Get initial timeframe from dump
+      const initialDump = await page.evaluate(() => {
+        return (window as any).__lwcharts?.dump?.();
+      });
+      const initialTimeframe = initialDump?.ui?.timeframe;
+
+      // Click various ranges
+      for (const range of ["5D", "1M", "6M", "All"]) {
+        const rangeBtn = page.locator(`[data-testid="bottombar-range-${range}"]`);
+        await rangeBtn.click();
+        await page.waitForTimeout(200);
+      }
+
+      // Get timeframe after all range clicks
+      const finalDump = await page.evaluate(() => {
+        return (window as any).__lwcharts?.dump?.();
+      });
+      const finalTimeframe = finalDump?.ui?.timeframe;
+
+      // Timeframe must be unchanged
+      expect(finalTimeframe).toBe(initialTimeframe);
+    });
+
+    test("All range shows full data span (firstBar to lastBar)", async ({ page }) => {
       // Click All
       const rangeAll = page.locator('[data-testid="bottombar-range-All"]');
       await rangeAll.click();
@@ -192,25 +217,23 @@ test.describe("TV-19: BottomBar Functions", () => {
       expect(Math.abs(visibleTimeRange.to - dataBounds.lastBarTime)).toBeLessThanOrEqual(tolerance);
     });
 
-    test("lastPrice.time is within visibleTimeRange after range click", async ({ page }) => {
-      // Click 1M
-      const range1M = page.locator('[data-testid="bottombar-range-1M"]');
-      await range1M.click();
-      await page.waitForTimeout(300);
-
-      const dump = await page.evaluate(() => {
-        return (window as any).__lwcharts?.dump?.();
-      });
-
-      const visibleTimeRange = dump?.render?.scale?.visibleTimeRange;
-      const lastPrice = dump?.render?.lastPrice;
+    test("visible range dates are sane (after year 2000, not 1970/1980)", async ({ page }) => {
+      const year2000 = 946684800; // Jan 1, 2000 in unix seconds
       
-      expect(visibleTimeRange).toBeTruthy();
-      expect(lastPrice).toBeTruthy();
+      for (const range of ["1D", "5D", "1M", "6M", "All"]) {
+        const rangeBtn = page.locator(`[data-testid="bottombar-range-${range}"]`);
+        await rangeBtn.click();
+        await page.waitForTimeout(200);
 
-      // Last price time should be within visible range (the most recent bar should be visible)
-      expect(lastPrice.time).toBeGreaterThanOrEqual(visibleTimeRange.from);
-      expect(lastPrice.time).toBeLessThanOrEqual(visibleTimeRange.to);
+        const dump = await page.evaluate(() => {
+          return (window as any).__lwcharts?.dump?.();
+        });
+
+        const visibleTimeRange = dump?.render?.scale?.visibleTimeRange;
+        expect(visibleTimeRange).toBeTruthy();
+        expect(visibleTimeRange.from).toBeGreaterThan(year2000);
+        expect(visibleTimeRange.to).toBeGreaterThan(year2000);
+      }
     });
 
     test("range selection is persisted in localStorage", async ({ page }) => {

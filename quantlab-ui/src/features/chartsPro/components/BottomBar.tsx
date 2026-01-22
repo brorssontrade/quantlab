@@ -32,14 +32,20 @@ type ScaleMode = "auto" | "log" | "percent" | "adj";
 
 const RANGE_KEYS: RangeKey[] = ["1D", "5D", "1M", "6M", "YTD", "1Y", "All"];
 
-const RANGE_DAYS: Record<RangeKey, number | null> = {
-  "1D": 1,
-  "5D": 5,
-  "1M": 30,
-  "6M": 180,
-  "YTD": null, // Special handling: start of year
-  "1Y": 365,
-  All: null, // Fit all visible data
+/** 
+ * Range durations in SECONDS (calendar days, not trading days)
+ * This ensures ranges are timeframe-agnostic:
+ * - 5D with 1h bars = last 5 days of hourly candles
+ * - 5D with 1D bars = last 5 daily candles
+ */
+const RANGE_SECONDS: Record<RangeKey, number | null> = {
+  "1D": 1 * 24 * 60 * 60,      // 86400 seconds
+  "5D": 5 * 24 * 60 * 60,      // 432000 seconds
+  "1M": 30 * 24 * 60 * 60,     // ~30 days
+  "6M": 180 * 24 * 60 * 60,    // ~180 days
+  "YTD": null,                  // Special: from Jan 1
+  "1Y": 365 * 24 * 60 * 60,    // ~365 days
+  All: null,                    // Fit all visible data
 };
 
 /**
@@ -102,18 +108,8 @@ export function BottomBar({
     };
   }, [timezone]);
 
-  // Bar count approximations for each range (trading days, not calendar days)
-  const RANGE_BARS: Record<RangeKey, number | null> = useMemo(() => ({
-    "1D": 1,
-    "5D": 5,
-    "1M": 22,   // ~22 trading days per month
-    "6M": 130,  // ~130 trading days in 6 months
-    "YTD": null, // Special: from Jan 1
-    "1Y": 252,  // ~252 trading days per year
-    "All": null, // Show all data
-  }), []);
-
-  // Handle range click - uses bar-index based range for robustness
+  // Handle range click - uses TIME-BASED range (calendar days, timeframe-agnostic)
+  // 5D = last 5 calendar days, regardless of whether timeframe is 1h or 1D
   const handleRangeClick = useCallback(
     (range: RangeKey) => {
       // Determine effective bounds
@@ -145,9 +141,32 @@ export function BottomBar({
       }
       if (onRangeChange) onRangeChange(range);
 
-      // Apply range to chart using bar-index based approach
+      // Apply range to chart using TIME-BASED approach (calendar days)
       const timeScale = chart.timeScale();
-      const { firstBarTime: minTime, lastBarTime: maxTime, dataCount, barTimes } = bounds;
+      const { firstBarTime: minTime, lastBarTime: maxTime, barTimes } = bounds;
+
+      /**
+       * Binary search to find first barTime >= targetUnix
+       * Returns the bar time at that index, or minTime if target is before all bars
+       */
+      const findFirstBarAtOrAfter = (targetUnix: number): number => {
+        if (targetUnix <= minTime) return minTime;
+        if (targetUnix >= maxTime) return maxTime;
+        
+        let low = 0;
+        let high = barTimes.length - 1;
+        
+        while (low < high) {
+          const mid = Math.floor((low + high) / 2);
+          if (barTimes[mid] < targetUnix) {
+            low = mid + 1;
+          } else {
+            high = mid;
+          }
+        }
+        
+        return barTimes[low] ?? minTime;
+      };
 
       if (range === "All") {
         // Show all bars
@@ -160,18 +179,23 @@ export function BottomBar({
         const yearStartUnix = timezone === "UTC"
           ? Math.floor(Date.UTC(year, 0, 1) / 1000)
           : Math.floor(new Date(year, 0, 1).getTime() / 1000);
-        // Find first bar at or after yearStart using binary search
-        const fromTime = barTimes.find(t => t >= yearStartUnix) ?? minTime;
+        // Find first bar at or after yearStart
+        const fromTime = findFirstBarAtOrAfter(yearStartUnix);
         timeScale.setVisibleRange({ from: fromTime, to: maxTime });
       } else {
-        // Bar-index based range: show last N bars
-        const barsToShow = RANGE_BARS[range] ?? dataCount;
-        const fromIndex = Math.max(0, dataCount - barsToShow);
-        const fromTime = barTimes[fromIndex] ?? minTime;
-        timeScale.setVisibleRange({ from: fromTime, to: maxTime });
+        // TIME-BASED range: show last N seconds of data (calendar days)
+        const rangeSeconds = RANGE_SECONDS[range];
+        if (rangeSeconds === null) {
+          // Fallback to all
+          timeScale.setVisibleRange({ from: minTime, to: maxTime });
+        } else {
+          const targetStartUnix = maxTime - rangeSeconds;
+          const fromTime = findFirstBarAtOrAfter(targetStartUnix);
+          timeScale.setVisibleRange({ from: fromTime, to: maxTime });
+        }
       }
     },
-    [chart, dataBounds, lastBarTime, onRangeChange, timezone, RANGE_BARS]
+    [chart, dataBounds, lastBarTime, onRangeChange, timezone]
   );
 
   // Handle scale mode toggle
