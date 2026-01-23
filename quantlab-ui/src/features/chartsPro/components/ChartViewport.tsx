@@ -2388,6 +2388,8 @@ const fitToContent = useCallback(() => {
     tool,
     drawings,
     selectedId,
+    magnetEnabled,
+    snapToClose,
   ]);
 
   bindTestApiRef.current = bindTestApi;

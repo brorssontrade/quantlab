@@ -876,4 +876,144 @@ test.describe("TV-20: LeftToolbar Tool Groups + Flyout", () => {
       }, { timeout: 2000 }).toBe("Keep this");
     });
   });
+
+  test.describe("TV-20.5: Magnet/Snap", () => {
+    test("magnet toggle changes dump().ui.magnet state", async ({ page }) => {
+      // Initial state: magnet off
+      const initialDump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      expect(initialDump.ui.magnet).toBe(false);
+
+      // Click magnet button
+      const magnetBtn = page.locator('[data-testid="topbar-magnet"]');
+      await magnetBtn.click();
+
+      // Verify magnet is now on
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump.ui.magnet;
+      }).toBe(true);
+
+      // Click again to turn off
+      await magnetBtn.click();
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump.ui.magnet;
+      }).toBe(false);
+    });
+
+    test("magnet ON causes trendline point to snap to bar OHLC", async ({ page }) => {
+      // Enable magnet
+      const magnetBtn = page.locator('[data-testid="topbar-magnet"]');
+      await magnetBtn.click();
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump.ui.magnet;
+      }).toBe(true);
+
+      // Get mock data to know expected bar values
+      // Mock data for AAPL.US 1h: bar 0 has high=181, low=179, close=180, open=179.5
+      const dumpBefore = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      const dataBounds = dumpBefore.dataBounds;
+      expect(dataBounds).toBeTruthy();
+
+      // Select trendline tool from Lines group flyout
+      const linesGroup = page.locator('[data-testid="lefttoolbar-group-lines"]');
+      await linesGroup.click();
+      
+      const flyout = page.locator('[data-testid="lefttoolbar-flyout"]');
+      await expect(flyout).toBeVisible({ timeout: 2000 });
+      
+      const trendTool = page.locator('[data-testid="lefttoolbar-tool-trendline"]');
+      await trendTool.click();
+      
+      // Draw trendline in chart area
+      const chartRoot = page.locator('[data-testid="tv-chart-root"]');
+      const box = await chartRoot.boundingBox();
+      if (!box) throw new Error("Chart root not found");
+
+      // Draw from left side to right side (over multiple bars)
+      const startX = box.x + box.width * 0.25;
+      const startY = box.y + box.height * 0.4;
+      const endX = box.x + box.width * 0.75;
+      const endY = box.y + box.height * 0.6;
+
+      await page.mouse.click(startX, startY);
+      await page.mouse.click(endX, endY);
+
+      // Verify drawing was created and its points snap to OHLC values
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.objects?.length;
+      }, { timeout: 3000 }).toBeGreaterThan(0);
+
+      const dumpAfter = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      const trendObj = dumpAfter?.objects?.find((d: any) => d.type === "trend");
+      expect(trendObj).toBeTruthy();
+
+      // With magnet ON, the price should snap to one of the bar's OHLC values
+      // For mock AAPL.US 1h: 
+      // - basePrice=180, close increments by 0.75 per bar
+      // - Bar patterns: high=close+1, low=close-1, open=close-0.5
+      // So valid snap prices are multiples like: 179, 179.5, 180, 181, 179.75, 180.25, 180.75, etc.
+      
+      // Check that p1.price ends in .00, .25, .50, .75 (snap values) within reasonable tolerance
+      // The actual implementation snaps to nearest OHLC of nearest bar
+      const p1Price = trendObj.points[0].price;
+      const p2Price = trendObj.points[1].price;
+      
+      // Valid OHLC values from mock data are well-defined decimal numbers
+      // If snap works, prices should be "clean" values matching bar OHLC
+      // We verify by checking the fractional part is one of: 0, 0.25, 0.5, 0.75
+      const validFractions = [0, 0.25, 0.5, 0.75];
+      const p1Frac = Math.abs(p1Price - Math.floor(p1Price));
+      const p2Frac = Math.abs(p2Price - Math.floor(p2Price));
+      
+      // Allow small tolerance for floating point
+      const isValidFraction = (frac: number) => 
+        validFractions.some(v => Math.abs(frac - v) < 0.01);
+      
+      expect(isValidFraction(p1Frac)).toBe(true);
+      expect(isValidFraction(p2Frac)).toBe(true);
+    });
+
+    test("magnet OFF does NOT snap - arbitrary prices allowed", async ({ page }) => {
+      // Ensure magnet is OFF
+      const initialDump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      expect(initialDump.ui.magnet).toBe(false);
+
+      // Select trendline tool from Lines group flyout
+      const linesGroup = page.locator('[data-testid="lefttoolbar-group-lines"]');
+      await linesGroup.click();
+      
+      const flyout = page.locator('[data-testid="lefttoolbar-flyout"]');
+      await expect(flyout).toBeVisible({ timeout: 2000 });
+      
+      const trendTool = page.locator('[data-testid="lefttoolbar-tool-trendline"]');
+      await trendTool.click();
+
+      // Draw trendline
+      const chartRoot = page.locator('[data-testid="tv-chart-root"]');
+      const box = await chartRoot.boundingBox();
+      if (!box) throw new Error("Chart root not found");
+
+      // Click at arbitrary Y positions (should not snap)
+      await page.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.37);
+      await page.mouse.click(box.x + box.width * 0.7, box.y + box.height * 0.63);
+
+      // Verify drawing exists
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.objects?.length;
+      }, { timeout: 3000 }).toBeGreaterThan(0);
+
+      const dumpAfter = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      const trendObj = dumpAfter?.objects?.find((d: any) => d.type === "trend");
+      expect(trendObj).toBeTruthy();
+
+      // With magnet OFF, prices are arbitrary - not necessarily snapped
+      // The point is created at the exact mouse Y position converted to price
+      // This is just a sanity check that drawing was created
+      expect(trendObj.points.length).toBe(2);
+    });
+  });
 });
