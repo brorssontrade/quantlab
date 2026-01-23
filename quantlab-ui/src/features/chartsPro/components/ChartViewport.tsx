@@ -2354,6 +2354,43 @@ const fitToContent = useCallback(() => {
               p1: d.p1,
               p2: d.p2,
               points: [d.p1, d.p2],
+              // Computed regression values for deterministic testing
+              ...(() => {
+                const minTime = Math.min(d.p1.timeMs, d.p2.timeMs);
+                const maxTime = Math.max(d.p1.timeMs, d.p2.timeMs);
+                const barsInWindow = data.filter(
+                  (bar) => bar.timestampMs >= minTime && bar.timestampMs <= maxTime
+                );
+                const n = barsInWindow.length;
+                if (n < 2) {
+                  return { n, slope: null, intercept: null, stdev: null, bandK: 2, windowStart: minTime, windowEnd: maxTime };
+                }
+                // Linear regression: y = slope*x + intercept
+                let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+                for (let i = 0; i < n; i++) {
+                  const x = i;
+                  const y = barsInWindow[i].close;
+                  sumX += x;
+                  sumY += y;
+                  sumXY += x * y;
+                  sumX2 += x * x;
+                }
+                const denom = n * sumX2 - sumX * sumX;
+                if (denom === 0) {
+                  return { n, slope: 0, intercept: sumY / n, stdev: 0, bandK: 2, windowStart: minTime, windowEnd: maxTime };
+                }
+                const slope = (n * sumXY - sumX * sumY) / denom;
+                const intercept = (sumY - slope * sumX) / n;
+                // Standard deviation of residuals
+                let sumResidual2 = 0;
+                for (let i = 0; i < n; i++) {
+                  const predicted = slope * i + intercept;
+                  const residual = barsInWindow[i].close - predicted;
+                  sumResidual2 += residual * residual;
+                }
+                const stdev = Math.sqrt(sumResidual2 / n);
+                return { n, slope, intercept, stdev, bandK: 2, windowStart: minTime, windowEnd: maxTime };
+              })(),
             }),
             // FibRetracement computed values for Fibonacci tests
             ...(d.kind === "fibRetracement" && {
