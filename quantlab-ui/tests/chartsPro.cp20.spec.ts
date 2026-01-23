@@ -2495,4 +2495,146 @@ test.describe("TV-20: LeftToolbar Tool Groups + Flyout", () => {
       }, { timeout: 3000 }).toBe(false);
     });
   });
+
+  // ====================================================================
+  // TV-20.12b: Short Position
+  // ====================================================================
+  test.describe("TV-20.12b: Short Position", () => {
+    test("should select shortPosition tool with S hotkey", async ({ page }) => {
+      await page.keyboard.press("s");
+      
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.activeTool;
+      }, { timeout: 3000 }).toBe("shortPosition");
+    });
+
+    test("should create shortPosition with 3-click workflow", async ({ page }) => {
+      // Clear any existing drawings
+      await page.evaluate(() => {
+        const charts = (window as any).__lwcharts;
+        if (charts?.set) charts.set({ drawings: [] });
+      });
+
+      // Select shortPosition tool
+      await page.keyboard.press("s");
+      
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.activeTool;
+      }, { timeout: 3000 }).toBe("shortPosition");
+
+      const chartWrapper = page.locator('[data-testid="tv-chart-root"]');
+      const box = await chartWrapper.boundingBox();
+      if (!box) return;
+
+      // 3-click workflow for short:
+      // Click 1: Entry point (middle height)
+      await page.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.5);
+      await page.waitForTimeout(100);
+      
+      // Click 2: Stop loss (above entry for short)
+      await page.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.3);
+      await page.waitForTimeout(100);
+      
+      // Click 3: Target (below entry for short)
+      await page.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.7);
+      
+      // Verify shortPosition was created
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.objects?.some((d: any) => d.type === "shortPosition");
+      }, { timeout: 3000 }).toBe(true);
+    });
+
+    test("should compute risk/reward values via dump()", async ({ page }) => {
+      // Clear any existing drawings
+      await page.evaluate(() => {
+        const charts = (window as any).__lwcharts;
+        if (charts?.set) charts.set({ drawings: [] });
+      });
+
+      // Select shortPosition tool
+      await page.keyboard.press("s");
+      
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.activeTool;
+      }, { timeout: 3000 }).toBe("shortPosition");
+
+      const chartWrapper = page.locator('[data-testid="tv-chart-root"]');
+      const box = await chartWrapper.boundingBox();
+      if (!box) return;
+
+      // 3-click workflow for short
+      await page.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.5); // Entry
+      await page.waitForTimeout(100);
+      await page.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.3); // Stop (above)
+      await page.waitForTimeout(100);
+      await page.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.7); // Target (below)
+      
+      // Verify dump() contract
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        const pos = dump?.objects?.find((d: any) => d.type === "shortPosition");
+        if (!pos) return false;
+        
+        // Verify all required fields exist
+        const hasP1 = pos.p1 && typeof pos.p1.timeMs === "number" && typeof pos.p1.price === "number";
+        const hasP2 = pos.p2 && typeof pos.p2.timeMs === "number" && typeof pos.p2.price === "number";
+        const hasP3 = pos.p3 && typeof pos.p3.timeMs === "number" && typeof pos.p3.price === "number";
+        const hasPoints = Array.isArray(pos.points) && pos.points.length === 3;
+        const hasRiskPrice = typeof pos.riskPrice === "number" && pos.riskPrice >= 0;
+        const hasRewardPrice = typeof pos.rewardPrice === "number" && pos.rewardPrice >= 0;
+        const hasRiskPercent = typeof pos.riskPercent === "number";
+        const hasRewardPercent = typeof pos.rewardPercent === "number";
+        const hasRatio = typeof pos.riskRewardRatio === "number" && pos.riskRewardRatio >= 0;
+        
+        return hasP1 && hasP2 && hasP3 && hasPoints && hasRiskPrice && hasRewardPrice && 
+               hasRiskPercent && hasRewardPercent && hasRatio;
+      }, { timeout: 3000 }).toBe(true);
+    });
+
+    test("should delete shortPosition with Delete key", async ({ page }) => {
+      // Clear and create a shortPosition
+      await page.evaluate(() => {
+        const charts = (window as any).__lwcharts;
+        if (charts?.set) charts.set({ drawings: [] });
+      });
+
+      await page.keyboard.press("s");
+      
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.activeTool;
+      }, { timeout: 3000 }).toBe("shortPosition");
+
+      const chartWrapper = page.locator('[data-testid="tv-chart-root"]');
+      const box = await chartWrapper.boundingBox();
+      if (!box) return;
+
+      // 3-click to create (short: entry, stop above, target below)
+      await page.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.5);
+      await page.waitForTimeout(100);
+      await page.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.3);
+      await page.waitForTimeout(100);
+      await page.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.7);
+
+      // Verify created and selected
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        const pos = dump?.objects?.find((d: any) => d.type === "shortPosition");
+        return pos?.selected;
+      }, { timeout: 3000 }).toBe(true);
+
+      // Delete with Delete key
+      await page.keyboard.press("Delete");
+
+      // Verify removed
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.objects?.some((d: any) => d.type === "shortPosition");
+      }, { timeout: 3000 }).toBe(false);
+    });
+  });
 });

@@ -45,7 +45,7 @@ export interface OhlcvResponse {
   meta?: Record<string, unknown>;
 }
 
-export type DrawingKind = "hline" | "vline" | "trend" | "channel" | "rectangle" | "text" | "priceRange" | "dateRange" | "dateAndPriceRange" | "fibRetracement" | "pitchfork" | "flatTopChannel" | "flatBottomChannel" | "regressionTrend" | "longPosition";
+export type DrawingKind = "hline" | "vline" | "trend" | "channel" | "rectangle" | "text" | "priceRange" | "dateRange" | "dateAndPriceRange" | "fibRetracement" | "pitchfork" | "flatTopChannel" | "flatBottomChannel" | "regressionTrend" | "longPosition" | "shortPosition";
 
 export interface DrawingStyle {
   color: string;
@@ -190,7 +190,17 @@ export interface LongPosition extends DrawingBase {
   p3: TrendPoint; // Take Profit (above entry for long)
 }
 
-export type Drawing = HLine | VLine | Trend | Channel | Rectangle | TextDrawing | PriceRange | DateRange | DateAndPriceRange | FibRetracement | Pitchfork | FlatTopChannel | FlatBottomChannel | RegressionTrend | LongPosition;
+/** Short Position - 3-point risk/reward visualization (TradingView-style)
+ * p1 = Entry, p2 = Stop Loss, p3 = Take Profit
+ * Inverted from Long: stop above entry, target below entry */
+export interface ShortPosition extends DrawingBase {
+  kind: "shortPosition";
+  p1: TrendPoint; // Entry point (price level where you enter short)
+  p2: TrendPoint; // Stop Loss (above entry for short)
+  p3: TrendPoint; // Take Profit (below entry for short)
+}
+
+export type Drawing = HLine | VLine | Trend | Channel | Rectangle | TextDrawing | PriceRange | DateRange | DateAndPriceRange | FibRetracement | Pitchfork | FlatTopChannel | FlatBottomChannel | RegressionTrend | LongPosition | ShortPosition;
 
 export interface CompareSeriesConfig {
   id: string;

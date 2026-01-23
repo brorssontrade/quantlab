@@ -834,6 +834,9 @@ const overlayCanvasClassName = "chartspro-overlay__canvas absolute inset-0";
         case "l":
           nextTool = "longPosition";
           break;
+        case "s":
+          nextTool = "shortPosition";
+          break;
         default:
           return;
       }
@@ -2410,6 +2413,24 @@ const fitToContent = useCallback(() => {
                 const targetPrice = d.p3.price;
                 const riskPrice = Math.abs(entryPrice - stopPrice);
                 const rewardPrice = Math.abs(targetPrice - entryPrice);
+                const riskPercent = entryPrice !== 0 ? (riskPrice / entryPrice) * 100 : 0;
+                const rewardPercent = entryPrice !== 0 ? (rewardPrice / entryPrice) * 100 : 0;
+                const riskRewardRatio = riskPrice > 0 ? rewardPrice / riskPrice : 0;
+                return { riskPrice, rewardPrice, riskPercent, rewardPercent, riskRewardRatio };
+              })(),
+            }),
+            // Short Position computed values for risk/reward tests
+            ...(d.kind === "shortPosition" && {
+              p1: d.p1,
+              p2: d.p2,
+              p3: d.p3,
+              points: [d.p1, d.p2, d.p3],
+              ...(() => {
+                const entryPrice = d.p1.price;
+                const stopPrice = d.p2.price;
+                const targetPrice = d.p3.price;
+                const riskPrice = Math.abs(stopPrice - entryPrice);
+                const rewardPrice = Math.abs(entryPrice - targetPrice);
                 const riskPercent = entryPrice !== 0 ? (riskPrice / entryPrice) * 100 : 0;
                 const rewardPercent = entryPrice !== 0 ? (rewardPrice / entryPrice) * 100 : 0;
                 const riskRewardRatio = riskPrice > 0 ? rewardPrice / riskPrice : 0;

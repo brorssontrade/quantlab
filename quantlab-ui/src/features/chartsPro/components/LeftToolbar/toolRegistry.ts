@@ -131,7 +131,7 @@ export const TOOL_GROUPS: ToolGroup[] = [
       { id: "dateRange", label: "Date Range", icon: "↔", status: "enabled", tooltip: "Measure time span" },
       { id: "dateAndPriceRange", label: "Date & Price Range", icon: "⤢", status: "enabled", tooltip: "Measure both price and time" },
       { id: "longPosition", label: "Long Position", icon: "📈", shortcut: "L", status: "enabled", tooltip: "Risk/Reward for long trade" },
-      { id: "shortPosition", label: "Short Position", icon: "📉", status: "disabled", tooltip: "Coming soon" },
+      { id: "shortPosition", label: "Short Position", icon: "📉", shortcut: "S", status: "enabled", tooltip: "Risk/Reward for short trade" },
     ],
   },
 ];
