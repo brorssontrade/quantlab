@@ -78,7 +78,8 @@
 | Path | Purpose |
 |------|---------|
 | `components/SearchableSelect.tsx` | Searchable dropdown |
-| `components/ui/` | shadcn/ui components |
+| `components/ui/` | shadcn/ui components (button, input, textarea, etc.) |
+| `components/ui/textarea.tsx` | **TV-20.4: Multiline text input for TextModal** |
 
 ### `src/features/` – Feature Modules
 

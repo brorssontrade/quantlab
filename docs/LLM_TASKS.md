@@ -1,3 +1,38 @@
+### 2026-01-23 (TV-20.4 – Edit Existing Text + Multiline)
+
+**Status:** ✅ **COMPLETE** (Double-click/Enter to edit existing text, multiline textarea support)
+
+**Task Description:** "Edit existing text via double-click or Enter key. TextModal uses textarea for multiline support. Enter=Save, Shift+Enter=newline."
+
+**Root Cause:** Text tool created new text but couldn't edit existing. Single-line input couldn't handle multi-line notes.
+
+**Solution:**
+1. **TextModal.tsx** – Changed Input to Textarea, added "Enter to save, Shift+Enter for new line" hint
+2. **textarea.tsx** – New shadcn/ui Textarea component
+3. **DrawingLayer.tsx** – Added `onTextEdit` prop, dblclick listener, Enter key handler for edit trigger
+4. **Hit test fix** – Text bounding box was using wrong y-direction (textBaseline="top" means y is top, extends down)
+5. **Expanded hit box** – Added HIT_TOLERANCE padding for easier selection
+
+**Files Changed:**
+- `quantlab-ui/src/components/ui/textarea.tsx` (NEW – shadcn/ui component)
+- `quantlab-ui/src/features/chartsPro/components/Modal/TextModal.tsx` (Input→Textarea, multiline hint)
+- `quantlab-ui/src/features/chartsPro/components/DrawingLayer.tsx` (onTextEdit, dblclick, Enter handler, hit test fix)
+- `quantlab-ui/src/features/chartsPro/components/ChartViewport.tsx` (onTextEdit prop)
+- `quantlab-ui/src/features/chartsPro/ChartsProTab.tsx` (onTextEdit wiring)
+- `quantlab-ui/tests/chartsPro.cp20.spec.ts` (+4 TV-20.4 tests)
+
+**Test Results & Gates:**
+- npm build ✅ (2473 modules)
+- chartsPro.cp20 ✅ (27/27 passed)
+- tvUI ✅ (169/169 passed)
+- tvParity ✅ (35/35 passed)
+
+**Commits:**
+- `9217937` feat(frontend): TV-20.4 Edit text + multiline support
+- `27287de` docs(kanban): mark TV-20.4 DONE
+
+---
+
 ### 2026-01-23 (TV-20.3 – Text/Note Tool)
 
 **Status:** ✅ **COMPLETE** (Text tool functional: click to place, modal to edit, move, delete)
