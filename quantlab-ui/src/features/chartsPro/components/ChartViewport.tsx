@@ -347,7 +347,7 @@ const installLwChartsStub = () => {
 installLwChartsStub();
 
 
-type ChartTypeProp = "candles" | "bars" | "line" | "area" | "heikinAshi";
+type ChartTypeProp = "candles" | "bars" | "hollowCandles" | "line" | "area" | "heikinAshi";
 
 interface ChartViewportProps {
   apiBase: string;

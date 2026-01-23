@@ -13,7 +13,7 @@ import { useState, useRef, useEffect } from "react";
 import { BarChart3, CandlestickChart, TrendingUp, AreaChart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-export type ChartType = "candles" | "bars" | "line" | "area" | "heikinAshi";
+export type ChartType = "candles" | "bars" | "hollowCandles" | "line" | "area" | "heikinAshi";
 
 interface ChartTypeSelectorProps {
   value: ChartType;
@@ -23,6 +23,7 @@ interface ChartTypeSelectorProps {
 const CHART_TYPES: Array<{ value: ChartType; label: string; icon: React.ElementType }> = [
   { value: "candles", label: "Candles", icon: CandlestickChart },
   { value: "bars", label: "Bars", icon: BarChart3 },
+  { value: "hollowCandles", label: "Hollow Candles", icon: CandlestickChart },
   { value: "heikinAshi", label: "Heikin Ashi", icon: CandlestickChart },
   { value: "line", label: "Line", icon: TrendingUp },
   { value: "area", label: "Area", icon: AreaChart },

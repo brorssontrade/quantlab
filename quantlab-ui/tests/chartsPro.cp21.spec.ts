@@ -163,3 +163,123 @@ test.describe("TV-21.1: Heikin Ashi Integration", () => {
     expect(dump?.ui?.chartType).toBe("candles");
   });
 });
+
+/**
+ * TV-21.2: Bars (OHLC Bars)
+ */
+test.describe("TV-21.2: Bars Chart Type", () => {
+  test.beforeEach(async ({ page }, testInfo) => {
+    await gotoChartsPro(page, testInfo, { mock: true });
+  });
+
+  test("can switch to Bars via ChartTypeSelector", async ({ page }) => {
+    const chartTypeBtn = page.locator('[data-testid="chart-type-button"]');
+    await chartTypeBtn.click();
+    
+    const barsOption = page.locator('[data-testid="chart-type-option-bars"]');
+    await expect(barsOption).toBeVisible();
+    await barsOption.click();
+
+    // State-driven wait
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.chartType;
+    }, { timeout: 5000 }).toBe("bars");
+  });
+
+  test("Bars renders without error", async ({ page }) => {
+    const chartTypeBtn = page.locator('[data-testid="chart-type-button"]');
+    await chartTypeBtn.click();
+    await page.locator('[data-testid="chart-type-option-bars"]').click();
+
+    // State-driven wait
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.chartType;
+    }, { timeout: 5000 }).toBe("bars");
+
+    // Chart should still be visible
+    await expect(page.locator('[data-testid="tv-chart-root"]')).toBeVisible();
+    await expect(page.locator('.tv-lightweight-charts')).toBeVisible();
+  });
+
+  test("switching from Bars back to Candles works", async ({ page }) => {
+    const chartTypeBtn = page.locator('[data-testid="chart-type-button"]');
+    
+    // Switch to Bars
+    await chartTypeBtn.click();
+    await page.locator('[data-testid="chart-type-option-bars"]').click();
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.chartType;
+    }).toBe("bars");
+
+    // Switch back to Candles
+    await chartTypeBtn.click();
+    await page.locator('[data-testid="chart-type-option-candles"]').click();
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.chartType;
+    }).toBe("candles");
+  });
+});
+
+/**
+ * TV-21.3: Hollow Candles
+ */
+test.describe("TV-21.3: Hollow Candles Chart Type", () => {
+  test.beforeEach(async ({ page }, testInfo) => {
+    await gotoChartsPro(page, testInfo, { mock: true });
+  });
+
+  test("can switch to Hollow Candles via ChartTypeSelector", async ({ page }) => {
+    const chartTypeBtn = page.locator('[data-testid="chart-type-button"]');
+    await chartTypeBtn.click();
+    
+    const hollowOption = page.locator('[data-testid="chart-type-option-hollowCandles"]');
+    await expect(hollowOption).toBeVisible();
+    await hollowOption.click();
+
+    // State-driven wait
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.chartType;
+    }, { timeout: 5000 }).toBe("hollowCandles");
+  });
+
+  test("Hollow Candles renders without error", async ({ page }) => {
+    const chartTypeBtn = page.locator('[data-testid="chart-type-button"]');
+    await chartTypeBtn.click();
+    await page.locator('[data-testid="chart-type-option-hollowCandles"]').click();
+
+    // State-driven wait
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.chartType;
+    }, { timeout: 5000 }).toBe("hollowCandles");
+
+    // Chart should still be visible
+    await expect(page.locator('[data-testid="tv-chart-root"]')).toBeVisible();
+    await expect(page.locator('.tv-lightweight-charts')).toBeVisible();
+  });
+
+  test("switching from Hollow Candles back to Candles works", async ({ page }) => {
+    const chartTypeBtn = page.locator('[data-testid="chart-type-button"]');
+    
+    // Switch to Hollow Candles
+    await chartTypeBtn.click();
+    await page.locator('[data-testid="chart-type-option-hollowCandles"]').click();
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.chartType;
+    }).toBe("hollowCandles");
+
+    // Switch back to Candles
+    await chartTypeBtn.click();
+    await page.locator('[data-testid="chart-type-option-candles"]').click();
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.chartType;
+    }).toBe("candles");
+  });
+});
