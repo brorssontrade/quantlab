@@ -1,3 +1,52 @@
+### 2026-01-23 (TV-19.3 – Timezone Selector + Market Session Status)
+
+**Status:** ✅ **COMPLETE** (Timezone dropdown with 3 zones + market session status based on exchange hours)
+
+**Task Description:** "Timezone selector (UTC, Europe/Stockholm, America/New_York), market session status (OPEN/CLOSED/PRE/POST/—), localStorage persistence, dump() contract."
+
+**Implementation:**
+1. **Timezone dropdown selector** with 3 IANA timezones (UTC, Europe/Stockholm, America/New_York)
+2. **Market session computation** based on exchangeCode (US, SS/ST, etc.) with correct hours
+3. **Updated dump() contract** with timezoneId, marketSession, marketStatus, clockText
+4. **localStorage persistence** via `cp.bottomBar.timezoneId`
+
+**dump() Contract:**
+```typescript
+// bottomBar
+{
+  rangeKey: string,
+  scaleMode: string,
+  timezoneId: "UTC" | "Europe/Stockholm" | "America/New_York",
+  marketStatus: "LIVE" | "DEMO" | "OFFLINE" | "LOADING",
+  marketSession: "OPEN" | "CLOSED" | "PRE" | "POST" | "—",
+  clockText: string  // "HH:MM:SS" in selected timezone
+}
+```
+
+**Market Session Hours:**
+- US (NYSE/NASDAQ): 09:30-16:00 ET = OPEN, 04:00-09:30 = PRE, 16:00-20:00 = POST
+- Stockholm (OMX): 09:00-17:30 CET = OPEN
+- Weekend = CLOSED
+- Unknown exchange = "—"
+
+**Files Changed:**
+- `quantlab-ui/src/features/chartsPro/components/BottomBar.tsx` (dropdown, session logic)
+- `quantlab-ui/src/features/chartsPro/ChartsProTab.tsx` (timezoneId state, handler)
+- `quantlab-ui/tests/chartsPro.cp19.spec.ts` (6 TV-19.3 tests)
+- `quantlab-ui/tests/chartsPro.tvUi.bottomBar.spec.ts` (updated text assertion)
+- `docs/CHARTSPRO_TVUI_KANBAN.md` (TV-19.3 marked DONE)
+
+**Test Results & Gates:**
+- npm build ✅ (2473 modules)
+- chartsPro.cp19 ✅ **63/63 = 21×3 repeat-each FLAKE-FREE**
+- tvUI.bottomBar ✅ (13/13 passed)
+- tvParity ✅ (35/35 passed)
+
+**Commits:**
+- `b708d2b` feat(frontend): TV-19.3 Timezone selector + Market session status
+
+---
+
 ### 2026-01-23 (TV-20.7 – Fibonacci Retracement)
 
 **Status:** ✅ **COMPLETE** (Full Fibonacci Retracement tool with 9 levels, TradingView-style rendering, edit lifecycle)
