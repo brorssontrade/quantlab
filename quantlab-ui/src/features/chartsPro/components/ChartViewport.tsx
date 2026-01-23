@@ -2278,6 +2278,8 @@ const fitToContent = useCallback(() => {
               ? [{ timeMs: d.p1.timeMs, price: d.p1.price }, { timeMs: d.p2.timeMs, price: d.p2.price }]
               : d.kind === "dateRange"
               ? [{ timeMs: d.p1.timeMs, price: d.p1.price }, { timeMs: d.p2.timeMs, price: d.p2.price }]
+              : d.kind === "dateAndPriceRange"
+              ? [{ timeMs: d.p1.timeMs, price: d.p1.price }, { timeMs: d.p2.timeMs, price: d.p2.price }]
               : [],
             // Raw p1/p2 for rectangle tests
             ...(d.kind === "rectangle" && { p1: d.p1, p2: d.p2 }),
@@ -2294,6 +2296,15 @@ const fitToContent = useCallback(() => {
             ...(d.kind === "dateRange" && {
               p1: d.p1,
               p2: d.p2,
+              deltaMs: Math.abs(d.p2.timeMs - d.p1.timeMs),
+              deltaDays: Math.abs(d.p2.timeMs - d.p1.timeMs) / (1000 * 60 * 60 * 24),
+            }),
+            // DateAndPriceRange computed values for combined measure tests
+            ...(d.kind === "dateAndPriceRange" && {
+              p1: d.p1,
+              p2: d.p2,
+              deltaPrice: d.p2.price - d.p1.price,
+              deltaPercent: d.p1.price !== 0 ? ((d.p2.price - d.p1.price) / d.p1.price) * 100 : 0,
               deltaMs: Math.abs(d.p2.timeMs - d.p1.timeMs),
               deltaDays: Math.abs(d.p2.timeMs - d.p1.timeMs) / (1000 * 60 * 60 * 24),
             }),

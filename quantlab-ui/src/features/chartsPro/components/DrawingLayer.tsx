@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { BusinessDay, IChartApi, ISeriesApi, SeriesType, UTCTimestamp } from "@/lib/lightweightCharts";
 
-import type { DateRange, Drawing, DrawingKind, NormalizedBar, PriceRange, Tf, Trend } from "../types";
+import type { DateAndPriceRange, DateRange, Drawing, DrawingKind, NormalizedBar, PriceRange, Tf, Trend } from "../types";
 import { describeTrend, tsMsToUtc } from "../types";
 import type { Tool } from "../state/controls";
 import { useOverlayCanvas } from "./overlayCanvasContext";
@@ -40,7 +40,8 @@ type DrawingGeometry =
   | { kind: "rectangle"; x: number; y: number; w: number; h: number; path: Path2D }
   | { kind: "text"; x: number; y: number; width: number; height: number; content: string }
   | { kind: "priceRange"; segment: SegmentGeometry; deltaPrice: number; deltaPercent: number }
-  | { kind: "dateRange"; segment: SegmentGeometry; deltaMs: number; barsCount: number };
+  | { kind: "dateRange"; segment: SegmentGeometry; deltaMs: number; barsCount: number }
+  | { kind: "dateAndPriceRange"; segment: SegmentGeometry; deltaPrice: number; deltaPercent: number; deltaMs: number; barsCount: number };
 
 type PointerState =
   | { mode: "idle" }
@@ -56,6 +57,7 @@ const COLORS: Record<Drawing["kind"], string> = {
   text: "#eab308",
   priceRange: "#06b6d4", // cyan for measure tools
   dateRange: "#06b6d4", // cyan for measure tools
+  dateAndPriceRange: "#06b6d4", // cyan for combined measure tool
 };
 
 const HIT_TOLERANCE = 8;
@@ -295,6 +297,9 @@ export function DrawingLayer({
           break;
         case "dateRange":
           drawDateRange(ctx, drawing as DateRange, geometry, selectedId === drawing.id, colors, timeframe);
+          break;
+        case "dateAndPriceRange":
+          drawDateAndPriceRange(ctx, drawing as DateAndPriceRange, geometry, selectedId === drawing.id, colors, timeframe);
           break;
         default:
           break;
@@ -607,6 +612,20 @@ export function DrawingLayer({
             }
             break;
           }
+          case "dateAndPriceRange": {
+            const { segment } = geometry;
+            // p1 = start point, p2 = end point
+            if (distance(point.x, point.y, segment.x1, segment.y1) <= HANDLE_RADIUS + 2) {
+              return { drawing, handle: "p1" };
+            }
+            if (distance(point.x, point.y, segment.x2, segment.y2) <= HANDLE_RADIUS + 2) {
+              return { drawing, handle: "p2" };
+            }
+            if (distanceToSegment(point.x, point.y, segment) <= HIT_TOLERANCE) {
+              return { drawing, handle: "line" };
+            }
+            break;
+          }
           default:
             break;
         }
@@ -789,6 +808,26 @@ export function DrawingLayer({
           requestRender();
           break;
         }
+        case "dateAndPriceRange": {
+          const drawing: Drawing = {
+            id: createId(),
+            kind: "dateAndPriceRange",
+            symbol,
+            tf: timeframe,
+            p1: { timeMs: point.timeMs, price: point.price },
+            p2: { timeMs: point.timeMs, price: point.price },
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            z: Date.now(),
+            style: { color: COLORS.dateAndPriceRange, width: 2 },
+          };
+          pushDraft(drawing);
+          pointerState.current = { mode: "drawing", id: drawing.id, kind: "dateAndPriceRange" };
+          draftIdRef.current = drawing.id;
+          pendingCommitRef.current = true;
+          requestRender();
+          break;
+        }
         default:
           break;
       }
@@ -842,6 +881,13 @@ export function DrawingLayer({
           };
           pushDraft(next, { transient: true, select: false });
         } else if (drawing.kind === "dateRange") {
+          const next: Drawing = {
+            ...drawing,
+            p2: { timeMs: targetPoint.timeMs, price: targetPoint.price },
+            updatedAt: Date.now(),
+          };
+          pushDraft(next, { transient: true, select: false });
+        } else if (drawing.kind === "dateAndPriceRange") {
           const next: Drawing = {
             ...drawing,
             p2: { timeMs: targetPoint.timeMs, price: targetPoint.price },
@@ -1008,6 +1054,33 @@ export function DrawingLayer({
           }
           case "dateRange": {
             // dateRange: drag p1 or p2 endpoints, or move whole measurement
+            if (state.handle === "p1") {
+              pushDraft({
+                ...drawing,
+                p1: { timeMs: targetPoint.timeMs, price: targetPoint.price },
+                updatedAt: Date.now(),
+              }, { transient: true, select: false });
+            } else if (state.handle === "p2") {
+              pushDraft({
+                ...drawing,
+                p2: { timeMs: targetPoint.timeMs, price: targetPoint.price },
+                updatedAt: Date.now(),
+              }, { transient: true, select: false });
+            } else if (state.handle === "line" && pointerOrigin.current) {
+              const dt = targetPoint.timeMs - pointerOrigin.current.timeMs;
+              const dp = targetPoint.price - pointerOrigin.current.price;
+              pointerOrigin.current = targetPoint;
+              pushDraft({
+                ...drawing,
+                p1: { timeMs: drawing.p1.timeMs + dt, price: drawing.p1.price + dp },
+                p2: { timeMs: drawing.p2.timeMs + dt, price: drawing.p2.price + dp },
+                updatedAt: Date.now(),
+              }, { transient: true, select: false });
+            }
+            break;
+          }
+          case "dateAndPriceRange": {
+            // dateAndPriceRange: drag p1 or p2 endpoints, or move whole measurement
             if (state.handle === "p1") {
               pushDraft({
                 ...drawing,
@@ -1540,6 +1613,109 @@ function drawDateRange(
   }
 }
 
+function drawDateAndPriceRange(
+  ctx: CanvasRenderingContext2D,
+  drawing: DateAndPriceRange,
+  geometry: Extract<DrawingGeometry, { kind: "dateAndPriceRange" }>,
+  selected: boolean,
+  colors: OverlayColors,
+  _timeframe?: Tf, // For consistency with drawDateRange signature
+) {
+  const { segment, deltaPrice, deltaPercent, deltaMs, barsCount } = geometry;
+  const color = drawing.style?.color ?? colors.line;
+  const lineWidth = selected ? SELECTED_LINE_WIDTH : (drawing.style?.width ?? LINE_WIDTH);
+  
+  // Draw diagonal line connecting p1 and p2 (like priceRange)
+  ctx.strokeStyle = selected ? colors.selection : color;
+  ctx.lineWidth = lineWidth;
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.moveTo(segment.x1, segment.y1);
+  ctx.lineTo(segment.x2, segment.y2);
+  ctx.stroke();
+  
+  // Draw extension lines at both ends (TV-style combined measurement)
+  const extLen = 15;
+  // Horizontal extensions at both Y levels
+  ctx.beginPath();
+  ctx.moveTo(segment.x1 - extLen, segment.y1);
+  ctx.lineTo(segment.x1 + extLen, segment.y1);
+  ctx.moveTo(segment.x2 - extLen, segment.y2);
+  ctx.lineTo(segment.x2 + extLen, segment.y2);
+  ctx.stroke();
+  
+  // Format time span as "Xd Yh" or relevant parts
+  const formatTimeSpan = (ms: number): string => {
+    const seconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+    
+    if (days > 0) {
+      const remHours = hours % 24;
+      return remHours > 0 ? `${days}d ${remHours}h` : `${days}d`;
+    } else if (hours > 0) {
+      const remMins = minutes % 60;
+      return remMins > 0 ? `${hours}h ${remMins}m` : `${hours}h`;
+    } else if (minutes > 0) {
+      return `${minutes}m`;
+    } else {
+      return `${seconds}s`;
+    }
+  };
+  
+  // Draw label showing BOTH price delta AND time delta (TradingView combined measure style)
+  const priceSign = deltaPrice >= 0 ? "+" : "";
+  const timeSpan = formatTimeSpan(deltaMs);
+  const label = `${priceSign}${deltaPrice.toFixed(2)} (${priceSign}${deltaPercent.toFixed(2)}%)  |  ${barsCount} bars, ${timeSpan}`;
+  const labelX = (segment.x1 + segment.x2) / 2;
+  const labelY = (segment.y1 + segment.y2) / 2 - 20;
+  
+  ctx.font = "12px sans-serif";
+  const textWidth = ctx.measureText(label).width;
+  const padding = 4;
+  
+  // Background for label
+  ctx.fillStyle = colors.labelBg;
+  ctx.fillRect(labelX - textWidth / 2 - padding, labelY - 8 - padding, textWidth + padding * 2, 16 + padding);
+  
+  // Label text (green/red for price, cyan separator)
+  // First part: price delta (colored by direction)
+  const priceLabel = `${priceSign}${deltaPrice.toFixed(2)} (${priceSign}${deltaPercent.toFixed(2)}%)`;
+  const separator = "  |  ";
+  const timeLabel = `${barsCount} bars, ${timeSpan}`;
+  
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  
+  // Draw the combined label with mixed colors
+  const priceWidth = ctx.measureText(priceLabel).width;
+  const sepWidth = ctx.measureText(separator).width;
+  
+  const startX = labelX - textWidth / 2;
+  ctx.textAlign = "left";
+  
+  // Price part (green/red)
+  ctx.fillStyle = deltaPrice >= 0 ? "#22c55e" : "#ef4444";
+  ctx.fillText(priceLabel, startX, labelY);
+  
+  // Separator (gray)
+  ctx.fillStyle = colors.text;
+  ctx.fillText(separator, startX + priceWidth, labelY);
+  
+  // Time part (cyan)
+  ctx.fillStyle = "#06b6d4";
+  ctx.fillText(timeLabel, startX + priceWidth + sepWidth, labelY);
+  
+  ctx.textAlign = "left"; // reset
+  
+  // Draw handles when selected
+  if (selected) {
+    drawHandleCircle(ctx, segment.x1, segment.y1, colors);
+    drawHandleCircle(ctx, segment.x2, segment.y2, colors);
+  }
+}
+
 interface GeometryViewport {
   width: number;
   height: number;
@@ -1574,6 +1750,8 @@ function geometrySignature(drawing: Drawing, viewport: GeometryViewport) {
     case "priceRange":
       return `${drawing.id}:${drawing.updatedAt}:${drawing.p1.timeMs}:${drawing.p1.price}:${drawing.p2.timeMs}:${drawing.p2.price}:${base}`;
     case "dateRange":
+      return `${drawing.id}:${drawing.updatedAt}:${drawing.p1.timeMs}:${drawing.p1.price}:${drawing.p2.timeMs}:${drawing.p2.price}:${base}`;
+    case "dateAndPriceRange":
       return `${drawing.id}:${drawing.updatedAt}:${drawing.p1.timeMs}:${drawing.p1.price}:${drawing.p2.timeMs}:${drawing.p2.price}:${base}`;
     default:
       return base;
@@ -1689,6 +1867,29 @@ function buildDrawingGeometry({
       return {
         kind: "dateRange",
         segment: createSegment(coords.x1, coords.y1, coords.x2, coords.y2),
+        deltaMs,
+        barsCount,
+      };
+    }
+    case "dateAndPriceRange": {
+      const coords = trendSegmentCoords(chart, series, drawing.p1, drawing.p2, width, height);
+      if (!coords) return null;
+      // Compute price delta (same as priceRange)
+      const deltaPrice = drawing.p2.price - drawing.p1.price;
+      const deltaPercent = drawing.p1.price !== 0 ? (deltaPrice / drawing.p1.price) * 100 : 0;
+      // Compute time delta (same as dateRange)
+      const deltaMs = Math.abs(drawing.p2.timeMs - drawing.p1.timeMs);
+      const timeRange = chart.timeScale().getVisibleLogicalRange();
+      const visibleBars = timeRange ? Math.abs(timeRange.to - timeRange.from) : 0;
+      const visibleWidth = width;
+      const barSpacing = visibleBars > 0 ? visibleWidth / visibleBars : 10;
+      const pixelDist = Math.abs(coords.x2 - coords.x1);
+      const barsCount = barSpacing > 0 ? Math.round(pixelDist / barSpacing) : 0;
+      return {
+        kind: "dateAndPriceRange",
+        segment: createSegment(coords.x1, coords.y1, coords.x2, coords.y2),
+        deltaPrice,
+        deltaPercent,
         deltaMs,
         barsCount,
       };

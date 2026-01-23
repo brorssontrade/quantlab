@@ -1252,4 +1252,123 @@ test.describe("TV-20: LeftToolbar Tool Groups + Flyout", () => {
       expect(objAfter).toBeUndefined();
     });
   });
+
+  test.describe("TV-20.6c: Date & Price Range Combined Measure", () => {
+    test("create dateAndPriceRange and verify both deltaPrice and deltaMs via dump()", async ({ page }) => {
+      // Select Date & Price Range tool via LeftToolbar flyout
+      // First click the Measure group to open flyout
+      const measureGroup = page.locator('[data-testid="lefttoolbar-group-measure"]');
+      await measureGroup.click();
+      await page.waitForTimeout(300);
+      
+      // Then click Date & Price Range tool
+      const combinedTool = page.locator('[data-testid="tool-dateAndPriceRange"]');
+      await combinedTool.waitFor({ state: "visible", timeout: 3000 });
+      await combinedTool.click();
+      await page.waitForTimeout(300);
+
+      // Verify tool is active
+      const toolAfterSelect = await page.evaluate(() => (window as any).__lwcharts?.dump?.()?.ui?.activeTool);
+      expect(toolAfterSelect).toBe("dateAndPriceRange");
+
+      // Get chart canvas and draw dateAndPriceRange
+      const chartWrapper = page.locator('[data-testid="tv-chart-root"]');
+      await expect(chartWrapper).toBeVisible({ timeout: 5000 });
+      const box = await chartWrapper.boundingBox();
+      expect(box).toBeTruthy();
+      if (!box) return;
+
+      // Define points: p1 and p2 at different X and Y positions (both time and price)
+      const x1 = box.x + box.width * 0.3;
+      const y1 = box.y + box.height * 0.3;
+      
+      const x2 = box.x + box.width * 0.6;
+      const y2 = box.y + box.height * 0.6;
+
+      // Draw dateAndPriceRange with drag pattern (down -> move -> up)
+      await page.mouse.move(x1, y1);
+      await page.mouse.down();
+      await page.mouse.move(x2, y2);
+      await page.mouse.up();
+      await page.waitForTimeout(200);
+
+      // Verify dateAndPriceRange was created and has both price AND time deltas
+      const dumpAfter = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      const combinedObj = dumpAfter?.objects?.find((d: any) => d.type === "dateAndPriceRange");
+      
+      expect(combinedObj).toBeTruthy();
+      expect(combinedObj.p1).toBeDefined();
+      expect(combinedObj.p2).toBeDefined();
+      
+      // Price deltas (like priceRange)
+      expect(typeof combinedObj.deltaPrice).toBe("number");
+      expect(typeof combinedObj.deltaPercent).toBe("number");
+      expect(combinedObj.deltaPrice).not.toBe(0);
+      expect(combinedObj.deltaPercent).not.toBe(0);
+      
+      // Time deltas (like dateRange)
+      expect(typeof combinedObj.deltaMs).toBe("number");
+      expect(typeof combinedObj.deltaDays).toBe("number");
+      expect(combinedObj.deltaMs).toBeGreaterThan(0);
+      expect(combinedObj.deltaDays).toBeGreaterThan(0);
+      
+      // Points array should have 2 entries
+      expect(combinedObj.points.length).toBe(2);
+    });
+
+    test("delete dateAndPriceRange removes it from dump()", async ({ page }) => {
+      // Select Date & Price Range tool
+      const measureGroup = page.locator('[data-testid="lefttoolbar-group-measure"]');
+      await measureGroup.click();
+      await page.waitForTimeout(300);
+      
+      const combinedTool = page.locator('[data-testid="tool-dateAndPriceRange"]');
+      await combinedTool.waitFor({ state: "visible", timeout: 3000 });
+      await combinedTool.click();
+      await page.waitForTimeout(300);
+
+      // Get chart canvas
+      const chartWrapper = page.locator('[data-testid="tv-chart-root"]');
+      await expect(chartWrapper).toBeVisible({ timeout: 5000 });
+      const box = await chartWrapper.boundingBox();
+      expect(box).toBeTruthy();
+      if (!box) return;
+
+      // Create dateAndPriceRange
+      const x1 = box.x + box.width * 0.35;
+      const y1 = box.y + box.height * 0.35;
+      const x2 = box.x + box.width * 0.55;
+      const y2 = box.y + box.height * 0.55;
+
+      await page.mouse.move(x1, y1);
+      await page.mouse.down();
+      await page.mouse.move(x2, y2);
+      await page.mouse.up();
+      await page.waitForTimeout(200);
+
+      // Verify dateAndPriceRange exists
+      const dumpBefore = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      const objBefore = dumpBefore?.objects?.find((d: any) => d.type === "dateAndPriceRange");
+      expect(objBefore).toBeTruthy();
+
+      // Switch to select tool and select the dateAndPriceRange
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(100);
+
+      // Click on the dateAndPriceRange to select it (midpoint)
+      const midX = (x1 + x2) / 2;
+      const midY = (y1 + y2) / 2;
+      await page.mouse.click(midX, midY);
+      await page.waitForTimeout(200);
+
+      // Delete with Delete key
+      await page.keyboard.press("Delete");
+      await page.waitForTimeout(200);
+
+      // Verify dateAndPriceRange is removed
+      const dumpAfter = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      const objAfter = dumpAfter?.objects?.find((d: any) => d.type === "dateAndPriceRange");
+      expect(objAfter).toBeUndefined();
+    });
+  });
 });

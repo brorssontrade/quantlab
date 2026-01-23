@@ -1,3 +1,58 @@
+### 2026-01-23 (TV-20.6c – Measure: Date & Price Range Combined)
+
+**Status:** ✅ **COMPLETE** (Combined measure tool showing both price and time deltas)
+
+**Task Description:** "Measure: Date & Price Range (combined tool) – TradingView's most versatile measure, shows both Δprice + Δ% AND bars + time span in a single label."
+
+**Implementation:**
+1. **types.ts** – Added `DateAndPriceRange` interface with p1/p2 TrendPoints, updated `DrawingKind` and `Drawing` unions
+2. **controls.ts** – Added `"dateAndPriceRange"` to `Tool` type and `VALID_TOOLS` array
+3. **toolRegistry.ts** – Enabled dateAndPriceRange tool in measure group (tooltip: "Measure both price and time")
+4. **DrawingLayer.tsx** – Full lifecycle: beginDrawing, updateDrawing (draw+drag), hitTest, render, geometrySignature, buildDrawingGeometry, drawDateAndPriceRange function
+5. **ChartViewport.tsx** – Added dateAndPriceRange to dump().objects with all computed values
+6. **ChartsProTab.tsx** – Updated validTools Sets (2 places)
+
+**dump() Contract for dateAndPriceRange:**
+```typescript
+{
+  type: "dateAndPriceRange",
+  points: [{ timeMs, price }, { timeMs, price }],
+  p1: { timeMs, price },
+  p2: { timeMs, price },
+  deltaPrice: number,    // p2.price - p1.price
+  deltaPercent: number,  // ((p2.price - p1.price) / p1.price) * 100
+  deltaMs: number,       // Math.abs(p2.timeMs - p1.timeMs)
+  deltaDays: number      // deltaMs / (1000 * 60 * 60 * 24)
+}
+```
+
+**drawDateAndPriceRange Visual:**
+- Diagonal line connecting p1 and p2 (like priceRange)
+- Horizontal tick marks at both ends
+- Label with mixed colors: "[+/-]Δprice (Δ%)  |  N bars, Xd Yh"
+- Price part: green/red based on direction
+- Time part: cyan (#06b6d4)
+
+**Files Changed:**
+- `quantlab-ui/src/features/chartsPro/types.ts` (DateAndPriceRange interface)
+- `quantlab-ui/src/features/chartsPro/state/controls.ts` (Tool type)
+- `quantlab-ui/src/features/chartsPro/components/LeftToolbar/toolRegistry.ts` (enable dateAndPriceRange)
+- `quantlab-ui/src/features/chartsPro/components/DrawingLayer.tsx` (~150 lines added)
+- `quantlab-ui/src/features/chartsPro/components/ChartViewport.tsx` (dump() contract)
+- `quantlab-ui/src/features/chartsPro/ChartsProTab.tsx` (validTools)
+- `quantlab-ui/tests/chartsPro.cp20.spec.ts` (+2 TV-20.6c tests)
+- `docs/CHARTSPRO_TVUI_KANBAN.md` (TV-20.6c marked DONE)
+
+**Test Results & Gates:**
+- npm build ✅ (2473 modules)
+- chartsPro.cp20 ✅ (35/36 passed, 1 pre-existing flaky) [+2 dateAndPriceRange tests]
+- tvParity ✅ (35/35 passed)
+
+**Commits:**
+- feat(frontend): TV-20.6c Measure Date & Price Range combined tool
+
+---
+
 ### 2026-01-23 (TV-20.6b – Measure: Date Range)
 
 **Status:** ✅ **COMPLETE** (Date Range measure tool showing bars count + time span)
