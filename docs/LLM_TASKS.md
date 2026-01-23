@@ -1,3 +1,65 @@
+### 2026-01-23 (TV-20.7 – Fibonacci Retracement)
+
+**Status:** ✅ **COMPLETE** (Full Fibonacci Retracement tool with 9 levels, TradingView-style rendering, edit lifecycle)
+
+**Task Description:** "Implementera Fib Retracement som en förstklassig drawing: 2-click (p1→p2), 9 standard levels (0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.272, 1.618), edit lifecycle, TradingView-style rendering, dump() contract for tests."
+
+**Implementation:**
+1. **Added FibRetracement interface and FIB_LEVELS constant** to types.ts
+2. **Enabled fibRetracement tool** in toolRegistry with shortcut "F"
+3. **Full lifecycle in DrawingLayer.tsx** (~200 lines): beginDrawing, updateDrawing, hitTest, geometrySignature, buildDrawingGeometry, render
+4. **TradingView-style rendering** with level-specific colors (gray/red/green/blue), labels showing ratio + price
+5. **dump() contract** returns p1, p2, and computed levels array
+
+**FIB_LEVELS Constant:**
+```typescript
+export const FIB_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.272, 1.618] as const;
+```
+
+**dump() Contract:**
+```typescript
+// fibRetracement
+{
+  type: "fibRetracement",
+  p1: { timeMs: number, price: number },
+  p2: { timeMs: number, price: number },
+  levels: [
+    { ratio: 0, price: X },
+    { ratio: 0.236, price: Y },
+    { ratio: 0.382, price: Z },
+    // ... all 9 levels
+  ]
+}
+```
+
+**Visual Rendering:**
+- Horizontal lines at each Fibonacci level
+- TradingView-style colors: gray (0%, 50%, 100%), red (23.6%, 38.2%), green (61.8%, 78.6%), blue (extensions 127.2%, 161.8%)
+- Labels showing "XX.X% (price)" at right end of each level
+- Dashed diagonal line connecting p1 and p2
+- Selection handles at endpoints when selected
+
+**Files Changed:**
+- `quantlab-ui/src/features/chartsPro/types.ts` (+FibRetracement, FIB_LEVELS)
+- `quantlab-ui/src/features/chartsPro/controls.ts` (+Tool type, VALID_TOOLS)
+- `quantlab-ui/src/features/chartsPro/toolRegistry.ts` (enabled fibRetracement)
+- `quantlab-ui/src/features/chartsPro/ChartsProTab.tsx` (validTools Sets)
+- `quantlab-ui/src/features/chartsPro/DrawingLayer.tsx` (+~200 lines full lifecycle)
+- `quantlab-ui/src/features/chartsPro/ChartViewport.tsx` (+dump() contract)
+- `quantlab-ui/tests/chartsPro.cp20.spec.ts` (+3 tests)
+- `docs/CHARTSPRO_TVUI_KANBAN.md` (TV-20.7 marked DONE)
+
+**Test Results & Gates:**
+- npm build ✅ (2473 modules)
+- chartsPro.cp20 ✅ **117/117 = 39×3 repeat-each FLAKE-FREE**
+- tvUI leftToolbar ✅ (3/3 passed)
+- tvParity ✅ (35/35 passed)
+
+**Commits:**
+- `81824ec` feat(frontend): TV-20.7 Fibonacci Retracement tool
+
+---
+
 ### 2026-01-23 (TV-20.6 Tests Flake Fix)
 
 **Status:** ✅ **COMPLETE** (All TV-20.6 measure tests now use expect.poll() instead of waitForTimeout())
