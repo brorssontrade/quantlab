@@ -109,10 +109,10 @@
 | `features/chartsPro/components/DrawingLayer.tsx` | **TV-20.2/20.3: Drawing interactions (Rectangle, Text, Shift+H/L for hide/lock)** | DrawingLayer |
 | `features/chartsPro/components/AlertsPanel.tsx` | **Day 8: Alerts panel in ChartsPro sidebar** | AlertsPanel |
 | `features/chartsPro/runtime/heikinAshi.ts` | **TV-21.1: Heikin Ashi OHLC transform (pure util, unit-testable)** | transformOhlcToHeikinAshi, transformToHeikinAshi |
-| `features/chartsPro/components/TopBar/ChartTypeSelector.tsx` | **TV-10.1+TV-21.1: Chart type dropdown (candles/bars/heikinAshi/line/area)** | ChartTypeSelector |
+| `features/chartsPro/components/TopBar/ChartTypeSelector.tsx` | **TV-10.1+TV-21: Chart type dropdown (candles/bars/hollowCandles/heikinAshi/line/area)** | ChartTypeSelector |
 | `tests/chartsPro.cp18.spec.ts` | **TV-18.2: Indicators modal tests (4 cases: open, Esc, X, add indicator)** |
 | `tests/chartsPro.cp20.spec.ts` | **TV-20: Drawing tools tests (23+ cases: ToolGroups, Rectangle, Text, select/move/delete, hotkey guardrail)** |
-| `tests/chartsPro.cp21.spec.ts` | **TV-21.1: Heikin Ashi tests (5 cases: fixture transform, toggle, render, restore, default)** |
+| `tests/chartsPro.cp21.spec.ts` | **TV-21: Chart types tests (12 cases: Heikin Ashi transform/toggle/render, Bars toggle/render, Hollow Candles toggle/render/style-verify)** |
 | `tests/chartsPro.tvUi.indicators.tab.spec.ts` | **TV-7/TV-18.2: Indicators tab tests (updated for modal, 12 cases)** |
 | `tests/chartsPro.tvUi.bottomBar.spec.ts` | **TV-9: BottomBar tests (13 cases, functional + responsive + deterministic, repeat-each=10, 130 runs, zero flakes)** |
 | `tests/chartsPro.tvUi.alerts.tab.spec.ts` | **TV-8: Alerts tab tests (12 cases, form/create/delete/sorting/determinism coverage)** |

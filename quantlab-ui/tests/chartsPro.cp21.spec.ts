@@ -282,4 +282,34 @@ test.describe("TV-21.3: Hollow Candles Chart Type", () => {
       return dump?.ui?.chartType;
     }).toBe("candles");
   });
+
+  /**
+   * TV-21.3b: Style verification
+   * Hollow Candles must have upColor === "transparent" (hollow body for up-candles)
+   * This verifies the actual lwcharts styling, not just the dropdown state.
+   */
+  test("Hollow Candles has transparent upColor (style verification)", async ({ page }) => {
+    const chartTypeBtn = page.locator('[data-testid="chart-type-button"]');
+    await chartTypeBtn.click();
+    await page.locator('[data-testid="chart-type-option-hollowCandles"]').click();
+
+    // State-driven wait for chartType AND series options to be applied
+    // Both must be true: chartType = hollowCandles AND upColor = transparent
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return {
+        chartType: dump?.ui?.chartType,
+        upColor: dump?.render?.baseSeriesOptions?.upColor,
+      };
+    }, { timeout: 5000 }).toEqual({
+      chartType: "hollowCandles",
+      upColor: "transparent",
+    });
+
+    // Extra verification: borderUpColor should be the actual visible color
+    const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+    const opts = dump?.render?.baseSeriesOptions;
+    expect(opts?.borderUpColor).toBeTruthy();
+    expect(opts?.borderUpColor).not.toBe("transparent");
+  });
 });

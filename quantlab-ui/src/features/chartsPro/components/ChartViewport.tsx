@@ -1391,8 +1391,13 @@ const fitToContent = useCallback(() => {
     const baseSeries = candleSeriesRef.current;
     if (!chart || !baseSeries) return;
     const appearance = resolveAppearance();
+    
+    // TV-21.3b: For hollowCandles, preserve the transparent upColor styling
+    // (created by seriesFactory) - don't override with appearance.upColor
+    const isHollow = baseSeriesTypeRef.current === "hollowCandles";
+    
     baseSeries.applyOptions({
-      upColor: appearance.upColor,
+      upColor: isHollow ? "transparent" : appearance.upColor,
       downColor: appearance.downColor,
       borderUpColor: appearance.borderVisible ? appearance.borderUp : appearance.upColor,
       borderDownColor: appearance.borderVisible ? appearance.borderDown : appearance.downColor,
@@ -1858,6 +1863,25 @@ const fitToContent = useCallback(() => {
           wickUp: themeSnapshot.wickUp,
           wickDown: themeSnapshot.wickDown,
         },
+        // TV-21.3b: Expose actual lwcharts series options for hollow candles style verification
+        baseSeriesOptions: (() => {
+          const series = candleSeriesRef.current;
+          if (!series || typeof series.options !== 'function') return null;
+          try {
+            const opts = series.options();
+            // Only expose style-relevant options for QA
+            return {
+              upColor: opts.upColor ?? null,
+              downColor: opts.downColor ?? null,
+              borderUpColor: opts.borderUpColor ?? null,
+              borderDownColor: opts.borderDownColor ?? null,
+              wickUpColor: opts.wickUpColor ?? null,
+              wickDownColor: opts.wickDownColor ?? null,
+            };
+          } catch {
+            return null;
+          }
+        })(),
         lwVersion: LIGHTWEIGHT_CHARTS_VERSION,
         // Day 18 diagnostics
         host: hostWH,
