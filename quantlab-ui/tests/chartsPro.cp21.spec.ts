@@ -4,16 +4,20 @@
  * TV-21.1: Heikin Ashi Chart Type
  *
  * Tests:
- * - Heikin Ashi transform logic (unit-level fixture test)
+ * - Heikin Ashi transform logic (unit-level fixture test using REAL transform util)
  * - dump().ui.chartType === "heikinAshi" when toggled
  * - Visual: Heikin Ashi renders candlesticks
  */
 
 import { test, expect } from "@playwright/test";
 import { gotoChartsPro } from "./helpers";
+import { transformOhlcToHeikinAshi } from "../src/features/chartsPro/runtime/heikinAshi";
 
 /**
- * Heikin Ashi Transform - Pure Unit Test
+ * Heikin Ashi Transform - Pure Unit Test (Node-side)
+ *
+ * Uses REAL transformOhlcToHeikinAshi from runtime/heikinAshi.ts
+ * If transform changes, this test will fail.
  *
  * Formula:
  * - HA_Close = (O + H + L + C) / 4
@@ -65,45 +69,9 @@ test.describe("TV-21.1: Heikin Ashi Transform (Unit)", () => {
     { time: 1004, open: 114.9375, high: 130, low: 114.9375, close: 124.5 },
   ];
 
-  test("fixture transform produces correct HA values", async ({ page }) => {
-    await gotoChartsPro(page, test.info(), { mock: true });
-
-    // Run the transform function directly in browser context
-    const result = await page.evaluate((fixture) => {
-      // Access the transform function via module (if exposed) or re-implement for test
-      // Since we can't directly import, we'll use the formula verification
-      function transformOhlcToHeikinAshi(bars: any[]) {
-        if (!bars || bars.length === 0) return [];
-        const result: any[] = [];
-        let prevHaOpen: number | null = null;
-        let prevHaClose: number | null = null;
-
-        for (const bar of bars) {
-          const haClose = (bar.open + bar.high + bar.low + bar.close) / 4;
-          const haOpen =
-            prevHaOpen !== null && prevHaClose !== null
-              ? (prevHaOpen + prevHaClose) / 2
-              : (bar.open + bar.close) / 2;
-          const haHigh = Math.max(bar.high, haOpen, haClose);
-          const haLow = Math.min(bar.low, haOpen, haClose);
-
-          result.push({
-            time: bar.time,
-            open: haOpen,
-            high: haHigh,
-            low: haLow,
-            close: haClose,
-            volume: bar.volume,
-          });
-
-          prevHaOpen = haOpen;
-          prevHaClose = haClose;
-        }
-        return result;
-      }
-
-      return transformOhlcToHeikinAshi(fixture);
-    }, FIXTURE_OHLC);
+  test("fixture transform produces correct HA values (real util)", async () => {
+    // Use REAL transform function from runtime/heikinAshi.ts (Node-side)
+    const result = transformOhlcToHeikinAshi(FIXTURE_OHLC);
 
     // Verify each bar matches expected values
     expect(result.length).toBe(5);
@@ -152,8 +120,11 @@ test.describe("TV-21.1: Heikin Ashi Integration", () => {
     const haOption = page.locator('[data-testid="chart-type-option-heikinAshi"]');
     await haOption.click();
 
-    // Wait a bit for render
-    await page.waitForTimeout(500);
+    // State-driven wait: poll dump() until chartType is heikinAshi
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.chartType;
+    }, { timeout: 5000 }).toBe("heikinAshi");
 
     // Verify chart is still rendering (no error toast, candles visible)
     const errorToast = page.locator('.toast-error');
