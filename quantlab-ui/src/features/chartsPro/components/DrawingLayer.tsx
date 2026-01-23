@@ -37,7 +37,8 @@ type DrawingGeometry =
   | { kind: "vline"; segment: SegmentGeometry }
   | { kind: "trend"; segment: SegmentGeometry }
   | { kind: "channel"; base?: SegmentGeometry | null; upper?: SegmentGeometry | null; lower?: SegmentGeometry | null }
-  | { kind: "rectangle"; x: number; y: number; w: number; h: number; path: Path2D };
+  | { kind: "rectangle"; x: number; y: number; w: number; h: number; path: Path2D }
+  | { kind: "text"; x: number; y: number; width: number; height: number; content: string };
 
 type PointerState =
   | { mode: "idle" }
@@ -50,6 +51,7 @@ const COLORS: Record<Drawing["kind"], string> = {
   trend: "#0ea5e9",
   channel: "#a855f7",
   rectangle: "#22c55e",
+  text: "#eab308",
 };
 
 const HIT_TOLERANCE = 8;
@@ -101,6 +103,7 @@ export interface DrawingLayerProps {
   onToggleLock: (id: string) => void;
   onToggleHide: (id: string) => void;
   setTool: (tool: Tool) => void;
+  onTextCreated?: (drawingId: string) => void;
 }
 
 export function DrawingLayer({
@@ -123,6 +126,7 @@ export function DrawingLayer({
   onToggleLock,
   onToggleHide,
   setTool,
+  onTextCreated,
 }: DrawingLayerProps) {
   const overlay = useOverlayCanvas();
   const pointerState = useRef<PointerState>({ mode: "idle" });
@@ -276,6 +280,9 @@ export function DrawingLayer({
           break;
         case "rectangle":
           drawRectangle(ctx, drawing, geometry, selectedId === drawing.id, colors);
+          break;
+        case "text":
+          drawText(ctx, drawing, geometry, selectedId === drawing.id, colors);
           break;
         default:
           break;
@@ -542,6 +549,14 @@ export function DrawingLayer({
             }
             break;
           }
+          case "text": {
+            const { x, y, width: w, height: h } = geometry;
+            // Check if inside text bounding box (for move)
+            if (point.x >= x && point.x <= x + w && point.y >= y - h && point.y <= y) {
+              return { drawing, handle: "line" };
+            }
+            break;
+          }
           default:
             break;
         }
@@ -658,6 +673,30 @@ export function DrawingLayer({
           draftIdRef.current = drawing.id;
           pendingCommitRef.current = true;
           requestRender();
+          break;
+        }
+        case "text": {
+          // Text tool: create text with placeholder content, then open modal for editing
+          const drawing: Drawing = {
+            id: createId(),
+            kind: "text",
+            symbol,
+            tf: timeframe,
+            anchor: { timeMs: point.timeMs, price: point.price },
+            content: "Text", // Default placeholder
+            fontSize: 12,
+            fontColor: COLORS.text,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            z: Date.now(),
+            style: { color: COLORS.text, width: 1 },
+          };
+          pushDraft(drawing, { select: true });
+          pointerState.current = { mode: "idle" };
+          pendingCommitRef.current = false;
+          requestRender();
+          // Trigger modal for text editing
+          onTextCreated?.(drawing.id);
           break;
         }
         default:
@@ -814,6 +853,23 @@ export function DrawingLayer({
                 ...drawing,
                 p1: { timeMs: drawing.p1.timeMs + dt, price: drawing.p1.price + dp },
                 p2: { timeMs: drawing.p2.timeMs + dt, price: drawing.p2.price + dp },
+                updatedAt: Date.now(),
+              }, { transient: true, select: false });
+            }
+            break;
+          }
+          case "text": {
+            // Move text by its anchor point
+            if (state.handle === "line" && pointerOrigin.current) {
+              const dt = targetPoint.timeMs - pointerOrigin.current.timeMs;
+              const dp = targetPoint.price - pointerOrigin.current.price;
+              pointerOrigin.current = targetPoint;
+              pushDraft({
+                ...drawing,
+                anchor: { 
+                  timeMs: drawing.anchor.timeMs + dt, 
+                  price: drawing.anchor.price + dp 
+                },
                 updatedAt: Date.now(),
               }, { transient: true, select: false });
             }
@@ -1137,6 +1193,46 @@ function drawRectangle(
   }
 }
 
+function drawText(
+  ctx: CanvasRenderingContext2D,
+  drawing: Drawing,
+  geometry: Extract<DrawingGeometry, { kind: "text" }>,
+  selected: boolean,
+  colors: OverlayColors,
+) {
+  if (drawing.kind !== "text") return;
+  const { x, y, width, height, content } = geometry;
+  const fontSize = drawing.fontSize ?? 12;
+  const fontColor = drawing.fontColor ?? colors.text;
+  const bgColor = drawing.backgroundColor;
+  
+  // Draw background if specified
+  if (bgColor) {
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(x - 2, y - 2, width + 4, height + 4);
+  }
+  
+  // Draw selection highlight
+  if (selected) {
+    ctx.strokeStyle = colors.selection;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.strokeRect(x - 4, y - 4, width + 8, height + 8);
+    ctx.setLineDash([]);
+  }
+  
+  // Draw text
+  ctx.font = `${fontSize}px sans-serif`;
+  ctx.fillStyle = selected ? colors.selection : fontColor;
+  ctx.textBaseline = "top";
+  ctx.fillText(content, x, y);
+  
+  // Draw handle when selected
+  if (selected) {
+    drawHandleCircle(ctx, x, y, colors);
+  }
+}
+
 interface GeometryViewport {
   width: number;
   height: number;
@@ -1166,6 +1262,8 @@ function geometrySignature(drawing: Drawing, viewport: GeometryViewport) {
       return `${drawing.id}:${drawing.updatedAt}:${drawing.trendId}:${drawing.offsetTop}:${drawing.offsetBottom}:${base}`;
     case "rectangle":
       return `${drawing.id}:${drawing.updatedAt}:${drawing.p1.timeMs}:${drawing.p1.price}:${drawing.p2.timeMs}:${drawing.p2.price}:${base}`;
+    case "text":
+      return `${drawing.id}:${drawing.updatedAt}:${drawing.anchor.timeMs}:${drawing.anchor.price}:${drawing.content}:${drawing.fontSize ?? 12}:${base}`;
     default:
       return base;
   }
@@ -1232,6 +1330,24 @@ function buildDrawingGeometry({
       const path = new Path2D();
       path.rect(x, y, w, h);
       return { kind: "rectangle", x, y, w, h, path };
+    }
+    case "text": {
+      const anchorX = coordinateFromTime(chart, drawing.anchor.timeMs, width);
+      const anchorY = resolveYCoordinate(series, drawing.anchor.price, height);
+      if (anchorX == null || anchorY == null) return null;
+      const fontSize = drawing.fontSize ?? 12;
+      const content = drawing.content || "Text";
+      // Approximate text dimensions (more accurate would require measuring)
+      const textWidth = content.length * fontSize * 0.6;
+      const textHeight = fontSize * 1.2;
+      return { 
+        kind: "text", 
+        x: anchorX, 
+        y: anchorY, 
+        width: textWidth, 
+        height: textHeight, 
+        content 
+      };
     }
     default:
       return null;
@@ -1327,6 +1443,12 @@ function channelLineCoords(
 function cloneDrawingState(drawing: Drawing): Drawing {
   if (drawing.kind === "trend") {
     return { ...drawing, p1: { ...drawing.p1 }, p2: { ...drawing.p2 } };
+  }
+  if (drawing.kind === "rectangle") {
+    return { ...drawing, p1: { ...drawing.p1 }, p2: { ...drawing.p2 } };
+  }
+  if (drawing.kind === "text") {
+    return { ...drawing, anchor: { ...drawing.anchor } };
   }
   return { ...drawing };
 }

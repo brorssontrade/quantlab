@@ -374,6 +374,8 @@ interface ChartViewportProps {
   registerExports?: (handlers: ExportHandlers) => void;
   onChartReady?: (chart: IChartApi) => void;
   onUpdateIndicator?: (id: string, patch: Partial<IndicatorInstance>) => void;
+  /** TV-20.3: Callback when text drawing is created (opens modal) */
+  onTextCreated?: (drawingId: string) => void;
   mockMode?: boolean;
   debugMode?: boolean;
   workspaceMode?: boolean;
@@ -426,6 +428,7 @@ export function ChartViewport({
   registerExports,
   onChartReady,
   onUpdateIndicator,
+  onTextCreated,
   mockMode = false,
   debugMode = false,
   workspaceMode = false,
@@ -2264,11 +2267,15 @@ const fitToContent = useCallback(() => {
               ? [{ timeMs: d.p1.timeMs, price: d.p1.price }, { timeMs: d.p2.timeMs, price: d.p2.price }]
               : d.kind === "rectangle"
               ? [{ timeMs: d.p1.timeMs, price: d.p1.price }, { timeMs: d.p2.timeMs, price: d.p2.price }]
+              : d.kind === "text"
+              ? [{ timeMs: d.anchor.timeMs, price: d.anchor.price }]
               : d.kind === "channel"
               ? [] // Channel references trendId
               : [],
             // Raw p1/p2 for rectangle tests
             ...(d.kind === "rectangle" && { p1: d.p1, p2: d.p2 }),
+            // Text content for text tests
+            ...(d.kind === "text" && { content: d.content, anchor: d.anchor }),
           })),
           // Alerts contract (count only for now, full list via API)
           alerts: {
@@ -3810,6 +3817,7 @@ const fitToContent = useCallback(() => {
                 onToggleLock={onToggleLock}
                 onToggleHide={onToggleHide}
                 setTool={setTool}
+                onTextCreated={onTextCreated}
               />
             </OverlayCanvasLayer>
             {/* TV-8.2: Alert markers layer – renders dashed lines + bell icons */}

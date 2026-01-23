@@ -45,7 +45,7 @@ export interface OhlcvResponse {
   meta?: Record<string, unknown>;
 }
 
-export type DrawingKind = "hline" | "vline" | "trend" | "channel" | "rectangle";
+export type DrawingKind = "hline" | "vline" | "trend" | "channel" | "rectangle" | "text";
 
 export interface DrawingStyle {
   color: string;
@@ -106,7 +106,17 @@ export interface Rectangle extends DrawingBase {
   fillOpacity?: number; // 0-1, default 0.1
 }
 
-export type Drawing = HLine | VLine | Trend | Channel | Rectangle;
+/** Text annotation at a specific chart point */
+export interface TextDrawing extends DrawingBase {
+  kind: "text";
+  anchor: TrendPoint; // Position where text is placed
+  content: string; // The text content
+  fontSize?: number; // Default 12
+  fontColor?: string; // Default theme text color
+  backgroundColor?: string; // Optional background
+}
+
+export type Drawing = HLine | VLine | Trend | Channel | Rectangle | TextDrawing;
 
 export interface CompareSeriesConfig {
   id: string;

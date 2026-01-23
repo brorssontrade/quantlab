@@ -19,6 +19,7 @@ import { LayoutManager, type SavedLayout } from "./components/TopBar/LayoutManag
 import { ApiStatusBadge } from "./components/ApiStatusBadge";
 import { ModalPortal } from "./components/Modal/ModalPortal";
 import { IndicatorsModal } from "./components/Modal/IndicatorsModal";
+import { TextModal } from "./components/Modal/TextModal";
 import { useOhlcvQuery } from "./hooks/useOhlcv";
 import { getLastHealthCheck, setQAForceDataMode } from "./runtime/dataClient";
 import type { LwChartsApi } from "./qaTypes";
@@ -264,6 +265,8 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
   });
   // TV-18.1: Modal state (central portal for indicators/other modals)
   const [modalState, setModalState] = useState<{ open: boolean; kind: string | null }>({ open: false, kind: null });
+  // TV-20.3: Text editing modal state (stores drawing ID being edited)
+  const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const [workspaceMode, setWorkspaceMode] = useState(() => loadWorkspaceLayout().mode);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => loadWorkspaceLayout().sidebarCollapsed);
   const [sidebarWidth] = useState(() => loadWorkspaceLayout().sidebarWidth);
@@ -892,6 +895,7 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
                   onToggleLock={drawingsStore.toggleLock}
                   onToggleHide={drawingsStore.toggleHidden}
                   onUpdateIndicator={drawingsStore.updateIndicator}
+                  onTextCreated={(drawingId) => setEditingTextId(drawingId)}
                   registerExports={(handlers) => {
                     exportHandlersRef.current = handlers;
                   }}
@@ -906,8 +910,8 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
                   sidebarWidth={sidebarWidth}
                   rightPanelActiveTab={workspaceMode ? rightPanelActiveTab : null}
                   
-                  modalOpen={modalState.open}
-                  modalKind={modalState.kind}
+                  modalOpen={modalState.open || editingTextId !== null}
+                  modalKind={editingTextId !== null ? "text" : modalState.kind}
                 />
               </div>
               
@@ -1125,6 +1129,53 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
         <IndicatorsModal
           onAdd={drawingsStore.addIndicator}
           onClose={() => setModalState({ open: false, kind: null })}
+        />
+      </ModalPortal>
+
+      {/* TV-20.3: Text editing modal */}
+      <ModalPortal
+        open={editingTextId !== null}
+        kind="text"
+        onClose={() => {
+          // Cancel: remove the text drawing if it still has placeholder content
+          if (editingTextId) {
+            const drawing = drawingsStore.drawings.find((d) => d.id === editingTextId);
+            if (drawing?.kind === "text" && drawing.content === "Text") {
+              drawingsStore.removeDrawing(editingTextId);
+            }
+          }
+          setEditingTextId(null);
+        }}
+      >
+        <TextModal
+          initialContent={
+            editingTextId
+              ? (drawingsStore.drawings.find((d) => d.id === editingTextId) as { content?: string } | undefined)?.content ?? "Text"
+              : "Text"
+          }
+          onSave={(content) => {
+            if (editingTextId) {
+              const existing = drawingsStore.drawings.find((d) => d.id === editingTextId);
+              if (existing?.kind === "text") {
+                drawingsStore.upsertDrawing({
+                  ...existing,
+                  content,
+                  updatedAt: Date.now(),
+                });
+              }
+            }
+            setEditingTextId(null);
+          }}
+          onCancel={() => {
+            // Cancel: remove the text drawing if it still has placeholder content
+            if (editingTextId) {
+              const drawing = drawingsStore.drawings.find((d) => d.id === editingTextId);
+              if (drawing?.kind === "text" && drawing.content === "Text") {
+                drawingsStore.removeDrawing(editingTextId);
+              }
+            }
+            setEditingTextId(null);
+          }}
         />
       </ModalPortal>
     </div>

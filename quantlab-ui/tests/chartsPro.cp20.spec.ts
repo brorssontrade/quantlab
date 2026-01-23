@@ -556,4 +556,132 @@ test.describe("TV-20: LeftToolbar Tool Groups + Flyout", () => {
       }
     });
   });
+
+  // TV-20.3: Text Tool Tests
+  test.describe("TV-20.3: Text Tool", () => {
+    test("clicking text tool then chart creates text drawing", async ({ page }) => {
+      // Select text tool from Text & Notes group
+      const textGroup = page.locator('[data-testid="lefttoolbar-group-text"]');
+      await textGroup.click();
+      
+      const flyout = page.locator('[data-testid="lefttoolbar-flyout"]');
+      await expect(flyout).toBeVisible();
+      
+      const textTool = page.locator('[data-testid="lefttoolbar-tool-text"]');
+      await expect(textTool).toBeVisible();
+      await textTool.click();
+      
+      // Verify tool is selected
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.activeTool;
+      }, { timeout: 2000 }).toBe("text");
+
+      // Click on chart to place text
+      const chartRoot = page.locator('[data-testid="tv-chart-root"]');
+      const box = await chartRoot.boundingBox();
+      if (!box) throw new Error("Chart root not found");
+      
+      const clickX = box.x + box.width * 0.5;
+      const clickY = box.y + box.height * 0.5;
+      await page.mouse.click(clickX, clickY);
+
+      // Modal should open for text input
+      const textModal = page.locator('[data-testid="text-modal"]');
+      await expect(textModal).toBeVisible({ timeout: 2000 });
+
+      // Type new content
+      const input = page.locator('[data-testid="text-modal-input"]');
+      await input.fill("Test annotation");
+
+      // Save
+      const saveButton = page.locator('[data-testid="text-modal-save"]');
+      await saveButton.click();
+
+      // Modal closes
+      await expect(textModal).not.toBeVisible();
+
+      // Text drawing should exist with custom content
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        const textObj = dump?.objects?.find((d: any) => d.type === "text");
+        return textObj?.content;
+      }, { timeout: 2000 }).toBe("Test annotation");
+    });
+
+    test("canceling text modal removes placeholder text", async ({ page }) => {
+      // Select text tool from Text & Notes group
+      const textGroup = page.locator('[data-testid="lefttoolbar-group-text"]');
+      await textGroup.click();
+      const textTool = page.locator('[data-testid="lefttoolbar-tool-text"]');
+      await textTool.click();
+
+      // Click on chart
+      const chartRoot = page.locator('[data-testid="tv-chart-root"]');
+      const box = await chartRoot.boundingBox();
+      if (!box) throw new Error("Chart root not found");
+      
+      await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.5);
+
+      // Modal should open
+      const textModal = page.locator('[data-testid="text-modal"]');
+      await expect(textModal).toBeVisible({ timeout: 2000 });
+
+      // Cancel
+      const cancelButton = page.locator('[data-testid="text-modal-cancel"]');
+      await cancelButton.click();
+
+      // Modal closes
+      await expect(textModal).not.toBeVisible();
+
+      // No text drawing should exist
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.objects?.filter((d: any) => d.type === "text")?.length || 0;
+      }, { timeout: 2000 }).toBe(0);
+    });
+
+    test("text can be deleted with Delete key", async ({ page }) => {
+      // First create a text drawing via UI
+      const textGroup = page.locator('[data-testid="lefttoolbar-group-text"]');
+      await textGroup.click();
+      const textTool = page.locator('[data-testid="lefttoolbar-tool-text"]');
+      await textTool.click();
+
+      // Click on chart
+      const chartRoot = page.locator('[data-testid="tv-chart-root"]');
+      const box = await chartRoot.boundingBox();
+      if (!box) throw new Error("Chart root not found");
+      
+      await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.5);
+
+      // Modal should open
+      const textModal = page.locator('[data-testid="text-modal"]');
+      await expect(textModal).toBeVisible({ timeout: 2000 });
+
+      // Save with default text
+      const saveButton = page.locator('[data-testid="text-modal-save"]');
+      await saveButton.click();
+
+      // Modal closes
+      await expect(textModal).not.toBeVisible();
+
+      // Verify text exists and is selected
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        const textCount = dump?.objects?.filter((d: any) => d.type === "text")?.length || 0;
+        const selected = dump?.ui?.selectedObjectId;
+        return { textCount, hasSelected: !!selected };
+      }, { timeout: 2000 }).toEqual({ textCount: 1, hasSelected: true });
+
+      // Press Delete
+      await page.keyboard.press("Delete");
+
+      // Text should be gone
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.objects?.filter((d: any) => d.type === "text")?.length || 0;
+      }, { timeout: 2000 }).toBe(0);
+    });
+  });
 });

@@ -86,7 +86,7 @@ export const TOOL_GROUPS: ToolGroup[] = [
     label: "Text & Notes",
     icon: "T",
     tools: [
-      { id: "text", label: "Text", icon: "T", shortcut: "N", status: "disabled", tooltip: "Engine support coming" },
+      { id: "text", label: "Text", icon: "T", shortcut: "N", status: "enabled" },
       { id: "note", label: "Note", icon: "📝", status: "disabled", tooltip: "Coming soon" },
       { id: "callout", label: "Callout", icon: "💬", status: "disabled", tooltip: "Coming soon" },
     ],

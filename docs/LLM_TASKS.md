@@ -1,3 +1,94 @@
+### 2026-01-23 (TV-20.3 – Text/Note Tool)
+
+**Status:** ✅ **COMPLETE** (Text tool functional: click to place, modal to edit, move, delete)
+
+**Task Description:** "Klick i chart placerar text-ankare. Text input via central modal. Text renderas på overlay och går att select/move/delete."
+
+**Implementation Summary:**
+
+1. **Type definitions (types.ts)**
+   - Added `"text"` to `DrawingKind` union
+   - Created `TextDrawing` interface: `{ anchor: TrendPoint, content: string, fontSize?, fontColor?, backgroundColor? }`
+   - Updated `Drawing` union to include `TextDrawing` type
+
+2. **DrawingLayer.tsx (canvas rendering)**
+   - Added `text` case in `beginDrawing`: creates text with "Text" placeholder, calls `onTextCreated` callback
+   - Added `text` case in `updateDrawing` (drag-mode): handles "line" handle for move
+   - Added `buildDrawingGeometry` case: calculates x, y from anchor, estimates width/height from content
+   - Added `drawText` render function: renders text with optional background, selection highlight, handle
+   - Added text render case in main render loop
+   - Added text hitTest: returns "line" handle for interior click (bounding box detection)
+   - Added text in `geometrySignature` for cache key
+   - Added `onTextCreated?: (drawingId: string) => void` prop for modal trigger
+
+3. **toolRegistry.ts**
+   - Changed text from `status: "disabled"` to `status: "enabled"`
+
+4. **drawings.ts (persistence store)**
+   - Added `"text": "Text"` to `KIND_LABEL` constant
+   - Updated `cloneDrawing` to deep-clone anchor for text
+
+5. **TextModal.tsx (new component)**
+   - Simple modal for editing text annotation content
+   - Text input field with Save/Cancel buttons
+   - data-testid attributes for testing
+
+6. **ChartsProTab.tsx (wiring)**
+   - Added `editingTextId` state to track text drawing being edited
+   - Added `onTextCreated` callback to open modal when text placed
+   - Added TextModal portal with save/cancel logic
+
+7. **ChartViewport.tsx (QA API)**
+   - Added text points to `dump().objects` (anchor coordinates)
+   - Added `content` and `anchor` fields for text objects
+
+**Files Changed:**
+- `quantlab-ui/src/features/chartsPro/types.ts` (DrawingKind, TextDrawing interface)
+- `quantlab-ui/src/features/chartsPro/components/DrawingLayer.tsx` (all drawing logic, onTextCreated prop)
+- `quantlab-ui/src/features/chartsPro/components/LeftToolbar/toolRegistry.ts` (enable text)
+- `quantlab-ui/src/features/chartsPro/state/drawings.ts` (KIND_LABEL, cloneDrawing)
+- `quantlab-ui/src/features/chartsPro/components/ChartViewport.tsx` (dump objects, prop pass-through)
+- `quantlab-ui/src/features/chartsPro/components/Modal/TextModal.tsx` (new)
+- `quantlab-ui/src/features/chartsPro/ChartsProTab.tsx` (modal wiring)
+- `quantlab-ui/tests/chartsPro.cp20.spec.ts` (TV-20.3 tests)
+
+**Test Results & Gates:**
+- npm build ✅ (2472 modules)
+- chartsPro.cp20 ✅ (23/23 passed)
+- tvParity ✅ (35/35 passed)
+
+---
+
+### 2026-01-23 (TV-20.2a – Rectangle 4-Corner Resize Parity)
+
+**Status:** ✅ **COMPLETE** (All 4 corners draggable for resize)
+
+**Task Description:** Fix rectangle UX so all 4 corners can be dragged for resize (parity with TradingView).
+
+**Root Cause:**
+hitTest only returned `p1`/`p2` handles for bottom-left and top-right corners. Top-left and bottom-right corners had no handles, making them appear draggable (handles rendered) but not functional.
+
+**Solution:**
+- Added `rect_tl | rect_tr | rect_bl | rect_br` to DragHandle type
+- Updated hitTest to detect all 4 corners via geometry calculation
+- Updated drag handler with full corner resize logic (computing minTime/maxTime/minPrice/maxPrice)
+- Updated cursorForHandle to show proper nwse/nesw resize cursors
+
+**Files Changed:**
+- `quantlab-ui/src/features/chartsPro/components/DrawingLayer.tsx` (DragHandle, hitTest, drag handling, cursor)
+- `quantlab-ui/src/features/chartsPro/components/ChartViewport.tsx` (dump().objects includes rectangle p1/p2)
+- `quantlab-ui/tests/chartsPro.cp20.spec.ts` (rectangle move, resize, delete tests)
+
+**Test Results & Gates:**
+- npm build ✅ (2471 modules)
+- chartsPro.cp20 ✅ (20/20 passed)
+- tvUI ✅ (169 passed)
+- tvParity ✅ (35/35 passed)
+
+**Commit:** eca1e92 `fix(frontend): TV-20.2a Rectangle 4-corner resize parity`
+
+---
+
 ### 2026-01-23 (TV-20.2 – Rectangle Drawing Tool)
 
 **Status:** ✅ **COMPLETE** (Rectangle tool fully functional: draw, select, move, delete)
