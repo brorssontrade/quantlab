@@ -1,3 +1,122 @@
+### 2026-01-23 (TV-20.12b – Short Position tool)
+
+**Status:** ✅ **COMPLETE** (3-click workflow, inverted semantics from Long, risk/reward calculation)
+
+**Task Description:** "Implementera Short Position med samma 3-punkt workflow som Long men med inverterad semantik: Stop above entry, Target below entry."
+
+**Implementation:**
+1. **Added ShortPosition interface** to types.ts (same structure as LongPosition)
+2. **Enabled shortPosition tool** in toolRegistry with shortcut "S"
+3. **Added keyboard handler** in ChartViewport ('s' → shortPosition)
+4. **Full lifecycle in DrawingLayer.tsx**: creation, rendering, hit-testing, drag handling
+5. **drawShortPosition function** - same visual as Long but with red base color (#ef4444)
+6. **dump() contract** with same fields as longPosition + riskRewardRatio
+
+**dump() Contract:**
+```typescript
+{
+  type: "shortPosition",
+  p1: { timeMs: number, price: number },  // Entry
+  p2: { timeMs: number, price: number },  // Stop Loss (above entry)
+  p3: { timeMs: number, price: number },  // Target (below entry)
+  points: [p1, p2, p3],
+  riskPrice: number,       // |stop - entry|
+  rewardPrice: number,     // |entry - target|
+  riskPercent: number,     // (riskPrice / entry) * 100
+  rewardPercent: number,   // (rewardPrice / entry) * 100
+  riskRewardRatio: number  // reward / risk
+}
+```
+
+**Files Changed:**
+- `quantlab-ui/src/features/chartsPro/types.ts` (+ShortPosition)
+- `quantlab-ui/src/features/chartsPro/controls.ts` (+shortPosition to Tool/VALID_TOOLS)
+- `quantlab-ui/src/features/chartsPro/toolRegistry.ts` (enabled shortPosition with S hotkey)
+- `quantlab-ui/src/features/chartsPro/ChartViewport.tsx` (keyboard handler + dump contract)
+- `quantlab-ui/src/features/chartsPro/DrawingLayer.tsx` (+full lifecycle ~150 lines)
+- `quantlab-ui/tests/chartsPro.cp20.spec.ts` (+4 Short Position tests)
+
+**Test Results & Gates:**
+- npm build ✅ (2473 modules)
+- chartsPro.cp20 ✅ **192/192 = 64×3 repeat-each FLAKE-FREE**
+- tvUI ✅ (169/169 passed, 2 pre-existing skipped)
+- tvParity ✅ (35/35 passed)
+
+**Commits:**
+- `8b03cc2` feat(chartspro): TV-20.12b Short Position tool
+
+---
+
+### 2026-01-23 (TV-20.12a – Long Position tool)
+
+**Status:** ✅ **COMPLETE** (3-click workflow, TradingView-style risk/reward zones, dump contract)
+
+**Task Description:** "Implementera Long Position med 3-punkt workflow: Entry (p1), Stop (p2), Target (p3). Visual: grön zon (profit), röd zon (risk), Labels med R:R ratio."
+
+**Implementation:**
+1. **Added LongPosition interface** to types.ts
+2. **Enabled longPosition tool** in toolRegistry with shortcut "L"
+3. **Added keyboard handler** in ChartViewport ('l' → longPosition)
+4. **Full lifecycle in DrawingLayer.tsx**: 3-click creation, rendering with zones, hit-testing, drag handling
+5. **drawLongPosition function** with TradingView-style profit/risk zones
+6. **dump() contract** with computed risk/reward values
+
+**dump() Contract:**
+```typescript
+{
+  type: "longPosition",
+  p1: { timeMs: number, price: number },  // Entry
+  p2: { timeMs: number, price: number },  // Stop Loss (below entry)
+  p3: { timeMs: number, price: number },  // Target (above entry)
+  points: [p1, p2, p3],
+  riskPrice: number,       // |entry - stop|
+  rewardPrice: number,     // |target - entry|
+  riskPercent: number,     // (riskPrice / entry) * 100
+  rewardPercent: number,   // (rewardPrice / entry) * 100
+  riskRewardRatio: number  // reward / risk
+}
+```
+
+**Files Changed:**
+- `quantlab-ui/src/features/chartsPro/types.ts` (+LongPosition)
+- `quantlab-ui/src/features/chartsPro/controls.ts` (+longPosition to Tool/VALID_TOOLS)
+- `quantlab-ui/src/features/chartsPro/toolRegistry.ts` (enabled longPosition with L hotkey)
+- `quantlab-ui/src/features/chartsPro/ChartViewport.tsx` (keyboard handler + dump contract)
+- `quantlab-ui/src/features/chartsPro/DrawingLayer.tsx` (+full lifecycle ~180 lines)
+- `quantlab-ui/tests/chartsPro.cp20.spec.ts` (+4 Long Position tests)
+
+**Test Results & Gates:**
+- npm build ✅ (2473 modules)
+- chartsPro.cp20 ✅ **180/180 = 60×3 repeat-each FLAKE-FREE**
+- tvUI ✅ (169/171 passed, 2 pre-existing skipped)
+- tvParity ✅ (35/35 passed)
+
+**Commits:**
+- `7c98113` feat(chartspro): TV-20.12a Long Position tool
+
+---
+
+### 2026-01-23 (TV-20.12 Pre-check – Hotkey collision fix)
+
+**Status:** ✅ **COMPLETE** (Fixed F hotkey collision between flatTopChannel and fibRetracement)
+
+**Task Description:** "Quality check before TV-20.12 – verify no hotkey collisions, state machine consistency."
+
+**Issue Found:** Hotkey 'F' was assigned to both flatTopChannel and fibRetracement.
+
+**Fix:**
+- Changed fibRetracement shortcut from "F" to "B" in toolRegistry
+- Added keyboard handler for 'b' → fibRetracement in ChartViewport
+
+**Files Changed:**
+- `quantlab-ui/src/features/chartsPro/toolRegistry.ts` (fibRetracement: F→B)
+- `quantlab-ui/src/features/chartsPro/ChartViewport.tsx` (added 'b' handler)
+
+**Commits:**
+- `9cdf10d` fix(chartspro): hotkey collision - F now flatTopChannel only, B for fibRetracement
+
+---
+
 ### 2026-01-23 (TV-19.3 – Timezone Selector + Market Session Status)
 
 **Status:** ✅ **COMPLETE** (Timezone dropdown with 3 zones + market session status based on exchange hours)

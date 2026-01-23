@@ -906,6 +906,8 @@
 | ✅ DONE | TV-20.10 | Flat Top/Bottom Channel (horizontal side + trend side) | 1.5h | TV-20.9 |
 | ✅ DONE | TV-20.11 | Regression Trend Channel (linear regression midline + ±σ bands) | 2h | TV-20.10 |
 | ✅ DONE | TV-20.11a | Regression Trend: deterministic tests (0 skipped) | 0.5h | TV-20.11 |
+| ✅ DONE | TV-20.12a | Long Position (3-click, Entry→Stop→Target, R:R ratio) | 1.5h | TV-20.11a |
+| ✅ DONE | TV-20.12b | Short Position (3-click, inverted semantics, R:R ratio) | 1h | TV-20.12a |
 
 **Commits:**
 - TV-20.1: `4f5e95a` fix(frontend): TV-20.1 LeftToolbar ToolGroups + Flyout
@@ -924,6 +926,45 @@
 - TV-20.10: `de4e6ba` feat(frontend): TV-20.10 Flat Top/Bottom Channel
 - TV-20.11: `44ecc3e` feat(frontend): TV-20.11 Regression Trend Channel
 - TV-20.11a: `e13d769` fix(frontend): TV-20.11a Regression Trend deterministic tests
+- TV-20.12a: `7c98113` feat(chartspro): TV-20.12a Long Position tool
+- TV-20.12b: `8b03cc2` feat(chartspro): TV-20.12b Short Position tool
+
+**Gate Results (TV-20.12b):**
+- build ✅ (2473 modules)
+- cp20 ✅ **192/192 (64×3 repeat-each) FLAKE-FREE**
+- tvUI ✅ (169/169 passed, 2 pre-existing skipped)
+- tvParity ✅ (35/35 passed)
+
+**dump() contracts for Position tools:**
+```typescript
+// longPosition
+{
+  type: "longPosition",
+  p1: { timeMs: number, price: number },  // Entry
+  p2: { timeMs: number, price: number },  // Stop (below entry)
+  p3: { timeMs: number, price: number },  // Target (above entry)
+  points: [p1, p2, p3],
+  riskPrice: number,       // |entry - stop|
+  rewardPrice: number,     // |target - entry|
+  riskPercent: number,     // (riskPrice / entry) * 100
+  rewardPercent: number,   // (rewardPrice / entry) * 100
+  riskRewardRatio: number  // reward / risk
+}
+
+// shortPosition
+{
+  type: "shortPosition",
+  p1: { timeMs: number, price: number },  // Entry
+  p2: { timeMs: number, price: number },  // Stop (above entry)
+  p3: { timeMs: number, price: number },  // Target (below entry)
+  points: [p1, p2, p3],
+  riskPrice: number,       // |stop - entry|
+  rewardPrice: number,     // |entry - target|
+  riskPercent: number,
+  rewardPercent: number,
+  riskRewardRatio: number
+}
+```
 
 **Gate Results (TV-20.11a):**
 - build ✅ (2473 modules)
