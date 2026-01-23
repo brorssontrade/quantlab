@@ -104,6 +104,7 @@ export interface DrawingLayerProps {
   onToggleHide: (id: string) => void;
   setTool: (tool: Tool) => void;
   onTextCreated?: (drawingId: string) => void;
+  onTextEdit?: (drawingId: string) => void;
 }
 
 export function DrawingLayer({
@@ -127,6 +128,7 @@ export function DrawingLayer({
   onToggleHide,
   setTool,
   onTextCreated,
+  onTextEdit,
 }: DrawingLayerProps) {
   const overlay = useOverlayCanvas();
   const pointerState = useRef<PointerState>({ mode: "idle" });
@@ -402,6 +404,13 @@ export function DrawingLayer({
       if (!selectedId) return;
       if (event.key === "Delete") {
         onRemove(selectedId);
+      } else if (event.key === "Enter") {
+        // TV-20.4: Enter on selected text = edit
+        const drawing = drawings.find((d) => d.id === selectedId);
+        if (drawing?.kind === "text" && onTextEdit) {
+          event.preventDefault();
+          onTextEdit(selectedId);
+        }
       } else if (event.shiftKey && event.key.toLowerCase() === "l") {
         // Shift+L = toggle lock
         onToggleLock(selectedId);
@@ -412,7 +421,7 @@ export function DrawingLayer({
     };
     window.addEventListener("keydown", handle);
     return () => window.removeEventListener("keydown", handle);
-  }, [selectedId, onRemove, onToggleHide, onToggleLock]);
+  }, [selectedId, onRemove, onToggleHide, onToggleLock, drawings, onTextEdit]);
 
   useEffect(() => {
     if (!magnetEnabled) {
@@ -552,7 +561,10 @@ export function DrawingLayer({
           case "text": {
             const { x, y, width: w, height: h } = geometry;
             // Check if inside text bounding box (for move)
-            if (point.x >= x && point.x <= x + w && point.y >= y - h && point.y <= y) {
+            // Text uses textBaseline="top", so y is top and text extends downward
+            // Expand bounding box by HIT_TOLERANCE for easier selection
+            if (point.x >= x - HIT_TOLERANCE && point.x <= x + w + HIT_TOLERANCE && 
+                point.y >= y - HIT_TOLERANCE && point.y <= y + h + HIT_TOLERANCE) {
               return { drawing, handle: "line" };
             }
             break;
@@ -1009,9 +1021,21 @@ export function DrawingLayer({
       applyCursorForHit(null, false);
     };
 
+    // TV-20.4: Double-click on text = edit
+    const handleDoubleClick = (event: MouseEvent) => {
+      const point = computePoint(event as unknown as PointerEvent);
+      if (!point) return;
+      const hit = hitTest(point);
+      if (hit?.drawing.kind === "text" && onTextEdit) {
+        event.preventDefault();
+        onTextEdit(hit.drawing.id);
+      }
+    };
+
     targetEl.addEventListener("pointerdown", handlePointerDown);
     targetEl.addEventListener("pointermove", handleHover);
     targetEl.addEventListener("pointerleave", handlePointerLeave);
+    targetEl.addEventListener("dblclick", handleDoubleClick);
     window.addEventListener("pointermove", handlePointerMove);
     window.addEventListener("pointerup", handlePointerUp);
     targetEl.addEventListener("wheel", handleWheel, { passive: false });
@@ -1019,6 +1043,7 @@ export function DrawingLayer({
       targetEl.removeEventListener("pointerdown", handlePointerDown);
       targetEl.removeEventListener("pointermove", handleHover);
       targetEl.removeEventListener("pointerleave", handlePointerLeave);
+      targetEl.removeEventListener("dblclick", handleDoubleClick);
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", handlePointerUp);
       targetEl.removeEventListener("wheel", handleWheel);
@@ -1032,6 +1057,7 @@ export function DrawingLayer({
     handleSelection,
     hitTest,
     onUpsert,
+    onTextEdit,
     containerRef,
     resetPointerSession,
     tool,

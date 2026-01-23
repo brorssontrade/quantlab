@@ -896,6 +896,7 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
                   onToggleHide={drawingsStore.toggleHidden}
                   onUpdateIndicator={drawingsStore.updateIndicator}
                   onTextCreated={(drawingId) => setEditingTextId(drawingId)}
+                  onTextEdit={(drawingId) => setEditingTextId(drawingId)}
                   registerExports={(handlers) => {
                     exportHandlersRef.current = handlers;
                   }}

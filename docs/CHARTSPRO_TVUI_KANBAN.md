@@ -884,14 +884,29 @@
 
 | Status | Task ID | Task | Estimated | Dependencies |
 |--------|---------|------|-----------|---|
-| 📋 READY | TV-20.1 | ToolGroups UI (TradingView-likt flyout: Fibo/Gann, Shapes, Text, Patterns, Measure, Channels, Pitchforks) | 2h | TV-3.x |
-| 📋 READY | TV-20.2 | Shapes (Rectangle + Circle) MVP + 1–2 tests | 2h | TV-20.1 |
-| 📋 READY | TV-20.3 | Text tool MVP + 1 test | 1.5h | TV-20.1 |
-| 📋 READY | TV-20.4 | Measure tools (Price Range / Date Range / Date+Price) MVP + 1 test | 2h | TV-20.1 |
-| 📋 READY | TV-20.5 | Fibonacci Retracement MVP + 1 test | 2.5h | TV-20.1 |
+| ✅ DONE | TV-20.1 | ToolGroups UI (TradingView-likt flyout: Fibo/Gann, Shapes, Text, Patterns, Measure, Channels, Pitchforks) | 2h | TV-3.x |
+| ✅ DONE | TV-20.2 | Rectangle tool (create/select/move/delete) + 6 tests | 2h | TV-20.1 |
+| ✅ DONE | TV-20.2a | Rectangle 4-corner resize parity (all corners draggable) | 0.5h | TV-20.2 |
+| ✅ DONE | TV-20.3 | Text tool (click→modal→edit, select/move/delete) + 3 tests | 1.5h | TV-20.1 |
+| 📋 READY | TV-20.4 | Edit existing text + multiline (textarea, Enter/Shift+Enter) | 1h | TV-20.3 |
+| 📋 READY | TV-20.5 | Magnet/Snap foundation (toggle, snap to high/low/close) | 2h | TV-20.1 |
+| 📋 READY | TV-20.6a | Measure: Price Range (2-click, Δprice, Δ%) | 1.5h | TV-20.1 |
+| 📋 READY | TV-20.6b | Measure: Date Range (2-click, bars, seconds) | 1h | TV-20.6a |
+| 📋 READY | TV-20.7 | Fibonacci Retracement MVP + 1 test | 2.5h | TV-20.5 |
 
-**Total TV-20: 10h**  
-**Acceptance:** ToolGroups UI + flyout, 5 nya tools implementerade med create/move/delete, dump().objects verifierar, 1-2 tests per tool.
+**Commits:**
+- TV-20.1: `4f5e95a` fix(frontend): TV-20.1 LeftToolbar ToolGroups + Flyout
+- TV-20.2: `4f5e95a` (same commit, rectangle included)
+- TV-20.2a: `eca1e92` fix(frontend): TV-20.2a Rectangle 4-corner resize parity
+- TV-20.3: `3dba910` feat(frontend): TV-20.3 Text/Note tool with modal input
+
+**Gate Results (TV-20.3):**
+- build ✅ (2472 modules)
+- cp20 ✅ (23/23 passed)
+- tvParity ✅ (35/35 passed)
+
+**Total TV-20: 14h** (revised with new tasks)  
+**Acceptance:** ToolGroups UI + flyout, Rectangle + Text tools complete, dump().objects verifierar.
 
 ---
 

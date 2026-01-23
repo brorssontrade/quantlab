@@ -91,9 +91,10 @@
 | `features/chartsPro/components/TopBar/` | **TV-1+: TopBar (symbol/timeframe/type), TV-10.2: Settings overlay, TV-12: Layout Manager** | TopBar.tsx, PrimaryControls.tsx, SettingsPanel.tsx, LayoutManager.tsx |
 | `features/chartsPro/components/TopBar/SettingsPanel.tsx` | **TV-10.2: Settings gear panel (appearance + scales, localStorage cp.settings.*)** | SettingsPanel, ChartSettings, DEFAULT_SETTINGS |
 | `features/chartsPro/components/TopBar/LayoutManager.tsx` | **TV-12.1-12.4: Layout save/load/delete manager (overlay panel, localStorage cp.layouts.*, JSON schema)** | LayoutManager, SavedLayout, LayoutManagerState |
-| `features/chartsPro/components/Modal/` | **TV-18.1+: Modal infrastructure (central portal for indicators, alerts, etc.)** | ModalPortal, IndicatorsModal |
+| `features/chartsPro/components/Modal/` | **TV-18.1+: Modal infrastructure (central portal for indicators, alerts, text edit)** | ModalPortal, IndicatorsModal, TextModal |
 | `features/chartsPro/components/Modal/ModalPortal.tsx` | **TV-18.1: Central modal component (portal, Esc + click-outside, focus trap, data-testid)** | ModalPortal |
 | `features/chartsPro/components/Modal/IndicatorsModal.tsx` | **TV-18.2: Indicators picker modal (search + add, TradingView-style)** | IndicatorsModal |
+| `features/chartsPro/components/Modal/TextModal.tsx` | **TV-20.3: Text annotation modal (edit content, Enter=save, data-testid)** | TextModal |
 | `features/chartsPro/components/LeftToolbar/` | **Day 7+: Left toolbar (7 tools, keyboard shortcuts, persistence, TV-3.9: responsive mobile pill)** | LeftToolbar.tsx, MobilePill.tsx, ToolButton.tsx |
 | `features/chartsPro/components/BottomBar/` | **TV-9: Bottom bar (quick ranges, scale toggles, UTC clock, persistence)** | BottomBar.tsx, useBottomBarState |
 | `features/chartsPro/components/RightPanel/TabsPanel.tsx` | **Day 8+: RightPanel tabs (Indicators/Objects/Alerts, persistence)** | TabsPanel |
@@ -104,9 +105,10 @@
 | `features/chartsPro/components/ChartViewport.tsx` | dump().ui includes `alerts` (count), `indicators` (count, names[], addOpen), **`settings` (ChartSettings | null)**, **`modal` (TV-18.1: { open, kind })** | ChartViewport |
 | `features/chartsPro/components/ChartViewport.tsx` | Main chart renderer (lightweight-charts) | ChartViewport |
 | `features/chartsPro/utils/applyChartSettings.ts` | **TV-10.3: Adapter mapping `ChartSettings` → lwcharts options; snapshot exposure** | applyChartLevelSettings, applySeriesSettings, createAppliedSnapshot |
-| `features/chartsPro/components/DrawingLayer.tsx` | Drawing interactions (Shift+H/L for hide/lock) | DrawingLayer |
+| `features/chartsPro/components/DrawingLayer.tsx` | **TV-20.2/20.3: Drawing interactions (Rectangle, Text, Shift+H/L for hide/lock)** | DrawingLayer |
 | `features/chartsPro/components/AlertsPanel.tsx` | **Day 8: Alerts panel in ChartsPro sidebar** | AlertsPanel |
 | `tests/chartsPro.cp18.spec.ts` | **TV-18.2: Indicators modal tests (4 cases: open, Esc, X, add indicator)** |
+| `tests/chartsPro.cp20.spec.ts` | **TV-20: Drawing tools tests (23 cases: ToolGroups, Rectangle, Text, select/move/delete)** |
 | `tests/chartsPro.tvUi.indicators.tab.spec.ts` | **TV-7/TV-18.2: Indicators tab tests (updated for modal, 12 cases)** |
 | `tests/chartsPro.tvUi.bottomBar.spec.ts` | **TV-9: BottomBar tests (13 cases, functional + responsive + deterministic, repeat-each=10, 130 runs, zero flakes)** |
 | `tests/chartsPro.tvUi.alerts.tab.spec.ts` | **TV-8: Alerts tab tests (12 cases, form/create/delete/sorting/determinism coverage)** |
@@ -118,7 +120,7 @@
 | `features/chartsPro/components/Watermark.tsx` | **Day 10: Symbol watermark** | Watermark |
 | `features/chartsPro/hooks/` | Custom hooks | useOhlcv, useIndicators |
 | `features/chartsPro/state/` | State management | controls, drawings |
-| `features/chartsPro/types.ts` | **TV-7: Type definitions + helpers** | IndicatorInstance, indicatorParamsSummary() |
+| `features/chartsPro/types.ts` | **TV-7+TV-20.3: Type definitions, DrawingKind, TextDrawing, IndicatorInstance** | DrawingKind, TextDrawing, IndicatorInstance |
 | `features/chartsPro/indicators/` | Technical indicators | SMA, EMA |
 | `features/chartsPro/theme.ts` | Chart theming (TradingView-style colors Day 10) | - |
 | `features/fundamentals/` | Fundamentals tab | FundamentalsTab |

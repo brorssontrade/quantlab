@@ -376,6 +376,8 @@ interface ChartViewportProps {
   onUpdateIndicator?: (id: string, patch: Partial<IndicatorInstance>) => void;
   /** TV-20.3: Callback when text drawing is created (opens modal) */
   onTextCreated?: (drawingId: string) => void;
+  /** TV-20.4: Callback when text drawing is edited (double-click or Enter) */
+  onTextEdit?: (drawingId: string) => void;
   mockMode?: boolean;
   debugMode?: boolean;
   workspaceMode?: boolean;
@@ -429,6 +431,7 @@ export function ChartViewport({
   onChartReady,
   onUpdateIndicator,
   onTextCreated,
+  onTextEdit,
   mockMode = false,
   debugMode = false,
   workspaceMode = false,
@@ -3818,6 +3821,7 @@ const fitToContent = useCallback(() => {
                 onToggleHide={onToggleHide}
                 setTool={setTool}
                 onTextCreated={onTextCreated}
+                onTextEdit={onTextEdit}
               />
             </OverlayCanvasLayer>
             {/* TV-8.2: Alert markers layer – renders dashed lines + bell icons */}

@@ -1,18 +1,19 @@
 /**
  * TextModal.tsx
  *
- * TV-20.3: Text Tool Modal
+ * TV-20.3/20.4: Text Tool Modal
  *
- * Simple modal for editing text annotation content.
- * Opens when text tool creates a new annotation.
+ * Modal for editing text annotation content.
+ * Opens when text tool creates a new annotation or when editing existing.
  * Features:
- * - Text input field
+ * - Textarea input field (multiline support)
+ * - Enter = Save, Shift+Enter = new line
  * - Save/Cancel buttons
  * - data-testid attributes for testing
  */
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 
@@ -38,6 +39,7 @@ export function TextModal({ initialContent, onSave, onCancel }: TextModalProps) 
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Enter = Save (unless Shift is held for newline)
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSubmit(e);
@@ -60,15 +62,17 @@ export function TextModal({ initialContent, onSave, onCancel }: TextModalProps) 
             <Label htmlFor="text-content" className="text-zinc-300">
               Text Content
             </Label>
-            <Input
+            <p className="text-xs text-zinc-500">
+              Enter to save, Shift+Enter for new line
+            </p>
+            <Textarea
               id="text-content"
               data-testid="text-modal-input"
-              type="text"
               value={content}
               onChange={(e) => setContent(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Enter annotation text..."
-              className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500"
+              className="bg-zinc-800 border-zinc-700 text-zinc-100 placeholder:text-zinc-500 min-h-[100px] resize-y"
               autoFocus
             />
           </div>

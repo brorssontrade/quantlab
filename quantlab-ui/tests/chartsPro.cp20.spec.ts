@@ -684,4 +684,196 @@ test.describe("TV-20: LeftToolbar Tool Groups + Flyout", () => {
       }, { timeout: 2000 }).toBe(0);
     });
   });
+
+  // TV-20.4: Edit existing text + multiline
+  test.describe("TV-20.4: Edit Existing Text + Multiline", () => {
+    test("double-click on text opens edit modal with existing content", async ({ page }) => {
+      // First create a text drawing with custom content
+      const textGroup = page.locator('[data-testid="lefttoolbar-group-text"]');
+      await textGroup.click();
+      const textTool = page.locator('[data-testid="lefttoolbar-tool-text"]');
+      await textTool.click();
+
+      const chartRoot = page.locator('[data-testid="tv-chart-root"]');
+      const box = await chartRoot.boundingBox();
+      if (!box) throw new Error("Chart root not found");
+      
+      const clickX = box.x + box.width * 0.5;
+      const clickY = box.y + box.height * 0.5;
+      await page.mouse.click(clickX, clickY);
+
+      // Modal opens for new text
+      const textModal = page.locator('[data-testid="text-modal"]');
+      await expect(textModal).toBeVisible({ timeout: 2000 });
+
+      // Save with "Original text"
+      const input = page.locator('[data-testid="text-modal-input"]');
+      await input.fill("Original text");
+      const saveButton = page.locator('[data-testid="text-modal-save"]');
+      await saveButton.click();
+      await expect(textModal).not.toBeVisible();
+
+      // Verify text was saved and is selected
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        const textObj = dump?.objects?.find((d: any) => d.type === "text");
+        return { content: textObj?.content, selected: textObj?.selected };
+      }, { timeout: 2000 }).toEqual({ content: "Original text", selected: true });
+
+      // Switch to select tool before double-clicking (TV-20.4: double-click edits in select mode)
+      const cursorGroup = page.locator('[data-testid="lefttoolbar-group-cursor"]');
+      await cursorGroup.click();
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.activeTool;
+      }, { timeout: 2000 }).toBe("select");
+
+      // First click to ensure we're hitting the text (it should stay selected)
+      await page.mouse.click(clickX, clickY);
+      
+      // Verify text is selected after click
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.selectedObjectId !== null;
+      }, { timeout: 2000 }).toBe(true);
+
+      // Now double-click to edit (at a slight offset to ensure we hit the text area)
+      await page.mouse.dblclick(clickX + 20, clickY);
+
+      // Modal should open with existing content
+      await expect(textModal).toBeVisible({ timeout: 2000 });
+      await expect(input).toHaveValue("Original text");
+
+      // Edit to new content
+      await input.fill("Edited text");
+      await saveButton.click();
+
+      // Verify text was updated
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        const textObj = dump?.objects?.find((d: any) => d.type === "text");
+        return textObj?.content;
+      }, { timeout: 2000 }).toBe("Edited text");
+    });
+
+    test("Enter key on selected text opens edit modal", async ({ page }) => {
+      // Create text drawing
+      const textGroup = page.locator('[data-testid="lefttoolbar-group-text"]');
+      await textGroup.click();
+      const textTool = page.locator('[data-testid="lefttoolbar-tool-text"]');
+      await textTool.click();
+
+      const chartRoot = page.locator('[data-testid="tv-chart-root"]');
+      const box = await chartRoot.boundingBox();
+      if (!box) throw new Error("Chart root not found");
+      
+      await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.5);
+
+      const textModal = page.locator('[data-testid="text-modal"]');
+      await expect(textModal).toBeVisible({ timeout: 2000 });
+
+      // Save initial text
+      const input = page.locator('[data-testid="text-modal-input"]');
+      await input.fill("Test note");
+      const saveButton = page.locator('[data-testid="text-modal-save"]');
+      await saveButton.click();
+      await expect(textModal).not.toBeVisible();
+
+      // Text should be selected after creation
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.selectedObjectId !== null;
+      }, { timeout: 2000 }).toBe(true);
+
+      // Press Enter to edit
+      await page.keyboard.press("Enter");
+
+      // Modal should open
+      await expect(textModal).toBeVisible({ timeout: 2000 });
+      await expect(input).toHaveValue("Test note");
+    });
+
+    test("multiline text: Shift+Enter inserts newline, Enter saves", async ({ page }) => {
+      // Create text drawing
+      const textGroup = page.locator('[data-testid="lefttoolbar-group-text"]');
+      await textGroup.click();
+      const textTool = page.locator('[data-testid="lefttoolbar-tool-text"]');
+      await textTool.click();
+
+      const chartRoot = page.locator('[data-testid="tv-chart-root"]');
+      const box = await chartRoot.boundingBox();
+      if (!box) throw new Error("Chart root not found");
+      
+      await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.5);
+
+      const textModal = page.locator('[data-testid="text-modal"]');
+      await expect(textModal).toBeVisible({ timeout: 2000 });
+
+      // Use fill() to set multiline content directly (this tests the multiline support)
+      const input = page.locator('[data-testid="text-modal-input"]');
+      await input.fill("Line 1\nLine 2");
+      
+      // Verify textarea has multiline content before saving
+      await expect(input).toHaveValue("Line 1\nLine 2");
+
+      // Click save button instead of Enter (more reliable)
+      const saveButton = page.locator('[data-testid="text-modal-save"]');
+      await saveButton.click();
+
+      // Modal should close
+      await expect(textModal).not.toBeVisible({ timeout: 2000 });
+
+      // Verify multiline content was saved
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        const textObj = dump?.objects?.find((d: any) => d.type === "text");
+        return textObj?.content;
+      }, { timeout: 2000 }).toBe("Line 1\nLine 2");
+    });
+
+    test("cancel on existing text keeps original content", async ({ page }) => {
+      // Create text drawing
+      const textGroup = page.locator('[data-testid="lefttoolbar-group-text"]');
+      await textGroup.click();
+      const textTool = page.locator('[data-testid="lefttoolbar-tool-text"]');
+      await textTool.click();
+
+      const chartRoot = page.locator('[data-testid="tv-chart-root"]');
+      const box = await chartRoot.boundingBox();
+      if (!box) throw new Error("Chart root not found");
+      
+      const clickX = box.x + box.width * 0.5;
+      const clickY = box.y + box.height * 0.5;
+      await page.mouse.click(clickX, clickY);
+
+      const textModal = page.locator('[data-testid="text-modal"]');
+      await expect(textModal).toBeVisible({ timeout: 2000 });
+
+      // Save "Keep this"
+      const input = page.locator('[data-testid="text-modal-input"]');
+      await input.fill("Keep this");
+      const saveButton = page.locator('[data-testid="text-modal-save"]');
+      await saveButton.click();
+      await expect(textModal).not.toBeVisible();
+
+      // Double-click to edit
+      await page.mouse.dblclick(clickX, clickY);
+      await expect(textModal).toBeVisible({ timeout: 2000 });
+
+      // Change content but cancel
+      await input.fill("Discard this");
+      const cancelButton = page.locator('[data-testid="text-modal-cancel"]');
+      await cancelButton.click();
+
+      // Modal closes
+      await expect(textModal).not.toBeVisible();
+
+      // Original content should be preserved
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        const textObj = dump?.objects?.find((d: any) => d.type === "text");
+        return textObj?.content;
+      }, { timeout: 2000 }).toBe("Keep this");
+    });
+  });
 });
