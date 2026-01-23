@@ -45,7 +45,7 @@ export interface OhlcvResponse {
   meta?: Record<string, unknown>;
 }
 
-export type DrawingKind = "hline" | "vline" | "trend" | "channel" | "rectangle" | "text" | "priceRange" | "dateRange" | "dateAndPriceRange" | "fibRetracement" | "pitchfork" | "flatTopChannel" | "flatBottomChannel";
+export type DrawingKind = "hline" | "vline" | "trend" | "channel" | "rectangle" | "text" | "priceRange" | "dateRange" | "dateAndPriceRange" | "fibRetracement" | "pitchfork" | "flatTopChannel" | "flatBottomChannel" | "regressionTrend";
 
 export interface DrawingStyle {
   color: string;
@@ -171,7 +171,16 @@ export interface FlatBottomChannel extends DrawingBase {
   p3: TrendPoint; // Point defining horizontal bottom level (y determines flat bottom price)
 }
 
-export type Drawing = HLine | VLine | Trend | Channel | Rectangle | TextDrawing | PriceRange | DateRange | DateAndPriceRange | FibRetracement | Pitchfork | FlatTopChannel | FlatBottomChannel;
+/** Regression Trend Channel - 2-point: p1→p2 defines time window for linear regression
+ * The regression is calculated on bars within [p1.timeMs, p2.timeMs] and displayed
+ * as regression line ± k×stdev (standard deviation) bands */
+export interface RegressionTrend extends DrawingBase {
+  kind: "regressionTrend";
+  p1: TrendPoint; // Start of regression window
+  p2: TrendPoint; // End of regression window
+}
+
+export type Drawing = HLine | VLine | Trend | Channel | Rectangle | TextDrawing | PriceRange | DateRange | DateAndPriceRange | FibRetracement | Pitchfork | FlatTopChannel | FlatBottomChannel | RegressionTrend;
 
 export interface CompareSeriesConfig {
   id: string;

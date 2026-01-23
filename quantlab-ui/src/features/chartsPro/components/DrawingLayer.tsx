@@ -46,7 +46,8 @@ type DrawingGeometry =
   | { kind: "priceRange"; segment: SegmentGeometry; deltaPrice: number; deltaPercent: number }
   | { kind: "dateRange"; segment: SegmentGeometry; deltaMs: number; barsCount: number }
   | { kind: "dateAndPriceRange"; segment: SegmentGeometry; deltaPrice: number; deltaPercent: number; deltaMs: number; barsCount: number }
-  | { kind: "fibRetracement"; segment: SegmentGeometry; levels: Array<{ ratio: number; price: number; y: number }> };
+  | { kind: "fibRetracement"; segment: SegmentGeometry; levels: Array<{ ratio: number; price: number; y: number }> }
+  | { kind: "regressionTrend"; midline: SegmentGeometry; upperBand: SegmentGeometry; lowerBand: SegmentGeometry; slope: number; intercept: number; stdev: number };
 
 type PointerState =
   | { mode: "idle" }
@@ -67,6 +68,7 @@ const COLORS: Record<Drawing["kind"], string> = {
   dateRange: "#06b6d4", // cyan for measure tools
   dateAndPriceRange: "#06b6d4", // cyan for combined measure tool
   fibRetracement: "#f59e0b", // amber for fibonacci tools
+  regressionTrend: "#10b981", // green/emerald for regression tools
 };
 
 const HIT_TOLERANCE = 8;
@@ -214,11 +216,12 @@ export function DrawingLayer({
         width: viewport.width,
         height: viewport.height,
         trends: trendMap,
+        data,
       });
       geometryCacheRef.current.set(drawing.id, { signature, geometry });
       return geometry;
     },
-    [candleSeries, chart, trendMap],
+    [candleSeries, chart, data, trendMap],
   );
 
   const updateCursor = useCallback(
@@ -319,6 +322,9 @@ export function DrawingLayer({
           break;
         case "fibRetracement":
           drawFibRetracement(ctx, drawing as FibRetracement, geometry, selectedId === drawing.id, colors);
+          break;
+        case "regressionTrend":
+          drawRegressionTrend(ctx, drawing, geometry as Extract<DrawingGeometry, { kind: "regressionTrend" }>, selectedId === drawing.id, colors);
           break;
         default:
           break;
@@ -732,6 +738,27 @@ export function DrawingLayer({
             }
             break;
           }
+          case "regressionTrend": {
+            const { midline, upperBand, lowerBand } = geometry as Extract<DrawingGeometry, { kind: "regressionTrend" }>;
+            // Check p1 and p2 handles (at midline endpoints)
+            if (distance(point.x, point.y, midline.x1, midline.y1) <= HANDLE_RADIUS + 2) {
+              return { drawing, handle: "p1" };
+            }
+            if (distance(point.x, point.y, midline.x2, midline.y2) <= HANDLE_RADIUS + 2) {
+              return { drawing, handle: "p2" };
+            }
+            // Check if click is on any of the three lines (midline, upper, lower)
+            if (distanceToSegment(point.x, point.y, midline) <= HIT_TOLERANCE) {
+              return { drawing, handle: "line" };
+            }
+            if (distanceToSegment(point.x, point.y, upperBand) <= HIT_TOLERANCE) {
+              return { drawing, handle: "line" };
+            }
+            if (distanceToSegment(point.x, point.y, lowerBand) <= HIT_TOLERANCE) {
+              return { drawing, handle: "line" };
+            }
+            break;
+          }
           default:
             break;
         }
@@ -991,6 +1018,26 @@ export function DrawingLayer({
           requestRender();
           break;
         }
+        case "regressionTrend": {
+          const drawing: Drawing = {
+            id: createId(),
+            kind: "regressionTrend",
+            symbol,
+            tf: timeframe,
+            p1: { timeMs: point.timeMs, price: point.price },
+            p2: { timeMs: point.timeMs, price: point.price },
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            z: Date.now(),
+            style: { color: COLORS.regressionTrend, width: 1 },
+          };
+          pushDraft(drawing);
+          pointerState.current = { mode: "drawing", id: drawing.id, kind: "regressionTrend" };
+          draftIdRef.current = drawing.id;
+          pendingCommitRef.current = true;
+          requestRender();
+          break;
+        }
         default:
           break;
       }
@@ -1109,6 +1156,13 @@ export function DrawingLayer({
           };
           pushDraft(next, { transient: true, select: false });
         } else if (drawing.kind === "fibRetracement") {
+          const next: Drawing = {
+            ...drawing,
+            p2: { timeMs: targetPoint.timeMs, price: targetPoint.price },
+            updatedAt: Date.now(),
+          };
+          pushDraft(next, { transient: true, select: false });
+        } else if (drawing.kind === "regressionTrend") {
           const next: Drawing = {
             ...drawing,
             p2: { timeMs: targetPoint.timeMs, price: targetPoint.price },
@@ -1414,6 +1468,33 @@ export function DrawingLayer({
           }
           case "fibRetracement": {
             // fibRetracement: drag p1 or p2 endpoints, or move whole fib
+            if (state.handle === "p1") {
+              pushDraft({
+                ...drawing,
+                p1: { timeMs: targetPoint.timeMs, price: targetPoint.price },
+                updatedAt: Date.now(),
+              }, { transient: true, select: false });
+            } else if (state.handle === "p2") {
+              pushDraft({
+                ...drawing,
+                p2: { timeMs: targetPoint.timeMs, price: targetPoint.price },
+                updatedAt: Date.now(),
+              }, { transient: true, select: false });
+            } else if (state.handle === "line" && pointerOrigin.current) {
+              const dt = targetPoint.timeMs - pointerOrigin.current.timeMs;
+              const dp = targetPoint.price - pointerOrigin.current.price;
+              pointerOrigin.current = targetPoint;
+              pushDraft({
+                ...drawing,
+                p1: { timeMs: drawing.p1.timeMs + dt, price: drawing.p1.price + dp },
+                p2: { timeMs: drawing.p2.timeMs + dt, price: drawing.p2.price + dp },
+                updatedAt: Date.now(),
+              }, { transient: true, select: false });
+            }
+            break;
+          }
+          case "regressionTrend": {
+            // regressionTrend: drag p1 or p2 endpoints, or move whole regression
             if (state.handle === "p1") {
               pushDraft({
                 ...drawing,
@@ -1914,6 +1995,40 @@ function drawFlatChannel(
   }
 }
 
+function drawRegressionTrend(
+  ctx: CanvasRenderingContext2D,
+  drawing: Drawing,
+  geometry: Extract<DrawingGeometry, { kind: "regressionTrend" }>,
+  selected: boolean,
+  colors: OverlayColors,
+) {
+  if (drawing.kind !== "regressionTrend") return;
+  
+  const { midline, upperBand, lowerBand } = geometry;
+  const stroke = drawing.style?.color || COLORS.regressionTrend;
+  const baseWidth = drawing.style?.width ?? LINE_WIDTH;
+  
+  ctx.setLineDash([]);
+  
+  // Draw midline (solid, full opacity)
+  ctx.strokeStyle = selected ? colors.selection : stroke;
+  ctx.lineWidth = selected ? SELECTED_LINE_WIDTH : baseWidth;
+  ctx.stroke(midline.path);
+  
+  // Draw upper and lower bands (solid, 0.7 opacity)
+  ctx.globalAlpha = 0.7;
+  ctx.lineWidth = (selected ? SELECTED_LINE_WIDTH : baseWidth) * 0.8;
+  ctx.stroke(upperBand.path);
+  ctx.stroke(lowerBand.path);
+  ctx.globalAlpha = 1;
+  
+  // Draw handles when selected (at midline endpoints = p1 and p2)
+  if (selected) {
+    drawHandleCircle(ctx, midline.x1, midline.y1, colors);
+    drawHandleCircle(ctx, midline.x2, midline.y2, colors);
+  }
+}
+
 function drawRectangle(
   ctx: CanvasRenderingContext2D,
   drawing: Drawing,
@@ -2329,6 +2444,7 @@ interface BuildGeometryArgs {
   width: number;
   height: number;
   trends: Map<string, Trend>;
+  data: NormalizedBar[];
 }
 
 function geometrySignature(drawing: Drawing, viewport: GeometryViewport) {
@@ -2359,6 +2475,8 @@ function geometrySignature(drawing: Drawing, viewport: GeometryViewport) {
       return `${drawing.id}:${drawing.updatedAt}:${drawing.p1.timeMs}:${drawing.p1.price}:${drawing.p2.timeMs}:${drawing.p2.price}:${base}`;
     case "fibRetracement":
       return `${drawing.id}:${drawing.updatedAt}:${drawing.p1.timeMs}:${drawing.p1.price}:${drawing.p2.timeMs}:${drawing.p2.price}:${base}`;
+    case "regressionTrend":
+      return `${drawing.id}:${drawing.updatedAt}:${drawing.p1.timeMs}:${drawing.p1.price}:${drawing.p2.timeMs}:${drawing.p2.price}:${base}`;
     default:
       return base;
   }
@@ -2371,6 +2489,7 @@ function buildDrawingGeometry({
   width,
   height,
   trends,
+  data,
 }: BuildGeometryArgs): DrawingGeometry | null {
   switch (drawing.kind) {
     case "hline": {
@@ -2661,6 +2780,107 @@ function buildDrawingGeometry({
         p3: { x: p3x, y: p3y },
       };
     }
+    case "regressionTrend": {
+      // Filter bars within the time range [p1.timeMs, p2.timeMs]
+      const minTime = Math.min(drawing.p1.timeMs, drawing.p2.timeMs);
+      const maxTime = Math.max(drawing.p1.timeMs, drawing.p2.timeMs);
+      const barsInRange = data.filter(
+        (bar) => bar.timestampMs >= minTime && bar.timestampMs <= maxTime
+      );
+      
+      // Need at least 2 bars for meaningful regression
+      if (barsInRange.length < 2) return null;
+      
+      // Sort bars by time to ensure proper ordering
+      barsInRange.sort((a, b) => a.timestampMs - b.timestampMs);
+      
+      const n = barsInRange.length;
+      let sumX = 0;
+      let sumY = 0;
+      let sumXY = 0;
+      let sumX2 = 0;
+      
+      // For linear regression: x = index (0, 1, 2, ...), y = close price
+      for (let i = 0; i < n; i++) {
+        const x = i;
+        const y = barsInRange[i].close;
+        sumX += x;
+        sumY += y;
+        sumXY += x * y;
+        sumX2 += x * x;
+      }
+      
+      // Linear regression formulas
+      const denominator = n * sumX2 - sumX * sumX;
+      if (denominator === 0) return null;
+      
+      const slope = (n * sumXY - sumX * sumY) / denominator;
+      const intercept = (sumY - slope * sumX) / n;
+      
+      // Calculate standard deviation of residuals
+      let sumResidualSq = 0;
+      for (let i = 0; i < n; i++) {
+        const predicted = intercept + slope * i;
+        const residual = barsInRange[i].close - predicted;
+        sumResidualSq += residual * residual;
+      }
+      const stdev = Math.sqrt(sumResidualSq / n);
+      
+      // Get pixel coordinates for the regression line endpoints
+      const p1x = coordinateFromTime(chart, drawing.p1.timeMs, width);
+      const p2x = coordinateFromTime(chart, drawing.p2.timeMs, width);
+      if (p1x == null || p2x == null) return null;
+      
+      // Calculate prices at p1 and p2 positions
+      // The regression line: price = intercept + slope * index
+      // We need to map from time to index position
+      const startIndex = 0;
+      const endIndex = n - 1;
+      
+      // Determine which endpoint is the start (lower time)
+      const isP1Start = drawing.p1.timeMs <= drawing.p2.timeMs;
+      
+      // Midline prices at start and end of regression window
+      const startPrice = intercept + slope * startIndex;
+      const endPrice = intercept + slope * endIndex;
+      
+      // Upper/lower band prices (regression ± 2σ)
+      const upperStartPrice = startPrice + 2 * stdev;
+      const upperEndPrice = endPrice + 2 * stdev;
+      const lowerStartPrice = startPrice - 2 * stdev;
+      const lowerEndPrice = endPrice - 2 * stdev;
+      
+      // Convert prices to pixel Y coordinates
+      const startY = resolveYCoordinate(series, startPrice, height);
+      const endY = resolveYCoordinate(series, endPrice, height);
+      const upperStartY = resolveYCoordinate(series, upperStartPrice, height);
+      const upperEndY = resolveYCoordinate(series, upperEndPrice, height);
+      const lowerStartY = resolveYCoordinate(series, lowerStartPrice, height);
+      const lowerEndY = resolveYCoordinate(series, lowerEndPrice, height);
+      
+      if (startY == null || endY == null || upperStartY == null || upperEndY == null || 
+          lowerStartY == null || lowerEndY == null) return null;
+      
+      // Assign coordinates based on which point is the start
+      const midlineX1 = isP1Start ? p1x : p2x;
+      const midlineX2 = isP1Start ? p2x : p1x;
+      const midlineY1 = isP1Start ? startY : endY;
+      const midlineY2 = isP1Start ? endY : startY;
+      const upperY1 = isP1Start ? upperStartY : upperEndY;
+      const upperY2 = isP1Start ? upperEndY : upperStartY;
+      const lowerY1 = isP1Start ? lowerStartY : lowerEndY;
+      const lowerY2 = isP1Start ? lowerEndY : lowerStartY;
+      
+      return {
+        kind: "regressionTrend",
+        midline: createSegment(midlineX1, midlineY1, midlineX2, midlineY2),
+        upperBand: createSegment(midlineX1, upperY1, midlineX2, upperY2),
+        lowerBand: createSegment(midlineX1, lowerY1, midlineX2, lowerY2),
+        slope,
+        intercept,
+        stdev,
+      };
+    }
     default:
       return null;
   }
@@ -2767,6 +2987,9 @@ function cloneDrawingState(drawing: Drawing): Drawing {
   }
   if (drawing.kind === "flatTopChannel" || drawing.kind === "flatBottomChannel") {
     return { ...drawing, p1: { ...drawing.p1 }, p2: { ...drawing.p2 }, p3: { ...drawing.p3 } };
+  }
+  if (drawing.kind === "regressionTrend") {
+    return { ...drawing, p1: { ...drawing.p1 }, p2: { ...drawing.p2 } };
   }
   if (drawing.kind === "text") {
     return { ...drawing, anchor: { ...drawing.anchor } };

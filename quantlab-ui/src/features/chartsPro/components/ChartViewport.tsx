@@ -825,6 +825,9 @@ const overlayCanvasClassName = "chartspro-overlay__canvas absolute inset-0";
         case "f":
           nextTool = "flatTopChannel";
           break;
+        case "g":
+          nextTool = "regressionTrend";
+          break;
         default:
           return;
       }
@@ -2345,6 +2348,12 @@ const fitToContent = useCallback(() => {
               p2: d.p2,
               p3: d.p3,
               flatPrice: d.p3.price, // The horizontal bottom level
+            }),
+            // Regression Trend raw points + computed values for tests
+            ...(d.kind === "regressionTrend" && {
+              p1: d.p1,
+              p2: d.p2,
+              points: [d.p1, d.p2],
             }),
             // FibRetracement computed values for Fibonacci tests
             ...(d.kind === "fibRetracement" && {
