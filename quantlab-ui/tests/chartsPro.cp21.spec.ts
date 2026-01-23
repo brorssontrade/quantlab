@@ -2,18 +2,27 @@
  * chartsPro.cp21.spec.ts
  *
  * TV-21: Alternative Chart Types
+ * TV-22.0a/c: Renko Settings State + Wiring
  *
  * Tests:
  * - TV-21.1: Heikin Ashi transform logic + integration
  * - TV-21.2: Bars chart type
  * - TV-21.3: Hollow Candles (with style verification)
  * - TV-21.4: Renko brick calculation + integration
+ * - TV-22.0a: Renko settings state + persistence
+ * - TV-22.0c: Renko settings wiring to transform
  */
 
 import { test, expect } from "@playwright/test";
 import { gotoChartsPro } from "./helpers";
 import { transformOhlcToHeikinAshi } from "../src/features/chartsPro/runtime/heikinAshi";
-import { transformOhlcToRenko, calculateAtr, suggestBoxSize } from "../src/features/chartsPro/runtime/renko";
+import { 
+  transformOhlcToRenko, 
+  transformOhlcToRenkoWithSettings,
+  calculateAtr, 
+  suggestBoxSize,
+  roundToNice,
+} from "../src/features/chartsPro/runtime/renko";
 
 /**
  * Heikin Ashi Transform - Pure Unit Test (Node-side)
@@ -563,5 +572,311 @@ test.describe("TV-22.0a: Renko Settings State", () => {
     const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
     expect(dump.ui.renko?.mode).toBe("auto");
     expect(dump.ui.renko?.fixedBoxSize).toBe(1);
+  });
+});
+
+/**
+ * TV-22.0c: Renko Settings Wiring (Unit Tests)
+ *
+ * Tests transformOhlcToRenkoWithSettings and roundToNice
+ */
+test.describe("TV-22.0c: Renko Settings Wiring (Unit)", () => {
+  // Same fixture as TV-21.4
+  const FIXTURE_OHLC = [
+    { time: 1000, open: 100, high: 102, low: 98, close: 100 },
+    { time: 1001, open: 100, high: 104, low: 99, close: 103 },
+    { time: 1002, open: 103, high: 108, low: 102, close: 106 },
+    { time: 1003, open: 106, high: 112, low: 105, close: 111 },
+    { time: 1004, open: 111, high: 117, low: 110, close: 116 },
+    { time: 1005, open: 116, high: 118, low: 108, close: 109 },
+    { time: 1006, open: 109, high: 110, low: 103, close: 104 },
+    { time: 1007, open: 104, high: 106, low: 98, close: 99 },
+  ];
+
+  test("fixed mode uses fixedBoxSize", () => {
+    const result = transformOhlcToRenkoWithSettings(FIXTURE_OHLC, {
+      mode: "fixed",
+      fixedBoxSize: 5,
+      atrPeriod: 14,
+      autoMinBoxSize: 0.01,
+      rounding: "none",
+    });
+
+    expect(result.meta.modeUsed).toBe("fixed");
+    expect(result.meta.boxSizeUsed).toBe(5);
+    expect(result.meta.bricksCount).toBe(6); // Same as basic transform with boxSize=5
+  });
+
+  test("fixed mode with different boxSize changes brick count", () => {
+    const resultSmall = transformOhlcToRenkoWithSettings(FIXTURE_OHLC, {
+      mode: "fixed",
+      fixedBoxSize: 2.5,
+      atrPeriod: 14,
+      autoMinBoxSize: 0.01,
+      rounding: "none",
+    });
+
+    const resultLarge = transformOhlcToRenkoWithSettings(FIXTURE_OHLC, {
+      mode: "fixed",
+      fixedBoxSize: 10,
+      atrPeriod: 14,
+      autoMinBoxSize: 0.01,
+      rounding: "none",
+    });
+
+    // Smaller box size = more bricks
+    expect(resultSmall.meta.boxSizeUsed).toBe(2.5);
+    expect(resultLarge.meta.boxSizeUsed).toBe(10);
+    expect(resultSmall.meta.bricksCount).toBeGreaterThan(resultLarge.meta.bricksCount);
+  });
+
+  test("auto mode uses ATR-based box size", () => {
+    const result = transformOhlcToRenkoWithSettings(FIXTURE_OHLC, {
+      mode: "auto",
+      fixedBoxSize: 5,
+      atrPeriod: 5,
+      autoMinBoxSize: 0.01,
+      rounding: "none",
+    });
+
+    expect(result.meta.modeUsed).toBe("auto");
+    expect(result.meta.atrPeriodUsed).toBe(5);
+    // Box size should be ATR-based, not the fixedBoxSize
+    expect(result.meta.boxSizeUsed).not.toBe(5);
+    expect(result.meta.boxSizeUsed).toBeGreaterThan(0);
+  });
+
+  test("auto mode clamps to autoMinBoxSize", () => {
+    // With a very high min, it should clamp
+    const result = transformOhlcToRenkoWithSettings(FIXTURE_OHLC, {
+      mode: "auto",
+      fixedBoxSize: 1,
+      atrPeriod: 14,
+      autoMinBoxSize: 100, // Very high min
+      rounding: "none",
+    });
+
+    expect(result.meta.boxSizeUsed).toBeGreaterThanOrEqual(100);
+  });
+
+  test("rounding=nice rounds box size to nice number", () => {
+    const resultNone = transformOhlcToRenkoWithSettings(FIXTURE_OHLC, {
+      mode: "fixed",
+      fixedBoxSize: 3.7,
+      atrPeriod: 14,
+      autoMinBoxSize: 0.01,
+      rounding: "none",
+    });
+
+    const resultNice = transformOhlcToRenkoWithSettings(FIXTURE_OHLC, {
+      mode: "fixed",
+      fixedBoxSize: 3.7,
+      atrPeriod: 14,
+      autoMinBoxSize: 0.01,
+      rounding: "nice",
+    });
+
+    expect(resultNone.meta.roundingUsed).toBe("none");
+    expect(resultNone.meta.boxSizeUsed).toBe(3.7);
+
+    expect(resultNice.meta.roundingUsed).toBe("nice");
+    // 3.7 rounds to nice number (2 or 5)
+    expect([1, 2, 5, 10]).toContain(resultNice.meta.boxSizeUsed);
+  });
+
+  test("roundToNice produces expected values", () => {
+    // Test various inputs - roundToNice rounds to 1, 2, 5, or 10 * magnitude
+    // Thresholds: <= 1.5 -> 1, <= 3.5 -> 2, <= 7.5 -> 5, else 10
+    expect(roundToNice(0.0123)).toBeCloseTo(0.01, 10); // 1.23 -> 1
+    expect(roundToNice(0.025)).toBeCloseTo(0.02, 10);  // 2.5 -> 2
+    expect(roundToNice(0.08)).toBeCloseTo(0.1, 10);    // 8 -> 10
+    expect(roundToNice(1.5)).toBeCloseTo(1, 10);       // 1.5 at threshold -> 1
+    expect(roundToNice(3.5)).toBeCloseTo(2, 10);       // 3.5 at threshold -> 2
+    expect(roundToNice(5)).toBeCloseTo(5, 10);         // 5 -> 5
+    expect(roundToNice(7.5)).toBeCloseTo(5, 10);       // 7.5 at threshold -> 5
+    expect(roundToNice(15)).toBeCloseTo(10, 10);       // 1.5 -> 1 * 10
+    expect(roundToNice(25)).toBeCloseTo(20, 10);       // 2.5 -> 2 * 10
+    expect(roundToNice(75)).toBeCloseTo(50, 10);       // 7.5 -> 5 * 10
+    expect(roundToNice(150)).toBeCloseTo(100, 10);     // 1.5 -> 1 * 100
+  });
+
+  test("meta includes first and last brick", () => {
+    const result = transformOhlcToRenkoWithSettings(FIXTURE_OHLC, {
+      mode: "fixed",
+      fixedBoxSize: 5,
+      atrPeriod: 14,
+      autoMinBoxSize: 0.01,
+      rounding: "none",
+    });
+
+    expect(result.meta.firstBrick).not.toBeNull();
+    expect(result.meta.lastBrick).not.toBeNull();
+    expect(result.meta.firstBrick?.direction).toBe("up");
+    expect(result.meta.lastBrick?.direction).toBe("down");
+  });
+
+  test("empty input returns empty result with null bricks", () => {
+    const result = transformOhlcToRenkoWithSettings([], {
+      mode: "auto",
+      fixedBoxSize: 5,
+      atrPeriod: 14,
+      autoMinBoxSize: 0.01,
+      rounding: "none",
+    });
+
+    expect(result.bricks).toEqual([]);
+    expect(result.meta.bricksCount).toBe(0);
+    expect(result.meta.firstBrick).toBeNull();
+    expect(result.meta.lastBrick).toBeNull();
+  });
+});
+
+/**
+ * TV-22.0c: Renko Settings Wiring (Integration Tests)
+ *
+ * Verifies dump().render.renko reflects actual transform settings
+ */
+test.describe("TV-22.0c: Renko Settings Wiring (Integration)", () => {
+  test("dump().render.renko is null when not in Renko mode", async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.removeItem("cp.renko");
+    });
+    await gotoChartsPro(page, { mock: true });
+    await page.waitForSelector('[data-testid="tv-chart-root"]');
+
+    // Wait for chart to be ready (candles mode)
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.chartType;
+    }, { timeout: 5000 }).toBe("candles");
+
+    // render.renko should be null
+    const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+    expect(dump.render?.renko).toBeNull();
+  });
+
+  test("dump().render.renko exposes transform metadata in Renko mode", async ({ page }) => {
+    await page.addInitScript(() => {
+      localStorage.removeItem("cp.renko");
+    });
+    await gotoChartsPro(page, { mock: true });
+    await page.waitForSelector('[data-testid="tv-chart-root"]');
+
+    // Switch to Renko
+    const chartTypeBtn = page.locator('[data-testid="chart-type-button"]');
+    await chartTypeBtn.click();
+    await page.locator('[data-testid="chart-type-option-renko"]').click();
+
+    // Wait for Renko mode
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.chartType;
+    }, { timeout: 5000 }).toBe("renko");
+
+    // render.renko should have metadata
+    const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+    expect(dump.render?.renko).toBeDefined();
+    expect(dump.render.renko).toMatchObject({
+      modeUsed: "auto", // Default
+      atrPeriodUsed: 14, // Default
+      roundingUsed: "none", // Default
+    });
+    expect(dump.render.renko.boxSizeUsed).toBeGreaterThan(0);
+    expect(dump.render.renko.bricksCount).toBeGreaterThan(0);
+    expect(dump.render.renko.sample).toBeDefined();
+  });
+
+  test("fixed mode settings affect dump().render.renko.boxSizeUsed", async ({ page }) => {
+    // Pre-seed with fixed mode settings
+    await page.addInitScript(() => {
+      localStorage.setItem("cp.renko", JSON.stringify({
+        mode: "fixed",
+        fixedBoxSize: 2,
+        atrPeriod: 14,
+        autoMinBoxSize: 0.01,
+        rounding: "none",
+      }));
+    });
+    await gotoChartsPro(page, { mock: true });
+    await page.waitForSelector('[data-testid="tv-chart-root"]');
+
+    // Switch to Renko
+    const chartTypeBtn = page.locator('[data-testid="chart-type-button"]');
+    await chartTypeBtn.click();
+    await page.locator('[data-testid="chart-type-option-renko"]').click();
+
+    // Wait for Renko mode
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.chartType;
+    }, { timeout: 5000 }).toBe("renko");
+
+    // Should use fixed box size
+    const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+    expect(dump.render?.renko?.modeUsed).toBe("fixed");
+    expect(dump.render?.renko?.boxSizeUsed).toBe(2);
+  });
+
+  test("rounding=nice affects boxSizeUsed deterministically", async ({ page }) => {
+    // Pre-seed with fixed mode + nice rounding
+    await page.addInitScript(() => {
+      localStorage.setItem("cp.renko", JSON.stringify({
+        mode: "fixed",
+        fixedBoxSize: 3.7,
+        atrPeriod: 14,
+        autoMinBoxSize: 0.01,
+        rounding: "nice",
+      }));
+    });
+    await gotoChartsPro(page, { mock: true });
+    await page.waitForSelector('[data-testid="tv-chart-root"]');
+
+    // Switch to Renko
+    const chartTypeBtn = page.locator('[data-testid="chart-type-button"]');
+    await chartTypeBtn.click();
+    await page.locator('[data-testid="chart-type-option-renko"]').click();
+
+    // Wait for Renko mode
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.chartType;
+    }, { timeout: 5000 }).toBe("renko");
+
+    // Box size should be rounded to nice (3.7 -> 2 or 5)
+    const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+    expect(dump.render?.renko?.roundingUsed).toBe("nice");
+    expect([1, 2, 5, 10]).toContain(dump.render?.renko?.boxSizeUsed);
+  });
+
+  test("localStorage settings persist and affect rendering after reload", async ({ page }) => {
+    // Pre-seed with specific settings
+    await page.addInitScript(() => {
+      localStorage.setItem("cp.renko", JSON.stringify({
+        mode: "fixed",
+        fixedBoxSize: 5,
+        atrPeriod: 20,
+        autoMinBoxSize: 0.1,
+        rounding: "none",
+      }));
+      localStorage.setItem("cp.chart.type", "renko"); // Also persist chart type
+    });
+    await gotoChartsPro(page, { mock: true });
+    await page.waitForSelector('[data-testid="tv-chart-root"]');
+
+    // Wait for Renko mode (should auto-load from localStorage)
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.chartType;
+    }, { timeout: 5000 }).toBe("renko");
+
+    // Verify settings were applied to transform
+    const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+    expect(dump.render?.renko).toMatchObject({
+      modeUsed: "fixed",
+      boxSizeUsed: 5,
+      atrPeriodUsed: 20,
+      roundingUsed: "none",
+    });
+    expect(dump.render?.renko?.bricksCount).toBeGreaterThan(0);
   });
 });

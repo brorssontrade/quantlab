@@ -17,7 +17,7 @@ import {
 } from "@/lib/lightweightCharts";
 import { createBaseSeries, type ChartType, type UIChartType, type BaseSeriesApi } from "../runtime/seriesFactory";
 import { transformOhlcToHeikinAshi } from "../runtime/heikinAshi";
-import { transformOhlcToRenko, renkoToLwCandlestick, suggestBoxSize } from "../runtime/renko";
+import { transformOhlcToRenkoWithSettings, renkoToLwCandlestick, type RenkoTransformResult } from "../runtime/renko";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
 import { toast } from "sonner";
@@ -526,6 +526,8 @@ export function ChartViewport({
   chartSettingsRef.current = chartSettings; // Sync settings for dump()
   renkoSettingsRef.current = renkoSettings; // TV-22.0a: Sync renko settings for dump()
   timeframeRef.current = timeframe; // Sync timeframe for dump()
+  // TV-22.0c: Track last Renko transform result for dump().render.renko
+  const lastRenkoResultRef = useRef<RenkoTransformResult | null>(null);
   const seriesPointCountsRef = useRef<{ price: number; volume: number; compares: Record<string, number> }>({
     price: 0,
     volume: 0,
@@ -2110,6 +2112,18 @@ const fitToContent = useCallback(() => {
             ...describeRenderSnapshot(),
                         appliedSettings: appliedSettingsRef.current, // TV-10.3: Expose applied settings for tests
             objects,
+            // TV-22.0c: Renko transform metadata for testing
+            renko: lastRenkoResultRef.current ? {
+              boxSizeUsed: lastRenkoResultRef.current.meta.boxSizeUsed,
+              modeUsed: lastRenkoResultRef.current.meta.modeUsed,
+              atrPeriodUsed: lastRenkoResultRef.current.meta.atrPeriodUsed,
+              bricksCount: lastRenkoResultRef.current.meta.bricksCount,
+              roundingUsed: lastRenkoResultRef.current.meta.roundingUsed,
+              sample: {
+                firstBrick: lastRenkoResultRef.current.meta.firstBrick,
+                lastBrick: lastRenkoResultRef.current.meta.lastBrick,
+              },
+            } : null,
             lastPrice: (() => {
               const lastBar = lastLoadedBaseRowsRef.current[lastLoadedBaseRowsRef.current.length - 1];
               if (!lastBar) return null;
@@ -2781,14 +2795,23 @@ const fitToContent = useCallback(() => {
         dataToApply = haBars as NormalizedBar[];
       }
       
-      // TV-21.4: Apply Renko transform if chartType is renko
+      // TV-21.4 + TV-22.0c: Apply Renko transform with settings if chartType is renko
       if (chartType === "renko" && dataToApply.length > 0) {
-        // Calculate box size based on price level (or use ATR for smarter sizing)
-        const avgPrice = dataToApply.reduce((sum, b) => sum + b.close, 0) / dataToApply.length;
-        const boxSize = suggestBoxSize(avgPrice);
-        const renkoBricks = transformOhlcToRenko(dataToApply, { boxSize });
-        const renkoCandles = renkoToLwCandlestick(renkoBricks);
+        // Use renkoSettings from props/ref, with defaults if not provided
+        const settings = renkoSettingsRef.current ?? {
+          mode: "auto" as const,
+          fixedBoxSize: 1,
+          atrPeriod: 14,
+          autoMinBoxSize: 0.01,
+          rounding: "none" as const,
+        };
+        const renkoResult = transformOhlcToRenkoWithSettings(dataToApply, settings);
+        lastRenkoResultRef.current = renkoResult; // Store for dump()
+        const renkoCandles = renkoToLwCandlestick(renkoResult.bricks);
         dataToApply = renkoCandles as NormalizedBar[];
+      } else {
+        // Clear renko result when not in renko mode
+        lastRenkoResultRef.current = null;
       }
       
       // Build candle data with transformed values

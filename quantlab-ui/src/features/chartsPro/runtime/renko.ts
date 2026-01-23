@@ -2,6 +2,7 @@
  * renko.ts
  *
  * TV-21.4: Renko Brick Generation
+ * TV-22.0c: Wiring RenkoSettings to transform
  *
  * Pure utility function for transforming OHLC data to Renko bricks.
  * Unit-testable without UI dependencies.
@@ -45,6 +46,33 @@ export interface RenkoConfig {
 }
 
 /**
+ * TV-22.0c: Extended Renko settings from ChartsProTab
+ */
+export interface RenkoSettingsInput {
+  mode: "auto" | "fixed";
+  fixedBoxSize: number;
+  atrPeriod: number;
+  autoMinBoxSize: number;
+  rounding: "none" | "nice";
+}
+
+/**
+ * TV-22.0c: Result of Renko transform with metadata for dump()
+ */
+export interface RenkoTransformResult {
+  bricks: RenkoBrick[];
+  meta: {
+    boxSizeUsed: number;
+    modeUsed: "auto" | "fixed";
+    atrPeriodUsed: number;
+    bricksCount: number;
+    roundingUsed: "none" | "nice";
+    firstBrick: RenkoBrick | null;
+    lastBrick: RenkoBrick | null;
+  };
+}
+
+/**
  * Calculate ATR (Average True Range) for auto box size
  */
 export function calculateAtr(bars: OhlcBar[], period: number = 14): number {
@@ -70,6 +98,27 @@ export function calculateAtr(bars: OhlcBar[], period: number = 14): number {
   if (relevantTr.length === 0) return 0;
 
   return relevantTr.reduce((sum, tr) => sum + tr, 0) / relevantTr.length;
+}
+
+/**
+ * TV-22.0c: Round to "nice" number (tick-friendly)
+ * Examples: 0.0123 -> 0.01, 1.234 -> 1, 12.34 -> 10, 123.4 -> 100
+ */
+export function roundToNice(value: number): number {
+  if (value <= 0) return value;
+  
+  // Find order of magnitude
+  const magnitude = Math.pow(10, Math.floor(Math.log10(value)));
+  const normalized = value / magnitude;
+  
+  // Round to nice values: 1, 2, 5, 10
+  let nice: number;
+  if (normalized <= 1.5) nice = 1;
+  else if (normalized <= 3.5) nice = 2;
+  else if (normalized <= 7.5) nice = 5;
+  else nice = 10;
+  
+  return nice * magnitude;
 }
 
 /**
@@ -158,6 +207,76 @@ export function transformOhlcToRenko(bars: OhlcBar[], config: RenkoConfig): Renk
   }
 
   return bricks;
+}
+
+/**
+ * TV-22.0c: Transform OHLC data to Renko bricks with full settings support
+ *
+ * @param bars - Input OHLC bars (sorted by time ascending)
+ * @param settings - RenkoSettings from ChartsProTab
+ * @returns RenkoTransformResult with bricks and metadata
+ */
+export function transformOhlcToRenkoWithSettings(
+  bars: OhlcBar[],
+  settings: RenkoSettingsInput
+): RenkoTransformResult {
+  const emptyResult: RenkoTransformResult = {
+    bricks: [],
+    meta: {
+      boxSizeUsed: 0,
+      modeUsed: settings.mode,
+      atrPeriodUsed: settings.atrPeriod,
+      bricksCount: 0,
+      roundingUsed: settings.rounding,
+      firstBrick: null,
+      lastBrick: null,
+    },
+  };
+
+  if (!bars || bars.length === 0) return emptyResult;
+
+  // Calculate box size based on mode
+  let boxSize: number;
+  
+  if (settings.mode === "fixed") {
+    boxSize = settings.fixedBoxSize;
+  } else {
+    // Auto mode: use ATR with min clamp
+    const atr = calculateAtr(bars, settings.atrPeriod);
+    boxSize = Math.max(atr, settings.autoMinBoxSize);
+    
+    // If ATR is 0 (not enough data), fall back to price-based suggestion
+    if (boxSize <= 0 || !isFinite(boxSize)) {
+      const avgPrice = bars.reduce((sum, b) => sum + b.close, 0) / bars.length;
+      boxSize = Math.max(suggestBoxSize(avgPrice), settings.autoMinBoxSize);
+    }
+  }
+
+  // Apply rounding if requested
+  if (settings.rounding === "nice") {
+    boxSize = roundToNice(boxSize);
+  }
+
+  // Ensure box size is positive
+  if (boxSize <= 0) {
+    boxSize = settings.autoMinBoxSize > 0 ? settings.autoMinBoxSize : 0.01;
+  }
+
+  // Use existing transform logic
+  const bricks = transformOhlcToRenko(bars, { boxSize });
+
+  return {
+    bricks,
+    meta: {
+      boxSizeUsed: boxSize,
+      modeUsed: settings.mode,
+      atrPeriodUsed: settings.atrPeriod,
+      bricksCount: bricks.length,
+      roundingUsed: settings.rounding,
+      firstBrick: bricks[0] ?? null,
+      lastBrick: bricks[bricks.length - 1] ?? null,
+    },
+  };
 }
 
 /**
