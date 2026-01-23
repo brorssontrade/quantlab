@@ -587,7 +587,7 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
       // Allow QA to set the active drawing tool
       const nextTool = (patch as any)?.activeTool ?? (patch as any)?.tool;
       if (typeof nextTool === "string") {
-        const validTools = new Set(["select", "hline", "vline", "trendline", "channel", "rectangle", "text", "priceRange", "dateRange", "dateAndPriceRange", "fibRetracement", "pitchfork"]);
+        const validTools = new Set(["select", "hline", "vline", "trendline", "channel", "rectangle", "text", "priceRange", "dateRange", "dateAndPriceRange", "fibRetracement", "pitchfork", "flatTopChannel", "flatBottomChannel"]);
         if (validTools.has(nextTool)) {
           controls.setTool(nextTool as any);
         }
@@ -609,7 +609,7 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
         }
         if (typeof (payload as any).activeTool === "string" || typeof (payload as any).tool === "string") {
           const tool = ((payload as any).activeTool ?? (payload as any).tool) as string;
-          const validTools = new Set(["select", "hline", "vline", "trendline", "channel", "rectangle", "text", "priceRange", "dateRange", "dateAndPriceRange", "fibRetracement", "pitchfork"]);
+          const validTools = new Set(["select", "hline", "vline", "trendline", "channel", "rectangle", "text", "priceRange", "dateRange", "dateAndPriceRange", "fibRetracement", "pitchfork", "flatTopChannel", "flatBottomChannel"]);
           if (validTools.has(tool)) controls.setTool(tool as any);
         }
         // inspector patch: dispatch event so chart viewport can react

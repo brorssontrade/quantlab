@@ -822,6 +822,9 @@ const overlayCanvasClassName = "chartspro-overlay__canvas absolute inset-0";
         case "p":
           nextTool = "pitchfork";
           break;
+        case "f":
+          nextTool = "flatTopChannel";
+          break;
         default:
           return;
       }
@@ -2285,6 +2288,10 @@ const fitToContent = useCallback(() => {
               ? [{ timeMs: d.p1.timeMs, price: d.p1.price }, { timeMs: d.p2.timeMs, price: d.p2.price }]
               : d.kind === "pitchfork"
               ? [{ timeMs: d.p1.timeMs, price: d.p1.price }, { timeMs: d.p2.timeMs, price: d.p2.price }, { timeMs: d.p3.timeMs, price: d.p3.price }]
+              : d.kind === "flatTopChannel"
+              ? [{ timeMs: d.p1.timeMs, price: d.p1.price }, { timeMs: d.p2.timeMs, price: d.p2.price }, { timeMs: d.p3.timeMs, price: d.p3.price }]
+              : d.kind === "flatBottomChannel"
+              ? [{ timeMs: d.p1.timeMs, price: d.p1.price }, { timeMs: d.p2.timeMs, price: d.p2.price }, { timeMs: d.p3.timeMs, price: d.p3.price }]
               : [],
             // Raw p1/p2 for rectangle tests
             ...(d.kind === "rectangle" && { p1: d.p1, p2: d.p2 }),
@@ -2324,6 +2331,20 @@ const fitToContent = useCallback(() => {
               p1: d.p1,
               p2: d.p2,
               p3: d.p3,
+            }),
+            // Flat Top Channel raw points for tests
+            ...(d.kind === "flatTopChannel" && {
+              p1: d.p1,
+              p2: d.p2,
+              p3: d.p3,
+              flatPrice: d.p3.price, // The horizontal top level
+            }),
+            // Flat Bottom Channel raw points for tests
+            ...(d.kind === "flatBottomChannel" && {
+              p1: d.p1,
+              p2: d.p2,
+              p3: d.p3,
+              flatPrice: d.p3.price, // The horizontal bottom level
             }),
             // FibRetracement computed values for Fibonacci tests
             ...(d.kind === "fibRetracement" && {

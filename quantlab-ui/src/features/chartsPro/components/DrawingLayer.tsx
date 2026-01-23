@@ -39,6 +39,8 @@ type DrawingGeometry =
   | { kind: "trend"; segment: SegmentGeometry }
   | { kind: "channel"; baseline: SegmentGeometry; parallel: SegmentGeometry; midline: SegmentGeometry; p3: { x: number; y: number } }
   | { kind: "pitchfork"; median: SegmentGeometry; leftTine: SegmentGeometry; rightTine: SegmentGeometry; p1: { x: number; y: number }; p2: { x: number; y: number }; p3: { x: number; y: number } }
+  | { kind: "flatTopChannel"; trendLine: SegmentGeometry; flatLine: SegmentGeometry; midline: SegmentGeometry; p1: { x: number; y: number }; p2: { x: number; y: number }; p3: { x: number; y: number } }
+  | { kind: "flatBottomChannel"; trendLine: SegmentGeometry; flatLine: SegmentGeometry; midline: SegmentGeometry; p1: { x: number; y: number }; p2: { x: number; y: number }; p3: { x: number; y: number } }
   | { kind: "rectangle"; x: number; y: number; w: number; h: number; path: Path2D }
   | { kind: "text"; x: number; y: number; width: number; height: number; content: string }
   | { kind: "priceRange"; segment: SegmentGeometry; deltaPrice: number; deltaPercent: number }
@@ -57,6 +59,8 @@ const COLORS: Record<Drawing["kind"], string> = {
   trend: "#0ea5e9",
   channel: "#a855f7",
   pitchfork: "#ec4899", // pink for pitchfork tools
+  flatTopChannel: "#a855f7", // purple like channel
+  flatBottomChannel: "#a855f7", // purple like channel
   rectangle: "#22c55e",
   text: "#eab308",
   priceRange: "#06b6d4", // cyan for measure tools
@@ -293,6 +297,10 @@ export function DrawingLayer({
           break;
         case "pitchfork":
           drawPitchfork(ctx, drawing, geometry, selectedId === drawing.id, colors);
+          break;
+        case "flatTopChannel":
+        case "flatBottomChannel":
+          drawFlatChannel(ctx, drawing, geometry, selectedId === drawing.id, colors);
           break;
         case "rectangle":
           drawRectangle(ctx, drawing, geometry, selectedId === drawing.id, colors);
@@ -597,6 +605,31 @@ export function DrawingLayer({
             }
             break;
           }
+          case "flatTopChannel":
+          case "flatBottomChannel": {
+            const { trendLine, flatLine, midline, p1: fp1, p2: fp2, p3: fp3 } = geometry as Extract<DrawingGeometry, { kind: "flatTopChannel" | "flatBottomChannel" }>;
+            // Check endpoint handles first (p1, p2, p3)
+            if (distance(point.x, point.y, fp1.x, fp1.y) <= HANDLE_RADIUS + 2) {
+              return { drawing, handle: "p1" };
+            }
+            if (distance(point.x, point.y, fp2.x, fp2.y) <= HANDLE_RADIUS + 2) {
+              return { drawing, handle: "p2" };
+            }
+            if (distance(point.x, point.y, fp3.x, fp3.y) <= HANDLE_RADIUS + 2) {
+              return { drawing, handle: "p3" };
+            }
+            // Check line segments for move
+            if (distanceToSegment(point.x, point.y, trendLine) <= HIT_TOLERANCE) {
+              return { drawing, handle: "line" };
+            }
+            if (distanceToSegment(point.x, point.y, flatLine) <= HIT_TOLERANCE) {
+              return { drawing, handle: "line" };
+            }
+            if (distanceToSegment(point.x, point.y, midline) <= HIT_TOLERANCE) {
+              return { drawing, handle: "line" };
+            }
+            break;
+          }
           case "rectangle": {
             const { x, y, w, h } = geometry;
             // All 4 corners: top-left, top-right, bottom-left, bottom-right
@@ -808,6 +841,30 @@ export function DrawingLayer({
           requestRender();
           break;
         }
+        case "flatTopChannel":
+        case "flatBottomChannel": {
+          // 3-click workflow: click1=p1, click2=p2 (trend baseline), click3=p3 (flat level)
+          const flatKind = tool as "flatTopChannel" | "flatBottomChannel";
+          const drawing: Drawing = {
+            id: createId(),
+            kind: flatKind,
+            symbol,
+            tf: timeframe,
+            p1: { timeMs: point.timeMs, price: point.price },
+            p2: { timeMs: point.timeMs, price: point.price },
+            p3: { timeMs: point.timeMs, price: point.price },
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            z: Date.now(),
+            style: { color: COLORS[flatKind], width: 1 },
+          };
+          pushDraft(drawing);
+          pointerState.current = { mode: "drawing", id: drawing.id, kind: flatKind, phase: 1 };
+          draftIdRef.current = drawing.id;
+          pendingCommitRef.current = false; // Don't commit on first mouse up
+          requestRender();
+          break;
+        }
         case "rectangle": {
           const drawing: Drawing = {
             id: createId(),
@@ -1002,6 +1059,27 @@ export function DrawingLayer({
             };
             pushDraft(next, { transient: true, select: false });
           }
+        } else if (drawing.kind === "flatTopChannel" || drawing.kind === "flatBottomChannel") {
+          // 3-click flat channel: phase 1 updates p2, phase 2 updates p3
+          const phase = state.phase ?? 1;
+          if (phase === 1) {
+            // Drawing trend baseline: update p2
+            const next: Drawing = {
+              ...drawing,
+              p2: { timeMs: targetPoint.timeMs, price: targetPoint.price },
+              p3: { timeMs: targetPoint.timeMs, price: targetPoint.price },
+              updatedAt: Date.now(),
+            };
+            pushDraft(next, { transient: true, select: false });
+          } else if (phase === 2) {
+            // Drawing flat level: update p3 (only y matters for flat line)
+            const next: Drawing = {
+              ...drawing,
+              p3: { timeMs: targetPoint.timeMs, price: targetPoint.price },
+              updatedAt: Date.now(),
+            };
+            pushDraft(next, { transient: true, select: false });
+          }
         } else if (drawing.kind === "rectangle") {
           const next: Drawing = {
             ...drawing,
@@ -1134,6 +1212,42 @@ export function DrawingLayer({
               }, { transient: true, select: false });
             } else if (state.handle === "line" && pointerOrigin.current) {
               // Move entire pitchfork
+              const dt = targetPoint.timeMs - pointerOrigin.current.timeMs;
+              const dp = targetPoint.price - pointerOrigin.current.price;
+              pointerOrigin.current = targetPoint;
+              pushDraft({
+                ...drawing,
+                p1: { timeMs: drawing.p1.timeMs + dt, price: drawing.p1.price + dp },
+                p2: { timeMs: drawing.p2.timeMs + dt, price: drawing.p2.price + dp },
+                p3: { timeMs: drawing.p3.timeMs + dt, price: drawing.p3.price + dp },
+                updatedAt: Date.now(),
+              }, { transient: true, select: false });
+            }
+            break;
+          case "flatTopChannel":
+          case "flatBottomChannel":
+            // 3-point flat channel: handles for p1, p2, p3, trendLine, flatLine, midline
+            if (state.handle === "p1") {
+              pushDraft({
+                ...drawing,
+                p1: { timeMs: targetPoint.timeMs, price: targetPoint.price },
+                updatedAt: Date.now(),
+              }, { transient: true, select: false });
+            } else if (state.handle === "p2") {
+              pushDraft({
+                ...drawing,
+                p2: { timeMs: targetPoint.timeMs, price: targetPoint.price },
+                updatedAt: Date.now(),
+              }, { transient: true, select: false });
+            } else if (state.handle === "p3") {
+              // p3 only affects the flat line's y-level
+              pushDraft({
+                ...drawing,
+                p3: { timeMs: targetPoint.timeMs, price: targetPoint.price },
+                updatedAt: Date.now(),
+              }, { transient: true, select: false });
+            } else if (state.handle === "line" && pointerOrigin.current) {
+              // Move entire flat channel
               const dt = targetPoint.timeMs - pointerOrigin.current.timeMs;
               const dp = targetPoint.price - pointerOrigin.current.price;
               pointerOrigin.current = targetPoint;
@@ -1461,6 +1575,35 @@ export function DrawingLayer({
         return;
       }
       
+      // Handle multi-click tool phase advancement (flatTopChannel/flatBottomChannel: 3-click)
+      if (state.mode === "drawing" && (state.kind === "flatTopChannel" || state.kind === "flatBottomChannel") && state.phase) {
+        event.preventDefault();
+        const drawing = activeDraftRef.current;
+        if (!drawing || (drawing.kind !== "flatTopChannel" && drawing.kind !== "flatBottomChannel")) return;
+        
+        if (state.phase === 1) {
+          // Phase 1→2: Lock p2 (trend baseline end), start defining p3 (flat level)
+          pushDraft({
+            ...drawing,
+            p2: { timeMs: point.timeMs, price: point.price },
+            updatedAt: Date.now(),
+          }, { transient: false, select: false });
+          pointerState.current = { mode: "drawing", id: drawing.id, kind: drawing.kind, phase: 2 };
+          requestRender();
+        } else if (state.phase === 2) {
+          // Phase 2→commit: Lock p3 (flat level) and commit
+          const finalDrawing: Drawing = {
+            ...drawing,
+            p3: { timeMs: point.timeMs, price: point.price },
+            updatedAt: Date.now(),
+          };
+          onUpsert(finalDrawing, { select: true });
+          resetPointerSession();
+          setTool("select");
+        }
+        return;
+      }
+      
       const hit = hitTest(point);
       if (tool === "select") {
         handleSelection(point, event, hit);
@@ -1494,6 +1637,10 @@ export function DrawingLayer({
       }
       if (state.mode === "drawing" && state.kind === "pitchfork" && state.phase) {
         // Pitchfork is in multi-click workflow - don't reset
+        return;
+      }
+      if (state.mode === "drawing" && (state.kind === "flatTopChannel" || state.kind === "flatBottomChannel") && state.phase) {
+        // Flat channel is in multi-click workflow - don't reset
         return;
       }
       if (pendingCommitRef.current && activeDraftRef.current) {
@@ -1722,6 +1869,47 @@ function drawPitchfork(
   if (selected) {
     drawHandleCircle(ctx, p1.x, p1.y, colors);
     drawHandleCircle(ctx, p2.x, p2.y, colors);
+    drawHandleCircle(ctx, p3.x, p3.y, colors);
+  }
+}
+
+function drawFlatChannel(
+  ctx: CanvasRenderingContext2D,
+  drawing: Drawing,
+  geometry: Extract<DrawingGeometry, { kind: "flatTopChannel" | "flatBottomChannel" }>,
+  selected: boolean,
+  colors: OverlayColors,
+) {
+  if (drawing.kind !== "flatTopChannel" && drawing.kind !== "flatBottomChannel") return;
+  
+  const { trendLine, flatLine, midline, p1, p2, p3 } = geometry;
+  const stroke = drawing.style?.color || colors.line;
+  const baseWidth = drawing.style?.width ?? LINE_WIDTH;
+  
+  ctx.strokeStyle = selected ? colors.selection : stroke;
+  ctx.lineWidth = selected ? SELECTED_LINE_WIDTH : baseWidth;
+  ctx.setLineDash([]);
+  
+  // Draw trend line (solid)
+  ctx.stroke(trendLine.path);
+  
+  // Draw flat line (solid)
+  ctx.stroke(flatLine.path);
+  
+  // Draw midline (dashed, subtle)
+  ctx.setLineDash([4, 4]);
+  ctx.lineWidth = (selected ? SELECTED_LINE_WIDTH : baseWidth) * 0.6;
+  ctx.globalAlpha = 0.5;
+  ctx.stroke(midline.path);
+  ctx.globalAlpha = 1;
+  ctx.setLineDash([]);
+  
+  // Draw handles when selected
+  if (selected) {
+    // p1 and p2 handles on trend line
+    drawHandleCircle(ctx, p1.x, p1.y, colors);
+    drawHandleCircle(ctx, p2.x, p2.y, colors);
+    // p3 handle for flat level
     drawHandleCircle(ctx, p3.x, p3.y, colors);
   }
 }
@@ -2156,6 +2344,9 @@ function geometrySignature(drawing: Drawing, viewport: GeometryViewport) {
       return `${drawing.id}:${drawing.updatedAt}:${drawing.p1.timeMs}:${drawing.p1.price}:${drawing.p2.timeMs}:${drawing.p2.price}:${drawing.p3.timeMs}:${drawing.p3.price}:${base}`;
     case "pitchfork":
       return `${drawing.id}:${drawing.updatedAt}:${drawing.p1.timeMs}:${drawing.p1.price}:${drawing.p2.timeMs}:${drawing.p2.price}:${drawing.p3.timeMs}:${drawing.p3.price}:${base}`;
+    case "flatTopChannel":
+    case "flatBottomChannel":
+      return `${drawing.id}:${drawing.updatedAt}:${drawing.p1.timeMs}:${drawing.p1.price}:${drawing.p2.timeMs}:${drawing.p2.price}:${drawing.p3.timeMs}:${drawing.p3.price}:${base}`;
     case "rectangle":
       return `${drawing.id}:${drawing.updatedAt}:${drawing.p1.timeMs}:${drawing.p1.price}:${drawing.p2.timeMs}:${drawing.p2.price}:${base}`;
     case "text":
@@ -2420,6 +2611,56 @@ function buildDrawingGeometry({
         p3: { x: p3x, y: p3y },
       };
     }
+    case "flatTopChannel":
+    case "flatBottomChannel": {
+      // p1-p2 = trend baseline, p3.price = flat horizontal level
+      const p1x = coordinateFromTime(chart, drawing.p1.timeMs, width);
+      const p1y = resolveYCoordinate(series, drawing.p1.price, height);
+      const p2x = coordinateFromTime(chart, drawing.p2.timeMs, width);
+      const p2y = resolveYCoordinate(series, drawing.p2.price, height);
+      const p3x = coordinateFromTime(chart, drawing.p3.timeMs, width);
+      const p3y = resolveYCoordinate(series, drawing.p3.price, height);
+      if (p1x == null || p1y == null || p2x == null || p2y == null || p3x == null || p3y == null) return null;
+      
+      // Trend line direction and extension
+      const trendDx = p2x - p1x;
+      const trendDy = p2y - p1y;
+      const trendLen = Math.sqrt(trendDx * trendDx + trendDy * trendDy);
+      if (trendLen === 0) return null;
+      
+      // Extend trend line to canvas edges
+      const extendFactor = 10;
+      const trendX1 = p1x - trendDx * extendFactor;
+      const trendY1 = p1y - trendDy * extendFactor;
+      const trendX2 = p2x + trendDx * extendFactor;
+      const trendY2 = p2y + trendDy * extendFactor;
+      
+      // Flat line is horizontal at p3.y, spanning the same x-range as extended trend
+      const flatY = p3y;
+      const flatX1 = trendX1;
+      const flatX2 = trendX2;
+      
+      // Midline: average y between trend line and flat line at each x
+      // For simplicity, compute midline at p1 and p2 x-coordinates, then extend
+      const midY1 = (p1y + flatY) / 2;
+      const midY2 = (p2y + flatY) / 2;
+      const midDx = p2x - p1x;
+      const midDy = midY2 - midY1;
+      const midX1 = p1x - midDx * extendFactor;
+      const midX2 = p2x + midDx * extendFactor;
+      const midYa = midY1 - midDy * extendFactor;
+      const midYb = midY2 + midDy * extendFactor;
+      
+      return {
+        kind: drawing.kind,
+        trendLine: createSegment(trendX1, trendY1, trendX2, trendY2),
+        flatLine: createSegment(flatX1, flatY, flatX2, flatY),
+        midline: createSegment(midX1, midYa, midX2, midYb),
+        p1: { x: p1x, y: p1y },
+        p2: { x: p2x, y: p2y },
+        p3: { x: p3x, y: p3y },
+      };
+    }
     default:
       return null;
   }
@@ -2522,6 +2763,9 @@ function cloneDrawingState(drawing: Drawing): Drawing {
     return { ...drawing, p1: { ...drawing.p1 }, p2: { ...drawing.p2 }, p3: { ...drawing.p3 } };
   }
   if (drawing.kind === "pitchfork") {
+    return { ...drawing, p1: { ...drawing.p1 }, p2: { ...drawing.p2 }, p3: { ...drawing.p3 } };
+  }
+  if (drawing.kind === "flatTopChannel" || drawing.kind === "flatBottomChannel") {
     return { ...drawing, p1: { ...drawing.p1 }, p2: { ...drawing.p2 }, p3: { ...drawing.p3 } };
   }
   if (drawing.kind === "text") {

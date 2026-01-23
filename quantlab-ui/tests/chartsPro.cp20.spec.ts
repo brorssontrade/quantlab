@@ -2007,4 +2007,173 @@ test.describe("TV-20: LeftToolbar Tool Groups + Flyout", () => {
       }, { timeout: 3000 }).toBe(false);
     });
   });
+
+  test.describe("TV-20.10: Flat Top/Bottom Channel", () => {
+    test("should select flatTopChannel tool via hotkey F", async ({ page }) => {
+      await page.keyboard.press("f");
+      
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.activeTool;
+      }, { timeout: 3000 }).toBe("flatTopChannel");
+    });
+
+    test("should create flatTopChannel via 3 clicks with horizontal top", async ({ page }) => {
+      // Clear existing drawings
+      await page.evaluate(() => {
+        const charts = (window as any).__lwcharts;
+        if (charts?.set) charts.set({ drawings: [] });
+      });
+
+      // Select flatTopChannel tool
+      await page.keyboard.press("f");
+      
+      // Wait for tool to be selected
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.activeTool;
+      }, { timeout: 3000 }).toBe("flatTopChannel");
+      
+      // Get chart canvas
+      const chartWrapper = page.locator('[data-testid="tv-chart-root"]');
+      await expect(chartWrapper).toBeVisible({ timeout: 5000 });
+      const box = await chartWrapper.boundingBox();
+      if (!box) return;
+      
+      // p1 = trend baseline start (left, lower)
+      const p1X = box.x + box.width * 0.2;
+      const p1Y = box.y + box.height * 0.6;
+      // p2 = trend baseline end (right, lower)
+      const p2X = box.x + box.width * 0.7;
+      const p2Y = box.y + box.height * 0.5;
+      // p3 = flat top level (any x, y defines horizontal top)
+      const p3X = box.x + box.width * 0.5;
+      const p3Y = box.y + box.height * 0.3;
+      
+      // 3 clicks to create flat top channel
+      await page.mouse.click(p1X, p1Y);
+      await page.mouse.click(p2X, p2Y);
+      await page.mouse.click(p3X, p3Y);
+
+      // Wait for flatTopChannel
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.objects?.some((d: any) => d.type === "flatTopChannel");
+      }, { timeout: 3000 }).toBe(true);
+
+      // Verify structure
+      const flatTop = await page.evaluate(() => {
+        const dump = (window as any).__lwcharts?.dump?.();
+        return dump?.objects?.find((d: any) => d.type === "flatTopChannel");
+      });
+
+      expect(flatTop).toBeTruthy();
+      expect(flatTop.type).toBe("flatTopChannel");
+      expect(flatTop.points).toHaveLength(3);
+      expect(flatTop.p1).toBeDefined();
+      expect(flatTop.p2).toBeDefined();
+      expect(flatTop.p3).toBeDefined();
+      expect(flatTop.flatPrice).toBeDefined();
+    });
+
+    test("should create flatBottomChannel via toolbar", async ({ page }) => {
+      // Clear existing drawings
+      await page.evaluate(() => {
+        const charts = (window as any).__lwcharts;
+        if (charts?.set) charts.set({ drawings: [] });
+      });
+
+      // Select flatBottomChannel via set()
+      await page.evaluate(() => {
+        const charts = (window as any).__lwcharts;
+        if (charts?.set) charts.set({ activeTool: "flatBottomChannel" });
+      });
+      
+      // Wait for tool to be selected
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.activeTool;
+      }, { timeout: 3000 }).toBe("flatBottomChannel");
+      
+      // Get chart canvas
+      const chartWrapper = page.locator('[data-testid="tv-chart-root"]');
+      await expect(chartWrapper).toBeVisible({ timeout: 5000 });
+      const box = await chartWrapper.boundingBox();
+      if (!box) return;
+      
+      // p1 = trend baseline start (left, upper)
+      const p1X = box.x + box.width * 0.2;
+      const p1Y = box.y + box.height * 0.3;
+      // p2 = trend baseline end (right, upper)
+      const p2X = box.x + box.width * 0.7;
+      const p2Y = box.y + box.height * 0.4;
+      // p3 = flat bottom level (any x, y defines horizontal bottom)
+      const p3X = box.x + box.width * 0.5;
+      const p3Y = box.y + box.height * 0.7;
+      
+      // 3 clicks to create flat bottom channel
+      await page.mouse.click(p1X, p1Y);
+      await page.mouse.click(p2X, p2Y);
+      await page.mouse.click(p3X, p3Y);
+
+      // Wait for flatBottomChannel
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.objects?.some((d: any) => d.type === "flatBottomChannel");
+      }, { timeout: 3000 }).toBe(true);
+
+      // Verify structure
+      const flatBottom = await page.evaluate(() => {
+        const dump = (window as any).__lwcharts?.dump?.();
+        return dump?.objects?.find((d: any) => d.type === "flatBottomChannel");
+      });
+
+      expect(flatBottom).toBeTruthy();
+      expect(flatBottom.type).toBe("flatBottomChannel");
+      expect(flatBottom.flatPrice).toBeDefined();
+    });
+
+    test("should delete flatTopChannel with Delete key", async ({ page }) => {
+      // Setup: create a flatTopChannel
+      await page.evaluate(() => {
+        const charts = (window as any).__lwcharts;
+        if (charts?.set) charts.set({ drawings: [] });
+      });
+
+      await page.keyboard.press("f");
+      
+      // Wait for tool
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.activeTool;
+      }, { timeout: 3000 }).toBe("flatTopChannel");
+      
+      // Get chart canvas
+      const chartWrapper = page.locator('[data-testid="tv-chart-root"]');
+      await expect(chartWrapper).toBeVisible({ timeout: 5000 });
+      const box = await chartWrapper.boundingBox();
+      if (!box) return;
+      
+      // 3 clicks to create
+      await page.mouse.click(box.x + box.width * 0.2, box.y + box.height * 0.6);
+      await page.mouse.click(box.x + box.width * 0.7, box.y + box.height * 0.5);
+      await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.3);
+
+      // Verify created and selected
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        const ft = dump?.objects?.find((d: any) => d.type === "flatTopChannel");
+        return ft?.selected;
+      }, { timeout: 3000 }).toBe(true);
+
+      // Delete with Delete key
+      await page.keyboard.press("Delete");
+
+      // Verify removed
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.objects?.some((d: any) => d.type === "flatTopChannel");
+      }, { timeout: 3000 }).toBe(false);
+    });
+  });
 });

@@ -66,8 +66,9 @@ export const TOOL_GROUPS: ToolGroup[] = [
     icon: "⫴",
     tools: [
       { id: "channel", label: "Parallel Channel", icon: "⫴", shortcut: "C", status: "enabled" },
+      { id: "flatTopChannel", label: "Flat Top", icon: "⊤", shortcut: "F", status: "enabled", tooltip: "Channel with horizontal top" },
+      { id: "flatBottomChannel", label: "Flat Bottom", icon: "⊥", status: "enabled", tooltip: "Channel with horizontal bottom" },
       { id: "regression", label: "Regression Channel", icon: "⋰", status: "disabled", tooltip: "Coming soon" },
-      { id: "flatTop", label: "Flat Top/Bottom", icon: "⊏", status: "disabled", tooltip: "Coming soon" },
     ],
   },
   {
@@ -172,6 +173,6 @@ export function getEnabledTools(): ToolDefinition[] {
  * Validate tool ID matches controls.ts Tool type
  */
 export function isValidToolId(toolId: string): toolId is Tool {
-  const validTools = ["select", "trendline", "hline", "vline", "channel", "rectangle", "text", "priceRange", "dateRange", "dateAndPriceRange", "fibRetracement", "pitchfork"];
+  const validTools = ["select", "trendline", "hline", "vline", "channel", "rectangle", "text", "priceRange", "dateRange", "dateAndPriceRange", "fibRetracement", "pitchfork", "flatTopChannel", "flatBottomChannel"];
   return validTools.includes(toolId);
 }

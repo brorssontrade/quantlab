@@ -45,7 +45,7 @@ export interface OhlcvResponse {
   meta?: Record<string, unknown>;
 }
 
-export type DrawingKind = "hline" | "vline" | "trend" | "channel" | "rectangle" | "text" | "priceRange" | "dateRange" | "dateAndPriceRange" | "fibRetracement" | "pitchfork";
+export type DrawingKind = "hline" | "vline" | "trend" | "channel" | "rectangle" | "text" | "priceRange" | "dateRange" | "dateAndPriceRange" | "fibRetracement" | "pitchfork" | "flatTopChannel" | "flatBottomChannel";
 
 export interface DrawingStyle {
   color: string;
@@ -155,7 +155,23 @@ export interface Pitchfork extends DrawingBase {
   p3: TrendPoint; // Right tine anchor (forms other side of the base)
 }
 
-export type Drawing = HLine | VLine | Trend | Channel | Rectangle | TextDrawing | PriceRange | DateRange | DateAndPriceRange | FibRetracement | Pitchfork;
+/** Flat Top Channel - 3-point: p1→p2 trend baseline, p3 defines horizontal top */
+export interface FlatTopChannel extends DrawingBase {
+  kind: "flatTopChannel";
+  p1: TrendPoint; // Trend baseline start
+  p2: TrendPoint; // Trend baseline end
+  p3: TrendPoint; // Point defining horizontal top level (y determines flat top price)
+}
+
+/** Flat Bottom Channel - 3-point: p1→p2 trend baseline, p3 defines horizontal bottom */
+export interface FlatBottomChannel extends DrawingBase {
+  kind: "flatBottomChannel";
+  p1: TrendPoint; // Trend baseline start
+  p2: TrendPoint; // Trend baseline end
+  p3: TrendPoint; // Point defining horizontal bottom level (y determines flat bottom price)
+}
+
+export type Drawing = HLine | VLine | Trend | Channel | Rectangle | TextDrawing | PriceRange | DateRange | DateAndPriceRange | FibRetracement | Pitchfork | FlatTopChannel | FlatBottomChannel;
 
 export interface CompareSeriesConfig {
   id: string;
