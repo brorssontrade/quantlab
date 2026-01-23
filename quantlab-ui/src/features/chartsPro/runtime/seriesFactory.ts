@@ -4,7 +4,7 @@
  * Sprint TV-3 Steg 1C: Chart Type Switcher
  *
  * Factory for creating/removing LightweightCharts series based on chartType.
- * Supports: bars, candles, hollowCandles, line, area, baseline, columns
+ * Supports: bars, candles, hollowCandles, line, area, baseline, columns, heikinAshi, renko
  *
  * Architecture:
  * - Maps chartType → series constructor (addBarSeries, addCandlestickSeries, etc.)
@@ -24,7 +24,8 @@ export type ChartType =
   | 'area'
   | 'baseline'
   | 'columns'
-  | 'heikinAshi';
+  | 'heikinAshi'
+  | 'renko';
 
 export type BaseSeriesApi =
   | ISeriesApi<'Bar'>
@@ -137,6 +138,19 @@ export function createBaseSeries(
       }
 
       case 'heikinAshi': {
+        return chart.addCandlestickSeries({
+          upColor: config.upColor,
+          downColor: config.downColor,
+          borderUpColor: config.borderUpColor ?? config.upColor,
+          borderDownColor: config.borderDownColor ?? config.downColor,
+          wickUpColor: config.wickUpColor ?? config.upColor,
+          wickDownColor: config.wickDownColor ?? config.downColor,
+        }) as BaseSeriesApi;
+      }
+
+      case 'renko': {
+        // TV-21.4: Renko uses candlestick series for brick rendering
+        // Data transformation happens in ChartViewport before setData
         return chart.addCandlestickSeries({
           upColor: config.upColor,
           downColor: config.downColor,

@@ -4,16 +4,16 @@
  *
  * TradingView-style chart type switcher:
  * - Dropdown with icon + label
- * - 4 core types: Candles (default), Bars, Line, Area
+ * - Core types: Candles (default), Bars, Hollow Candles, Heikin Ashi, Renko, Line, Area
  * - Persists to localStorage: cp.chart.type
  * - Exposes in dump().ui.chartType
  */
 
 import { useState, useRef, useEffect } from "react";
-import { BarChart3, CandlestickChart, TrendingUp, AreaChart } from "lucide-react";
+import { BarChart3, CandlestickChart, TrendingUp, AreaChart, Boxes } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-export type ChartType = "candles" | "bars" | "hollowCandles" | "line" | "area" | "heikinAshi";
+export type ChartType = "candles" | "bars" | "hollowCandles" | "line" | "area" | "heikinAshi" | "renko";
 
 interface ChartTypeSelectorProps {
   value: ChartType;
@@ -25,6 +25,7 @@ const CHART_TYPES: Array<{ value: ChartType; label: string; icon: React.ElementT
   { value: "bars", label: "Bars", icon: BarChart3 },
   { value: "hollowCandles", label: "Hollow Candles", icon: CandlestickChart },
   { value: "heikinAshi", label: "Heikin Ashi", icon: CandlestickChart },
+  { value: "renko", label: "Renko", icon: Boxes },
   { value: "line", label: "Line", icon: TrendingUp },
   { value: "area", label: "Area", icon: AreaChart },
 ];

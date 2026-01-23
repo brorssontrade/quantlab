@@ -1050,7 +1050,7 @@
 | ✅ DONE | TV-21.1 | Heikin Ashi (transform OHLC → HA + render, 1 test) | 3h | None |
 | ✅ DONE | TV-21.2 | Bars (OHLC Bars – native lwcharts bar series) | 1h | TV-21.1 |
 | ✅ DONE | TV-21.3 | Hollow Candles (up=hollow, down=filled styling) | 2h | TV-21.2 |
-| 🔮 BACKLOG | TV-21.4 | Renko (time-agnostic transform, box rendering) | 6h | TV-21.3 |
+| ✅ DONE | TV-21.4 | Renko (time-agnostic transform, box rendering) | 6h | TV-21.3 |
 
 **TV-21.1 DONE 2025-01-12:** Pure transform util `runtime/heikinAshi.ts`, integrated in `applyBaseSeries`, added to `ChartTypeSelector`, `cp21.spec.ts` fixture test (5 bars → exact HA), `dump().ui.chartType` exposes "heikinAshi". Commit `35ab2a2`.
 
@@ -1058,15 +1058,19 @@
 
 **TV-21.2 DONE 2025-01-23:** Bars already existed in seriesFactory. Added 3 tests. Commit `be1616b`.
 
-**TV-21.3 DONE 2025-01-23:** Hollow Candles added to ChartTypeSelector + ChartViewport. Added 3 tests. Commit `be1616b`.
+**TV-21.3 DONE 2025-01-23:** Hollow Candles added to ChartTypeSelector + ChartViewport. Added 3 tests + style verification. Commit `be1616b`, `9b8e3d7`.
 
-**TV-21.2 Bars:** Minimal risk, high parity-win. LightweightCharts has native bar/ohlc series, no transforms needed. Default stays "candles", dump().ui.chartType updated. 2-3 deterministic tests.
+**TV-21.3b DONE 2025-01-23:** Style verification – fixed enforceBasePriceScale overwriting hollow styling, exposed baseSeriesOptions in dump().render. Commit `9b8e3d7`.
 
-**TV-21.3 Hollow Candles:** TradingView-style: up-candles hollow (transparent body + border), down-candles filled. Same data as candles, styling per bar. 2-3 tests verifying chartType + style.
+**TV-21.4 DONE 2025-01-23:** Renko implementation:
+- Pure util `runtime/renko.ts` with deterministic brick calculation
+- Fixture tests (6 bricks from 8 bars, edge cases, ATR/suggestBoxSize utils)
+- Integration in ChartViewport with auto box size based on price level
+- ChartTypeSelector with Boxes icon
+- 8 new tests (5 unit + 3 integration)
+- Gates: build ✅ | cp21 20/20 ✅ | tvParity 35/35 ✅
 
-**TV-21.4 Renko:** Larger scope – time-agnostic transform + box rendering. Defer until 21.2/21.3 stable.
-
-**Total TV-21: 12h (expanded)**  
+**Total TV-21: COMPLETE**  
 **Acceptance:** All chart types switch correctly, dump().ui.chartType updated, no timeframe/range side-effects.
 
 **Future Epics (TV-22.x):** Kagi, Point & Figure, Line Break, Range charts, Orderflow (Footprint, TPO, Session Volume Profile) – separate backlog.

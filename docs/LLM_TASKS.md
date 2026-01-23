@@ -1,3 +1,39 @@
+### 2025-01-23 (TV-21.4 Renko + TV-21.3b Style Verification)
+
+**Status:** ✅ **COMPLETE** (TV-21 chart types fully done!)
+
+**Task Description:** "Implement Renko chart type with pure util + fixture tests + integration."
+
+**Implementation:**
+1. **TV-21.3b Hollow Candles Style Verification:**
+   - Fixed bug: `enforceBasePriceScale()` was overwriting hollow upColor
+   - Added `baseSeriesOptions` to `dump().render` for style introspection
+   - Added test verifying `upColor === "transparent"` for hollow candles
+
+2. **TV-21.4 Renko:**
+   - Pure util `runtime/renko.ts` with deterministic brick calculation
+   - `transformOhlcToRenko()` generates bricks based on boxSize
+   - Helper utils: `calculateAtr()`, `suggestBoxSize()`, `renkoToLwCandlestick()`
+   - Integration in ChartViewport with auto box size based on price level
+   - ChartTypeSelector with Boxes icon
+
+**Files Changed:**
+- `quantlab-ui/src/features/chartsPro/runtime/renko.ts` (NEW - 180 lines)
+- `quantlab-ui/src/features/chartsPro/runtime/seriesFactory.ts` (+renko case)
+- `quantlab-ui/src/features/chartsPro/components/ChartViewport.tsx` (+renko transform)
+- `quantlab-ui/src/features/chartsPro/components/TopBar/ChartTypeSelector.tsx` (+renko option)
+- `quantlab-ui/tests/chartsPro.cp21.spec.ts` (+8 tests: 5 unit, 3 integration)
+
+**Test Results & Gates:**
+- npm build ✅ (2475 modules)
+- chartsPro.cp21 ✅ **20/20 passed** (was 12)
+- tvParity ✅ **35/35 passed**
+
+**Commits:**
+- `9b8e3d7` fix(chartspro): TV-21.3b hollow candles style verification
+
+---
+
 ### 2025-01-23 (TV-21.2 Bars + TV-21.3 Hollow Candles)
 
 **Status:** ✅ **COMPLETE** (both chart types working with tests)

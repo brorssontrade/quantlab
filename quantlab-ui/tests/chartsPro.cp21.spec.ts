@@ -1,17 +1,19 @@
 /**
  * chartsPro.cp21.spec.ts
  *
- * TV-21.1: Heikin Ashi Chart Type
+ * TV-21: Alternative Chart Types
  *
  * Tests:
- * - Heikin Ashi transform logic (unit-level fixture test using REAL transform util)
- * - dump().ui.chartType === "heikinAshi" when toggled
- * - Visual: Heikin Ashi renders candlesticks
+ * - TV-21.1: Heikin Ashi transform logic + integration
+ * - TV-21.2: Bars chart type
+ * - TV-21.3: Hollow Candles (with style verification)
+ * - TV-21.4: Renko brick calculation + integration
  */
 
 import { test, expect } from "@playwright/test";
 import { gotoChartsPro } from "./helpers";
 import { transformOhlcToHeikinAshi } from "../src/features/chartsPro/runtime/heikinAshi";
+import { transformOhlcToRenko, calculateAtr, suggestBoxSize } from "../src/features/chartsPro/runtime/renko";
 
 /**
  * Heikin Ashi Transform - Pure Unit Test (Node-side)
@@ -311,5 +313,137 @@ test.describe("TV-21.3: Hollow Candles Chart Type", () => {
     const opts = dump?.render?.baseSeriesOptions;
     expect(opts?.borderUpColor).toBeTruthy();
     expect(opts?.borderUpColor).not.toBe("transparent");
+  });
+});
+
+/**
+ * TV-21.4: Renko Brick Calculation (Unit)
+ *
+ * Uses REAL transformOhlcToRenko from runtime/renko.ts
+ *
+ * Renko rules:
+ * - New up brick when close >= currentLevel + boxSize
+ * - New down brick when close <= currentLevel - boxSize
+ * - Bricks are drawn at fixed box intervals
+ */
+test.describe("TV-21.4: Renko Transform (Unit)", () => {
+  // Fixture: Price moves in a predictable pattern with boxSize = 5
+  // Starting at 100, moving up to 115, then down to 100
+  const FIXTURE_OHLC = [
+    { time: 1000, open: 100, high: 102, low: 98, close: 100 },   // No brick (start level = 100)
+    { time: 1001, open: 100, high: 104, low: 99, close: 103 },   // No brick (< 105)
+    { time: 1002, open: 103, high: 108, low: 102, close: 106 },  // Up brick to 105
+    { time: 1003, open: 106, high: 112, low: 105, close: 111 },  // Up brick to 110
+    { time: 1004, open: 111, high: 117, low: 110, close: 116 },  // Up brick to 115
+    { time: 1005, open: 116, high: 118, low: 108, close: 109 },  // Down brick to 110
+    { time: 1006, open: 109, high: 110, low: 103, close: 104 },  // Down brick to 105
+    { time: 1007, open: 104, high: 106, low: 98, close: 99 },    // Down brick to 100
+  ];
+
+  test("fixture transform produces correct Renko bricks (real util)", () => {
+    const result = transformOhlcToRenko(FIXTURE_OHLC, { boxSize: 5 });
+
+    // Should produce: 3 up bricks (100→105, 105→110, 110→115)
+    // Then 3 down bricks (115→110, 110→105, 105→100)
+    expect(result.length).toBe(6);
+
+    // Up bricks
+    expect(result[0]).toMatchObject({ open: 100, close: 105, direction: 'up' });
+    expect(result[1]).toMatchObject({ open: 105, close: 110, direction: 'up' });
+    expect(result[2]).toMatchObject({ open: 110, close: 115, direction: 'up' });
+
+    // Down bricks
+    expect(result[3]).toMatchObject({ open: 115, close: 110, direction: 'down' });
+    expect(result[4]).toMatchObject({ open: 110, close: 105, direction: 'down' });
+    expect(result[5]).toMatchObject({ open: 105, close: 100, direction: 'down' });
+  });
+
+  test("empty input returns empty array", () => {
+    expect(transformOhlcToRenko([], { boxSize: 5 })).toEqual([]);
+  });
+
+  test("throws on invalid boxSize", () => {
+    expect(() => transformOhlcToRenko(FIXTURE_OHLC, { boxSize: 0 })).toThrow();
+    expect(() => transformOhlcToRenko(FIXTURE_OHLC, { boxSize: -1 })).toThrow();
+  });
+
+  test("calculateAtr returns reasonable value", () => {
+    const atr = calculateAtr(FIXTURE_OHLC, 5);
+    // With our fixture data, ATR should be positive and reasonable
+    expect(atr).toBeGreaterThan(0);
+    expect(atr).toBeLessThan(20); // Sanity check
+  });
+
+  test("suggestBoxSize returns sensible defaults", () => {
+    expect(suggestBoxSize(0.5)).toBe(0.01);
+    expect(suggestBoxSize(5)).toBe(0.1);
+    expect(suggestBoxSize(50)).toBe(1);
+    expect(suggestBoxSize(500)).toBe(5);
+    expect(suggestBoxSize(5000)).toBe(50);
+    expect(suggestBoxSize(50000)).toBe(100);
+  });
+});
+
+/**
+ * TV-21.4: Renko Integration
+ */
+test.describe("TV-21.4: Renko Integration", () => {
+  test.beforeEach(async ({ page }, testInfo) => {
+    await gotoChartsPro(page, testInfo, { mock: true });
+  });
+
+  test("can switch to Renko via ChartTypeSelector", async ({ page }) => {
+    const chartTypeBtn = page.locator('[data-testid="chart-type-button"]');
+    await chartTypeBtn.click();
+
+    const renkoOption = page.locator('[data-testid="chart-type-option-renko"]');
+    await expect(renkoOption).toBeVisible();
+    await renkoOption.click();
+
+    // State-driven wait
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.chartType;
+    }, { timeout: 5000 }).toBe("renko");
+  });
+
+  test("Renko renders bricks without error", async ({ page }) => {
+    const chartTypeBtn = page.locator('[data-testid="chart-type-button"]');
+    await chartTypeBtn.click();
+    await page.locator('[data-testid="chart-type-option-renko"]').click();
+
+    // State-driven wait
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.chartType;
+    }, { timeout: 5000 }).toBe("renko");
+
+    // Chart should still be visible
+    await expect(page.locator('[data-testid="tv-chart-root"]')).toBeVisible();
+    await expect(page.locator('.tv-lightweight-charts')).toBeVisible();
+
+    // Should have data points (bricks)
+    const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+    expect(dump?.render?.pricePoints).toBeGreaterThan(0);
+  });
+
+  test("switching from Renko back to Candles works", async ({ page }) => {
+    const chartTypeBtn = page.locator('[data-testid="chart-type-button"]');
+
+    // Switch to Renko
+    await chartTypeBtn.click();
+    await page.locator('[data-testid="chart-type-option-renko"]').click();
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.chartType;
+    }).toBe("renko");
+
+    // Switch back to Candles
+    await chartTypeBtn.click();
+    await page.locator('[data-testid="chart-type-option-candles"]').click();
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.chartType;
+    }).toBe("candles");
   });
 });

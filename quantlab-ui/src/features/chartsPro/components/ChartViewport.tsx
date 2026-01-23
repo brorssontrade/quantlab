@@ -17,6 +17,7 @@ import {
 } from "@/lib/lightweightCharts";
 import { createBaseSeries, type ChartType as FactoryChartType, type BaseSeriesApi } from "../runtime/seriesFactory";
 import { transformOhlcToHeikinAshi } from "../runtime/heikinAshi";
+import { transformOhlcToRenko, renkoToLwCandlestick, suggestBoxSize } from "../runtime/renko";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
 import { toast } from "sonner";
@@ -347,7 +348,7 @@ const installLwChartsStub = () => {
 installLwChartsStub();
 
 
-type ChartTypeProp = "candles" | "bars" | "hollowCandles" | "line" | "area" | "heikinAshi";
+type ChartTypeProp = "candles" | "bars" | "hollowCandles" | "line" | "area" | "heikinAshi" | "renko";
 
 interface ChartViewportProps {
   apiBase: string;
@@ -2769,6 +2770,16 @@ const fitToContent = useCallback(() => {
       if (chartType === "heikinAshi" && dataToApply.length > 0) {
         const haBars = transformOhlcToHeikinAshi(dataToApply);
         dataToApply = haBars as NormalizedBar[];
+      }
+      
+      // TV-21.4: Apply Renko transform if chartType is renko
+      if (chartType === "renko" && dataToApply.length > 0) {
+        // Calculate box size based on price level (or use ATR for smarter sizing)
+        const avgPrice = dataToApply.reduce((sum, b) => sum + b.close, 0) / dataToApply.length;
+        const boxSize = suggestBoxSize(avgPrice);
+        const renkoBricks = transformOhlcToRenko(dataToApply, { boxSize });
+        const renkoCandles = renkoToLwCandlestick(renkoBricks);
+        dataToApply = renkoCandles as NormalizedBar[];
       }
       
       // Build candle data with transformed values
