@@ -155,7 +155,7 @@ function loadRenkoSettings(): RenkoSettings {
       atrPeriod: typeof parsed.atrPeriod === "number" && parsed.atrPeriod > 0 && Number.isInteger(parsed.atrPeriod)
         ? parsed.atrPeriod
         : DEFAULT_RENKO_SETTINGS.atrPeriod,
-      autoMinBoxSize: typeof parsed.autoMinBoxSize === "number" && parsed.autoMinBoxSize > 0
+      autoMinBoxSize: typeof parsed.autoMinBoxSize === "number" && parsed.autoMinBoxSize >= 0
         ? parsed.autoMinBoxSize
         : DEFAULT_RENKO_SETTINGS.autoMinBoxSize,
       rounding: parsed.rounding === "none" || parsed.rounding === "nice"

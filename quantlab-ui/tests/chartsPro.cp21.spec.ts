@@ -1195,4 +1195,72 @@ test.describe("TV-22.0b: Renko Settings Modal", () => {
       return dump?.render?.renko?.boxSizeUsed;
     }, { timeout: 5000 }).toBe(2.5);
   });
+
+  // TV-22.0b1: autoMinBoxSize=0 persistence test
+  test("autoMinBoxSize=0 can be saved, persisted, and survives reload", async ({ page }) => {
+    await gotoChartsPro(page);
+
+    // Clear localStorage first
+    await page.evaluate(() => window.localStorage.removeItem("cp.renko"));
+
+    // Switch to renko and open settings modal
+    await page.getByTestId("chart-type-button").click();
+    await page.getByTestId("chart-type-option-renko").click();
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.chartType;
+    }, { timeout: 5000 }).toBe("renko");
+
+    await page.getByTestId("renko-settings-open").click();
+    await expect(page.getByTestId("renko-settings-modal")).toBeVisible();
+
+    // Switch to auto mode (where autoMinBoxSize is relevant)
+    await page.getByTestId("renko-settings-mode-auto").click();
+
+    // Set autoMinBoxSize to 0
+    const autoMinInput = page.getByTestId("renko-settings-auto-min-box-size");
+    await autoMinInput.fill("0");
+
+    // Save
+    await page.getByTestId("renko-settings-save").click();
+    await expect(page.getByTestId("renko-settings-modal")).not.toBeVisible();
+
+    // Verify dump().ui.renko.autoMinBoxSize is 0
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.renko?.autoMinBoxSize;
+    }, { timeout: 5000 }).toBe(0);
+
+    // Verify localStorage has autoMinBoxSize=0
+    const storedBefore = await page.evaluate(() => {
+      const stored = window.localStorage.getItem("cp.renko");
+      return stored ? JSON.parse(stored) : null;
+    });
+    expect(storedBefore?.autoMinBoxSize).toBe(0);
+
+    // Reload the page
+    await page.reload();
+    await gotoChartsPro(page);
+
+    // Verify dump().ui.renko.autoMinBoxSize is still 0 after reload
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.renko?.autoMinBoxSize;
+    }, { timeout: 5000 }).toBe(0);
+
+    // Open modal again and verify input shows 0
+    await page.getByTestId("chart-type-button").click();
+    await page.getByTestId("chart-type-option-renko").click();
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.chartType;
+    }, { timeout: 5000 }).toBe("renko");
+
+    await page.getByTestId("renko-settings-open").click();
+    await expect(page.getByTestId("renko-settings-modal")).toBeVisible();
+
+    // Verify the input field shows 0
+    const inputValue = await page.getByTestId("renko-settings-auto-min-box-size").inputValue();
+    expect(inputValue).toBe("0");
+  });
 });
