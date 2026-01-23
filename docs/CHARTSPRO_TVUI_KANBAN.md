@@ -1048,11 +1048,17 @@
 | Status | Task ID | Task | Estimated | Dependencies |
 |--------|---------|------|-----------|---|
 | ✅ DONE | TV-21.1 | Heikin Ashi (transform OHLC → HA + render, 1 test) | 3h | None |
-| 📋 READY | TV-21.2 | Bars (OHLC Bars – native lwcharts bar series) | 1h | TV-21.1 |
-| 📋 READY | TV-21.3 | Hollow Candles (up=hollow, down=filled styling) | 2h | TV-21.2 |
+| ✅ DONE | TV-21.2 | Bars (OHLC Bars – native lwcharts bar series) | 1h | TV-21.1 |
+| ✅ DONE | TV-21.3 | Hollow Candles (up=hollow, down=filled styling) | 2h | TV-21.2 |
 | 🔮 BACKLOG | TV-21.4 | Renko (time-agnostic transform, box rendering) | 6h | TV-21.3 |
 
 **TV-21.1 DONE 2025-01-12:** Pure transform util `runtime/heikinAshi.ts`, integrated in `applyBaseSeries`, added to `ChartTypeSelector`, `cp21.spec.ts` fixture test (5 bars → exact HA), `dump().ui.chartType` exposes "heikinAshi". Commit `35ab2a2`.
+
+**TV-21.1a DONE 2025-01-23:** Test hygiene – removed sleeps, imported real transform util. Commit `06f4da0`.
+
+**TV-21.2 DONE 2025-01-23:** Bars already existed in seriesFactory. Added 3 tests. Commit `be1616b`.
+
+**TV-21.3 DONE 2025-01-23:** Hollow Candles added to ChartTypeSelector + ChartViewport. Added 3 tests. Commit `be1616b`.
 
 **TV-21.2 Bars:** Minimal risk, high parity-win. LightweightCharts has native bar/ohlc series, no transforms needed. Default stays "candles", dump().ui.chartType updated. 2-3 deterministic tests.
 

@@ -1,3 +1,54 @@
+### 2025-01-23 (TV-21.2 Bars + TV-21.3 Hollow Candles)
+
+**Status:** ✅ **COMPLETE** (both chart types working with tests)
+
+**Task Description:** "Add Bars (OHLC) and Hollow Candles chart types to ChartTypeSelector."
+
+**Implementation:**
+1. **TV-21.2 Bars:** Already existed in seriesFactory (addBarSeries), just needed tests
+2. **TV-21.3 Hollow Candles:** Added to ChartTypeSelector + ChartViewport ChartTypeProp
+3. **All tests use state-driven waits** (expect.poll on dump().ui.chartType)
+4. **6 new tests total:** 3 for Bars, 3 for Hollow Candles
+
+**Files Changed:**
+- `quantlab-ui/src/features/chartsPro/components/TopBar/ChartTypeSelector.tsx` (+hollowCandles)
+- `quantlab-ui/src/features/chartsPro/components/ChartViewport.tsx` (+hollowCandles to ChartTypeProp)
+- `quantlab-ui/tests/chartsPro.cp21.spec.ts` (+6 tests)
+
+**Test Results & Gates:**
+- npm build ✅ (2474 modules)
+- chartsPro.cp21 ✅ **11/11 passed**
+- tvParity ✅ **35/35 passed**
+
+**Commits:**
+- `be1616b` feat(frontend): TV-21.2 Bars + TV-21.3 Hollow Candles chart types
+
+---
+
+### 2025-01-23 (TV-21.1a – Test Hygiene)
+
+**Status:** ✅ **COMPLETE** (no sleeps, real util import)
+
+**Task Description:** "Remove waitForTimeout in cp21, import real transform util in unit test."
+
+**Implementation:**
+1. Removed `waitForTimeout(500)` → replaced with `expect.poll()` on dump().ui.chartType
+2. Unit test now imports real `transformOhlcToHeikinAshi` from runtime/heikinAshi.ts
+3. Unit test runs in 24ms (Node-side) vs ~1s (browser-side reimplementation)
+
+**Files Changed:**
+- `quantlab-ui/tests/chartsPro.cp21.spec.ts` (test hygiene)
+
+**Test Results & Gates:**
+- npm build ✅ (2474 modules)
+- chartsPro.cp21 ✅ **5/5 passed** (before adding bars/hollow tests)
+- tvParity ✅ **35/35 passed**
+
+**Commits:**
+- `06f4da0` test(frontend): TV-21.1a cp21 test hygiene (no sleeps, real util import)
+
+---
+
 ### 2025-01-12 (TV-21.1 – Heikin Ashi Chart Type)
 
 **Status:** ✅ **COMPLETE** (transform util, ChartTypeSelector integration, fixture test)
