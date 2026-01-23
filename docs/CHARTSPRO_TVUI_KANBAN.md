@@ -889,8 +889,8 @@
 | ✅ DONE | TV-20.2a | Rectangle 4-corner resize parity (all corners draggable) | 0.5h | TV-20.2 |
 | ✅ DONE | TV-20.3 | Text tool (click→modal→edit, select/move/delete) + 3 tests | 1.5h | TV-20.1 |
 | ✅ DONE | TV-20.4 | Edit existing text + multiline (textarea, Enter/Shift+Enter) | 1h | TV-20.3 |
-| 📋 READY | TV-20.5 | Magnet/Snap foundation (toggle, snap to high/low/close) | 2h | TV-20.1 |
-| 📋 READY | TV-20.6a | Measure: Price Range (2-click, Δprice, Δ%) | 1.5h | TV-20.1 |
+| ✅ DONE | TV-20.5 | Magnet/Snap foundation (toggle, snap to high/low/close) | 2h | TV-20.1 |
+| 📋 READY | TV-20.6a | Measure: Price Range (2-click, Δprice, Δ%) | 1.5h | TV-20.5 |
 | 📋 READY | TV-20.6b | Measure: Date Range (2-click, bars, seconds) | 1h | TV-20.6a |
 | 📋 READY | TV-20.7 | Fibonacci Retracement MVP + 1 test | 2.5h | TV-20.5 |
 
@@ -900,15 +900,16 @@
 - TV-20.2a: `eca1e92` fix(frontend): TV-20.2a Rectangle 4-corner resize parity
 - TV-20.3: `3dba910` feat(frontend): TV-20.3 Text/Note tool with modal input
 - TV-20.4: `9217937` feat(frontend): TV-20.4 Edit text + multiline support
+- TV-20.5: `8f5b26c` feat(frontend): TV-20.5 Magnet/Snap toggle + dump() dependency fix
 
-**Gate Results (TV-20.4):**
+**Gate Results (TV-20.5):**
 - build ✅ (2473 modules)
-- cp20 ✅ (27/27 passed)
+- cp20 ✅ (30/30 passed) [+3 new magnet/snap tests]
 - tvUI ✅ (169/169 passed)
 - tvParity ✅ (35/35 passed)
 
 **Total TV-20: 14h** (revised with new tasks)  
-**Acceptance:** ToolGroups UI + flyout, Rectangle + Text tools complete, dump().objects verifierar.
+**Acceptance:** ToolGroups UI + flyout, Rectangle + Text tools complete, Magnet/Snap works, dump().ui.magnet/snap verifiable.
 
 ---
 

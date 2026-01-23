@@ -1,3 +1,30 @@
+### 2026-01-23 (TV-20.5 – Magnet/Snap Toggle + dump() Fix)
+
+**Status:** ✅ **COMPLETE** (Magnet toggle works, snap to OHLC functional, dump().ui.magnet reflects state)
+
+**Task Description:** "Magnet ska faktiskt påverka placement/move av drawings, inte bara UI. Fix stale closure i bindTestApi."
+
+**Root Cause:** `bindTestApi` useCallback in ChartViewport.tsx had a stale closure – `magnetEnabled` and `snapToClose` were not in the dependency array, so `dump().ui.magnet` always returned the initial value.
+
+**Solution:**
+1. **ChartViewport.tsx** – Added `magnetEnabled` and `snapToClose` to `bindTestApi` useCallback dependency array (line ~2390)
+2. **3 new tests** – Verify magnet toggle state, snap ON snaps to OHLC, snap OFF allows arbitrary prices
+
+**Files Changed:**
+- `quantlab-ui/src/features/chartsPro/components/ChartViewport.tsx` (dependency fix)
+- `quantlab-ui/tests/chartsPro.cp20.spec.ts` (+3 TV-20.5 tests)
+
+**Test Results & Gates:**
+- npm build ✅ (2473 modules)
+- chartsPro.cp20 ✅ (30/30 passed) [+3 magnet/snap tests]
+- tvUI ✅ (169/169 passed)
+- tvParity ✅ (35/35 passed)
+
+**Commits:**
+- `8f5b26c` feat(frontend): TV-20.5 Magnet/Snap toggle + dump() dependency fix
+
+---
+
 ### 2026-01-23 (TV-20.4 – Edit Existing Text + Multiline)
 
 **Status:** ✅ **COMPLETE** (Double-click/Enter to edit existing text, multiline textarea support)
