@@ -891,7 +891,8 @@
 | ✅ DONE | TV-20.4 | Edit existing text + multiline (textarea, Enter/Shift+Enter) | 1h | TV-20.3 |
 | ✅ DONE | TV-20.5 | Magnet/Snap foundation (toggle, snap to high/low/close) | 2h | TV-20.1 |
 | ✅ DONE | TV-20.6a | Measure: Price Range (2-click, Δprice, Δ%) | 1.5h | TV-20.5 |
-| 📋 READY | TV-20.6b | Measure: Date Range (2-click, bars, seconds) | 1h | TV-20.6a |
+| ✅ DONE | TV-20.6b | Measure: Date Range (2-click, bars, deltaMs) | 1h | TV-20.6a |
+| 📋 READY | TV-20.6c | Measure: Date & Price Range (combined tool) | 1h | TV-20.6b |
 | 📋 READY | TV-20.7 | Fibonacci Retracement MVP + 1 test | 2.5h | TV-20.5 |
 
 **Commits:**
@@ -901,16 +902,16 @@
 - TV-20.3: `3dba910` feat(frontend): TV-20.3 Text/Note tool with modal input
 - TV-20.4: `9217937` feat(frontend): TV-20.4 Edit text + multiline support
 - TV-20.5: `8f5b26c` feat(frontend): TV-20.5 Magnet/Snap toggle + dump() dependency fix
-- TV-20.6a: feat(frontend): TV-20.6a Measure Price Range tool
+- TV-20.6a: `95a48ea` feat(frontend): TV-20.6a Measure Price Range tool
+- TV-20.6b: feat(frontend): TV-20.6b Measure Date Range tool
 
-**Gate Results (TV-20.6a):**
+**Gate Results (TV-20.6b):**
 - build ✅ (2473 modules)
-- cp20 ✅ (32/32 passed) [+2 new priceRange tests]
-- tvUI ✅ (169/171 passed, 2 skipped)
+- cp20 ✅ (34/34 passed) [+2 new dateRange tests]
 - tvParity ✅ (35/35 passed)
 
-**Total TV-20: 14h** (revised with new tasks)  
-**Acceptance:** ToolGroups UI + flyout, Rectangle + Text tools complete, Magnet/Snap works, dump().ui.magnet/snap verifiable.
+**Total TV-20: 15h** (revised with new tasks)  
+**Acceptance:** ToolGroups UI + flyout, Rectangle + Text tools complete, Magnet/Snap works, Measure tools (priceRange, dateRange) complete with dump() contract.
 
 ---
 

@@ -1,3 +1,55 @@
+### 2026-01-23 (TV-20.6b – Measure: Date Range)
+
+**Status:** ✅ **COMPLETE** (Date Range measure tool showing bars count + time span)
+
+**Task Description:** "Measure: Date Range (2-click, bars, deltaMs) – draw horizontal bracket between two time points, display bar count and time span."
+
+**Implementation:**
+1. **types.ts** – Added `DateRange` interface with p1/p2 TrendPoints, updated `DrawingKind` and `Drawing` unions
+2. **controls.ts** – Added `"dateRange"` to `Tool` type and `VALID_TOOLS` array
+3. **toolRegistry.ts** – Enabled dateRange tool in measure group (tooltip: "Measure time span")
+4. **DrawingLayer.tsx** – Full dateRange lifecycle: beginDrawing, updateDrawing (draw+drag), hitTest, render, geometrySignature, buildDrawingGeometry, drawDateRange function
+5. **ChartViewport.tsx** – Added dateRange to dump().objects with deltaMs and deltaDays computed values
+6. **ChartsProTab.tsx** – Updated validTools Sets (2 places)
+
+**dump() Contract for dateRange:**
+```typescript
+{
+  type: "dateRange",
+  points: [{ timeMs, price }, { timeMs, price }],
+  p1: { timeMs, price },
+  p2: { timeMs, price },
+  deltaMs: number,    // Math.abs(p2.timeMs - p1.timeMs)
+  deltaDays: number   // deltaMs / (1000 * 60 * 60 * 24)
+}
+```
+
+**drawDateRange Visual:**
+- Horizontal line at midY between p1 and p2
+- Vertical tick marks at both ends (TV-style time measurement)
+- Label showing "N bars, Xd Yh" (or Xh Ym / Xm / Xs depending on duration)
+- Cyan (#06b6d4) color for measure tools
+
+**Files Changed:**
+- `quantlab-ui/src/features/chartsPro/types.ts` (DateRange interface)
+- `quantlab-ui/src/features/chartsPro/state/controls.ts` (Tool type)
+- `quantlab-ui/src/features/chartsPro/components/LeftToolbar/toolRegistry.ts` (enable dateRange)
+- `quantlab-ui/src/features/chartsPro/components/DrawingLayer.tsx` (~100 lines added)
+- `quantlab-ui/src/features/chartsPro/components/ChartViewport.tsx` (dump() contract)
+- `quantlab-ui/src/features/chartsPro/ChartsProTab.tsx` (validTools)
+- `quantlab-ui/tests/chartsPro.cp20.spec.ts` (+2 TV-20.6b tests)
+- `docs/CHARTSPRO_TVUI_KANBAN.md` (TV-20.6b marked DONE)
+
+**Test Results & Gates:**
+- npm build ✅ (2473 modules)
+- chartsPro.cp20 ✅ (34/34 passed) [+2 dateRange tests]
+- tvParity ✅ (35/35 passed)
+
+**Commits:**
+- feat(frontend): TV-20.6b Measure Date Range tool
+
+---
+
 ### 2026-01-23 (TV-20.6a – Measure: Price Range)
 
 **Status:** ✅ **COMPLETE** (Price Range measure tool with Δprice and Δ% display)

@@ -1140,4 +1140,116 @@ test.describe("TV-20: LeftToolbar Tool Groups + Flyout", () => {
       expect(deltaAfter).toBeLessThan(deltaBefore);
     });
   });
+
+  test.describe("TV-20.6b: Date Range Measure", () => {
+    test("create dateRange and verify deltaMs via dump()", async ({ page }) => {
+      // Select Date Range tool via LeftToolbar flyout
+      // First click the Measure group to open flyout
+      const measureGroup = page.locator('[data-testid="lefttoolbar-group-measure"]');
+      await measureGroup.click();
+      await page.waitForTimeout(300);
+      
+      // Then click Date Range tool
+      const dateRangeTool = page.locator('[data-testid="tool-dateRange"]');
+      await dateRangeTool.waitFor({ state: "visible", timeout: 3000 });
+      await dateRangeTool.click();
+      await page.waitForTimeout(300);
+
+      // Verify tool is active
+      const toolAfterSelect = await page.evaluate(() => (window as any).__lwcharts?.dump?.()?.ui?.activeTool);
+      expect(toolAfterSelect).toBe("dateRange");
+
+      // Get chart canvas and draw dateRange
+      const chartWrapper = page.locator('[data-testid="tv-chart-root"]');
+      await expect(chartWrapper).toBeVisible({ timeout: 5000 });
+      const box = await chartWrapper.boundingBox();
+      expect(box).toBeTruthy();
+      if (!box) return;
+
+      // Define points: p1 and p2 at different X positions (time)
+      const x1 = box.x + box.width * 0.3;
+      const y1 = box.y + box.height * 0.5;
+      
+      const x2 = box.x + box.width * 0.6;
+      const y2 = box.y + box.height * 0.5;
+
+      // Draw dateRange with drag pattern (down -> move -> up)
+      await page.mouse.move(x1, y1);
+      await page.mouse.down();
+      await page.mouse.move(x2, y2);
+      await page.mouse.up();
+      await page.waitForTimeout(200);
+
+      // Verify dateRange was created and has correct deltas
+      const dumpAfter = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      const dateRangeObj = dumpAfter?.objects?.find((d: any) => d.type === "dateRange");
+      
+      expect(dateRangeObj).toBeTruthy();
+      expect(dateRangeObj.p1).toBeDefined();
+      expect(dateRangeObj.p2).toBeDefined();
+      expect(typeof dateRangeObj.deltaMs).toBe("number");
+      expect(typeof dateRangeObj.deltaDays).toBe("number");
+      
+      // deltaMs should be positive (time difference)
+      expect(dateRangeObj.deltaMs).toBeGreaterThan(0);
+      expect(dateRangeObj.deltaDays).toBeGreaterThan(0);
+      
+      // Points array should have 2 entries
+      expect(dateRangeObj.points.length).toBe(2);
+    });
+
+    test("delete dateRange removes it from dump()", async ({ page }) => {
+      // Select Date Range tool
+      const measureGroup = page.locator('[data-testid="lefttoolbar-group-measure"]');
+      await measureGroup.click();
+      await page.waitForTimeout(300);
+      
+      const dateRangeTool = page.locator('[data-testid="tool-dateRange"]');
+      await dateRangeTool.waitFor({ state: "visible", timeout: 3000 });
+      await dateRangeTool.click();
+      await page.waitForTimeout(300);
+
+      // Get chart canvas
+      const chartWrapper = page.locator('[data-testid="tv-chart-root"]');
+      await expect(chartWrapper).toBeVisible({ timeout: 5000 });
+      const box = await chartWrapper.boundingBox();
+      expect(box).toBeTruthy();
+      if (!box) return;
+
+      // Create dateRange
+      const x1 = box.x + box.width * 0.35;
+      const y1 = box.y + box.height * 0.5;
+      const x2 = box.x + box.width * 0.55;
+      const y2 = box.y + box.height * 0.5;
+
+      await page.mouse.move(x1, y1);
+      await page.mouse.down();
+      await page.mouse.move(x2, y2);
+      await page.mouse.up();
+      await page.waitForTimeout(200);
+
+      // Verify dateRange exists
+      const dumpBefore = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      const objBefore = dumpBefore?.objects?.find((d: any) => d.type === "dateRange");
+      expect(objBefore).toBeTruthy();
+
+      // Switch to select tool and select the dateRange
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(100);
+
+      // Click on the dateRange to select it (midpoint)
+      const midX = (x1 + x2) / 2;
+      await page.mouse.click(midX, y1);
+      await page.waitForTimeout(200);
+
+      // Delete with Delete key
+      await page.keyboard.press("Delete");
+      await page.waitForTimeout(200);
+
+      // Verify dateRange is removed
+      const dumpAfter = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      const objAfter = dumpAfter?.objects?.find((d: any) => d.type === "dateRange");
+      expect(objAfter).toBeUndefined();
+    });
+  });
 });

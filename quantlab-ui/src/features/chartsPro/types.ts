@@ -45,7 +45,7 @@ export interface OhlcvResponse {
   meta?: Record<string, unknown>;
 }
 
-export type DrawingKind = "hline" | "vline" | "trend" | "channel" | "rectangle" | "text" | "priceRange";
+export type DrawingKind = "hline" | "vline" | "trend" | "channel" | "rectangle" | "text" | "priceRange" | "dateRange";
 
 export interface DrawingStyle {
   color: string;
@@ -123,7 +123,14 @@ export interface PriceRange extends DrawingBase {
   p2: TrendPoint; // End point
 }
 
-export type Drawing = HLine | VLine | Trend | Channel | Rectangle | TextDrawing | PriceRange;
+/** Date Range measurement - two points showing bars count and time span */
+export interface DateRange extends DrawingBase {
+  kind: "dateRange";
+  p1: TrendPoint; // Start point (time + price for positioning)
+  p2: TrendPoint; // End point
+}
+
+export type Drawing = HLine | VLine | Trend | Channel | Rectangle | TextDrawing | PriceRange | DateRange;
 
 export interface CompareSeriesConfig {
   id: string;
