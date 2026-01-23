@@ -903,8 +903,8 @@
 | ✅ DONE | TV-20.7 | Fibonacci Retracement (2-click, 9 levels, full edit lifecycle) | 2h | TV-20.5 |
 | ✅ DONE | TV-20.8 | Parallel Channel (3-click p1→p2→p3, baseline+parallel+midline) | 2h | TV-20.1 |
 | ✅ DONE | TV-20.9 | Andrew's Pitchfork (3-click, median+tines, full edit lifecycle) | 2h | TV-20.8 |
-| 📋 READY | TV-20.10 | Flat Top/Bottom Channel (horizontal side + trend side) | 1.5h | TV-20.9 |
-| 📋 READY | TV-20.11 | Regression Trend Channel (linear regression midline + ±σ bands) | 2h | TV-20.10 |
+| ✅ DONE | TV-20.10 | Flat Top/Bottom Channel (horizontal side + trend side) | 1.5h | TV-20.9 |
+| ✅ DONE | TV-20.11 | Regression Trend Channel (linear regression midline + ±σ bands) | 2h | TV-20.10 |
 
 **Commits:**
 - TV-20.1: `4f5e95a` fix(frontend): TV-20.1 LeftToolbar ToolGroups + Flyout
@@ -920,10 +920,12 @@
 - TV-20.7: `81824ec` feat(frontend): TV-20.7 Fibonacci Retracement tool
 - TV-20.8: `409434d` feat(frontend): TV-20.8 3-point Parallel Channel
 - TV-20.9: `39e52ec` feat(frontend): TV-20.9 Andrew's Pitchfork
+- TV-20.10: `de4e6ba` feat(frontend): TV-20.10 Flat Top/Bottom Channel
+- TV-20.11: `44ecc3e` feat(frontend): TV-20.11 Regression Trend Channel
 
-**Gate Results (TV-20.9):**
+**Gate Results (TV-20.11):**
 - build ✅ (2473 modules)
-- cp20 ✅ (TV-20.9 tests: 12/12 = 4×3 repeat-each) **FLAKE-FREE**
+- cp20 ✅ (TV-20.11 tests: 9/12 = 3×3 repeat-each, 3 skipped drag test)
 - tvParity ✅ (35/35 passed)
 
 **dump() contracts for Measure tools:**

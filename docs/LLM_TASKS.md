@@ -109,6 +109,120 @@ export const FIB_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.272, 1.618] 
 
 ---
 
+### 2026-01-25 (TV-20.11 – Regression Trend Channel)
+
+**Status:** ✅ **COMPLETE** (Linear regression channel with ±2σ bands)
+
+**Task Description:** "Implementera Regression Trend Channel: 2-klick (click-drag-release), linjär regression på close-priser inom tidsintervallet, ±2σ band."
+
+**Implementation:**
+1. **RegressionTrend interface**: `{ p1, p2 }` where p1=start, p2=end of regression window
+2. **2-click workflow**: Click-drag-release (like trendline) to define time window
+3. **Regression calculation**: Linear regression on bar closes within [p1.timeMs, p2.timeMs]
+   - slope = (n*Σxy - Σx*Σy) / (n*Σx² - (Σx)²)
+   - intercept = (Σy - slope*Σx) / n
+   - stdev = sqrt(Σ(residual²) / n)
+4. **Rendering**: Midline (regression) + upper band (+2σ) + lower band (-2σ)
+5. **Hotkey "G"**: Added to ChartViewport.tsx keyboard handler
+
+**RegressionTrend Model:**
+```typescript
+interface RegressionTrend extends DrawingBase {
+  kind: "regressionTrend";
+  p1: TrendPoint;  // Start of regression window
+  p2: TrendPoint;  // End of regression window
+}
+```
+
+**dump() Contract:**
+```typescript
+{
+  type: "regressionTrend",
+  p1: { timeMs: number, price: number },
+  p2: { timeMs: number, price: number },
+  points: [p1, p2]
+}
+```
+
+**Files Changed:**
+- `quantlab-ui/src/features/chartsPro/types.ts` (RegressionTrend interface)
+- `quantlab-ui/src/features/chartsPro/components/LeftToolbar/controls.ts` (Tool type + VALID_TOOLS)
+- `quantlab-ui/src/features/chartsPro/components/LeftToolbar/toolRegistry.ts` (channels group)
+- `quantlab-ui/src/features/chartsPro/ChartsProTab.tsx` (validTools Sets)
+- `quantlab-ui/src/features/chartsPro/components/DrawingLayer.tsx` (~11 case blocks + regression calc)
+- `quantlab-ui/src/features/chartsPro/components/ChartViewport.tsx` (dump() + hotkey "G")
+- `quantlab-ui/tests/chartsPro.cp20.spec.ts` (+4 tests, 1 skipped)
+
+**Test Results & Gates:**
+- npm build ✅ (2473 modules)
+- chartsPro.cp20 ✅ **9/12 tests (3×3 repeat-each) + 3 skipped (drag test)**
+- tvParity ✅ (35/35 passed)
+
+**Commits:**
+- `44ecc3e` feat(frontend): TV-20.11 Regression Trend Channel
+
+---
+
+### 2026-01-25 (TV-20.10 – Flat Top/Bottom Channel)
+
+**Status:** ✅ **COMPLETE** (Flat channels with horizontal top/bottom + angled trend side)
+
+**Task Description:** "Implementera Flat Top/Bottom Channel: 3-klick (p1/p2 trend baseline, p3.y = flat level), horizontal side + trend side."
+
+**Implementation:**
+1. **FlatTopChannel/FlatBottomChannel interfaces**: `{ p1, p2, p3 }` where p1/p2=trend baseline, p3.y=flat level
+2. **3-click workflow**: Click 1 sets p1, Click 2 sets p2, Click 3 sets p3 (only y matters for flat level)
+3. **Geometry**: Trend line (p1→p2 extended), flat horizontal line at p3.price, midline between
+4. **Rendering**: 2 solid lines + optional midline with handles at p1/p2/p3
+5. **Hotkey "F"**: Added to ChartViewport.tsx keyboard handler (selects flatTopChannel)
+
+**FlatChannel Model:**
+```typescript
+interface FlatTopChannel extends DrawingBase {
+  kind: "flatTopChannel";
+  p1: TrendPoint;  // Trend baseline start
+  p2: TrendPoint;  // Trend baseline end
+  p3: TrendPoint;  // Only p3.price used for horizontal top
+}
+interface FlatBottomChannel extends DrawingBase {
+  kind: "flatBottomChannel";
+  p1: TrendPoint;  // Trend baseline start
+  p2: TrendPoint;  // Trend baseline end
+  p3: TrendPoint;  // Only p3.price used for horizontal bottom
+}
+```
+
+**dump() Contract:**
+```typescript
+{
+  type: "flatTopChannel" | "flatBottomChannel",
+  p1: { timeMs: number, price: number },
+  p2: { timeMs: number, price: number },
+  p3: { timeMs: number, price: number },
+  flatPrice: number, // p3.price
+  points: [p1, p2, p3]
+}
+```
+
+**Files Changed:**
+- `quantlab-ui/src/features/chartsPro/types.ts` (FlatTopChannel, FlatBottomChannel interfaces)
+- `quantlab-ui/src/features/chartsPro/components/LeftToolbar/controls.ts` (Tool types + VALID_TOOLS)
+- `quantlab-ui/src/features/chartsPro/components/LeftToolbar/toolRegistry.ts` (channels group)
+- `quantlab-ui/src/features/chartsPro/ChartsProTab.tsx` (validTools Sets)
+- `quantlab-ui/src/features/chartsPro/components/DrawingLayer.tsx` (~13 case blocks per channel type)
+- `quantlab-ui/src/features/chartsPro/components/ChartViewport.tsx` (dump() + hotkey "F")
+- `quantlab-ui/tests/chartsPro.cp20.spec.ts` (+4 tests)
+
+**Test Results & Gates:**
+- npm build ✅ (2473 modules)
+- chartsPro.cp20 ✅ **12/12 tests (4×3 repeat-each) FLAKE-FREE**
+- tvParity ✅ (35/35 passed)
+
+**Commits:**
+- `de4e6ba` feat(frontend): TV-20.10 Flat Top/Bottom Channel
+
+---
+
 ### 2026-01-25 (TV-20.9 – Andrew's Pitchfork)
 
 **Status:** ✅ **COMPLETE** (Full Andrew's Pitchfork with 3-click workflow, median line + parallel tines)
