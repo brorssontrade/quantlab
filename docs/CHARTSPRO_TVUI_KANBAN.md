@@ -864,7 +864,7 @@
 | ✅ DONE | TV-19.1 | X-axis crosshair time label (black box, TradingView-style) | 1.5h | TV-9.x |
 | ✅ DONE | TV-19.2 | Quick ranges (1D/5D/1M/…) affect chart visible range (dump().render.timeRange) | 1.5h | TV-9.x |
 | ✅ DONE | TV-19.2c | **HOTFIX:** Quick ranges = calendar time window (timeframe-agnostic) | 1h | TV-19.2 |
-| 📋 READY | TV-19.3 | Timezone + market status (UTC + RTH/EXT or OPEN/CLOSED stub) | 1h | TV-9.x |
+| 📋 IN PROGRESS | TV-19.3 | Timezone + market status (UTC + RTH/EXT or OPEN/CLOSED stub) | 1h | TV-9.x |
 | 📋 READY | TV-19.4 | Scale toggles (Auto/Log/%/ADJ) affect chart options (dump().render.appliedSettings) | 1.5h | TV-9.x, TV-10.3 |
 
 **TV-19.2c Fix Details (2026-01-22):**

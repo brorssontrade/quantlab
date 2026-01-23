@@ -241,12 +241,12 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
   const [settings, setSettings] = useState<ChartSettings>(() => loadSettings());
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
   const [layoutManagerOpen, setLayoutManagerOpen] = useState(false);
-  // TV-19.3: Timezone mode (UTC / Local) - controlled by ChartsProTab, passed to BottomBar
-  const [timezoneMode, setTimezoneMode] = useState<"UTC" | "Local">(() => {
+  // TV-19.3: Timezone ID (IANA format) - controlled by ChartsProTab, passed to BottomBar
+  const [timezoneId, setTimezoneId] = useState<"UTC" | "Europe/Stockholm" | "America/New_York">(() => {
     if (typeof window === "undefined") return "UTC";
     try {
-      const stored = window.localStorage?.getItem("cp.bottomBar.timezoneMode");
-      if (stored === "Local") return "Local";
+      const stored = window.localStorage?.getItem("cp.bottomBar.timezoneId");
+      if (stored === "Europe/Stockholm" || stored === "America/New_York") return stored;
       return "UTC";
     } catch {
       return "UTC";
@@ -356,11 +356,11 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
     }
   }, [rightPanelActiveTab]);
 
-  // TV-19.3: Handle timezone toggle (UTC <-> Local)
-  const handleTimezoneToggle = useCallback((mode: "UTC" | "Local") => {
-    setTimezoneMode(mode);
+  // TV-19.3: Handle timezone change (UTC / Europe/Stockholm / America/New_York)
+  const handleTimezoneChange = useCallback((tz: "UTC" | "Europe/Stockholm" | "America/New_York") => {
+    setTimezoneId(tz);
     try {
-      window.localStorage?.setItem("cp.bottomBar.timezoneMode", mode);
+      window.localStorage?.setItem("cp.bottomBar.timezoneId", tz);
     } catch {
       // ignore storage errors
     }
@@ -972,9 +972,10 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
                   dataCount: data.length,
                   barTimes: data.map(d => Number(d.time)),
                 } : undefined}
-                timezoneMode={timezoneMode}
-                onTimezoneToggle={handleTimezoneToggle}
+                timezoneId={timezoneId}
+                onTimezoneChange={handleTimezoneChange}
                 marketStatus={loading ? "LOADING" : mode === "live" ? "LIVE" : mode === "demo" ? "DEMO" : "OFFLINE"}
+                exchangeCode={symbol?.includes(".") ? symbol.split(".")[1] : undefined}
                 scaleMode={scaleMode}
                 onScaleModeChange={handleScaleModeChange}
               />

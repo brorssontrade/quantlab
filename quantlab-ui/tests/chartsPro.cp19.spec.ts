@@ -249,66 +249,93 @@ test.describe("TV-19: BottomBar Functions", () => {
   });
 
   test.describe("TV-19.3: Timezone + Market status", () => {
-    test("timezone toggle changes dump().ui.bottomBar.timezoneMode", async ({ page }) => {
+    test("timezone selector shows dropdown and changes timezoneId", async ({ page }) => {
       // Wait for bottomBar to be initialized in dump
       await expect.poll(async () => {
         const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
-        return dump?.ui?.bottomBar?.timezoneMode;
+        return dump?.ui?.bottomBar?.timezoneId;
       }, { timeout: 5000 }).toBeTruthy();
 
-      // Get initial timezone mode
+      // Get initial timezone
       const initialDump = await page.evaluate(() => {
         return (window as any).__lwcharts?.dump?.();
       });
-      const initialTz = initialDump?.ui?.bottomBar?.timezoneMode;
+      const initialTz = initialDump?.ui?.bottomBar?.timezoneId;
       expect(initialTz).toBe("UTC"); // Default
 
-      // Click timezone toggle
+      // Click timezone toggle to open dropdown
       const tzToggle = page.locator('[data-testid="bottombar-tz-toggle"]');
       await expect(tzToggle).toBeVisible();
       await tzToggle.click();
 
+      // Dropdown should appear
+      const dropdown = page.locator('[data-testid="bottombar-tz-dropdown"]');
+      await expect(dropdown).toBeVisible();
+
+      // Select Stockholm
+      await page.locator('[data-testid="bottombar-tz-option-Europe-Stockholm"]').click();
+
       // Wait for dump to update
       await expect.poll(async () => {
         const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
-        return dump?.ui?.bottomBar?.timezoneMode;
-      }, { timeout: 2000 }).toBe("Local");
+        return dump?.ui?.bottomBar?.timezoneId;
+      }, { timeout: 2000 }).toBe("Europe/Stockholm");
 
-      // Toggle back
+      // Select back to UTC
       await tzToggle.click();
+      await page.locator('[data-testid="bottombar-tz-option-UTC"]').click();
 
       await expect.poll(async () => {
         const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
-        return dump?.ui?.bottomBar?.timezoneMode;
+        return dump?.ui?.bottomBar?.timezoneId;
       }, { timeout: 2000 }).toBe("UTC");
     });
 
-    test("timezone mode persists in localStorage", async ({ page }) => {
+    test("timezone selection persists in localStorage", async ({ page }) => {
       // Wait for bottomBar to be ready
       await expect.poll(async () => {
         const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
-        return dump?.ui?.bottomBar?.timezoneMode;
+        return dump?.ui?.bottomBar?.timezoneId;
       }, { timeout: 5000 }).toBeTruthy();
 
-      // Toggle to Local
+      // Select New York timezone
       const tzToggle = page.locator('[data-testid="bottombar-tz-toggle"]');
       await tzToggle.click();
+      await page.locator('[data-testid="bottombar-tz-option-America-New_York"]').click();
 
       // Wait for localStorage update
       await expect.poll(async () => {
-        return await page.evaluate(() => window.localStorage.getItem("cp.bottomBar.timezoneMode"));
-      }, { timeout: 2000 }).toBe("Local");
+        return await page.evaluate(() => window.localStorage.getItem("cp.bottomBar.timezoneId"));
+      }, { timeout: 2000 }).toBe("America/New_York");
 
-      // Toggle back to UTC
+      // Select back to UTC
       await tzToggle.click();
+      await page.locator('[data-testid="bottombar-tz-option-UTC"]').click();
 
       await expect.poll(async () => {
-        return await page.evaluate(() => window.localStorage.getItem("cp.bottomBar.timezoneMode"));
+        return await page.evaluate(() => window.localStorage.getItem("cp.bottomBar.timezoneId"));
       }, { timeout: 2000 }).toBe("UTC");
     });
 
-    test("market status indicator is visible and matches dump()", async ({ page }) => {
-      // Market status indicator should be visible
+    test("market session indicator is visible in dump()", async ({ page }) => {
+      // Market session indicator should be visible
+      const marketSession = page.locator('[data-testid="bottombar-market-session"]');
+      await expect(marketSession).toBeVisible();
+
+      // Wait for marketSession in dump
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.bottomBar?.marketSession;
+      }, { timeout: 5000 }).toBeTruthy();
+
+      // Verify it's one of the valid values
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      const session = dump?.ui?.bottomBar?.marketSession;
+      expect(["OPEN", "CLOSED", "PRE", "POST", "—"]).toContain(session);
+    });
+
+    test("data status indicator (LIVE/DEMO) is visible and matches dump()", async ({ page }) => {
+      // Data status indicator should be visible
       const marketStatus = page.locator('[data-testid="bottombar-market-status"]');
       await expect(marketStatus).toBeVisible();
 
@@ -341,20 +368,22 @@ test.describe("TV-19: BottomBar Functions", () => {
       expect(text).toMatch(/\d{2}:\d{2}:\d{2}/);
     });
 
-    test("timezone toggle button displays current mode", async ({ page }) => {
+    test("timezone dropdown shows available options", async ({ page }) => {
       const tzToggle = page.locator('[data-testid="bottombar-tz-toggle"]');
       await expect(tzToggle).toBeVisible();
 
       // Should show "UTC" by default
-      let text = await tzToggle.textContent();
-      expect(text).toBe("UTC");
+      await expect(tzToggle).toContainText("UTC");
 
-      // Toggle and verify
+      // Open dropdown
       await tzToggle.click();
       
-      await expect.poll(async () => {
-        return await tzToggle.textContent();
-      }, { timeout: 2000 }).toBe("Local");
+      // All 3 options should be visible
+      const dropdown = page.locator('[data-testid="bottombar-tz-dropdown"]');
+      await expect(dropdown).toBeVisible();
+      await expect(page.locator('[data-testid="bottombar-tz-option-UTC"]')).toBeVisible();
+      await expect(page.locator('[data-testid="bottombar-tz-option-Europe-Stockholm"]')).toBeVisible();
+      await expect(page.locator('[data-testid="bottombar-tz-option-America-New_York"]')).toBeVisible();
     });
   });
 
