@@ -144,6 +144,14 @@ export function BottomBar({
   useEffect(() => {
     const computeSession = () => {
       const now = new Date();
+      
+      // Bail out to "—" if we don't have real-time data (OFFLINE/LOADING)
+      // This avoids showing OPEN/PRE/POST when data is stale
+      if (marketStatus === "OFFLINE" || marketStatus === "LOADING") {
+        setMarketSession("—");
+        return;
+      }
+      
       // Market session hours (simplified, in local exchange time)
       // US markets: 09:30-16:00 ET, pre: 04:00-09:30, post: 16:00-20:00
       // Stockholm: 09:00-17:30 CET
@@ -211,7 +219,7 @@ export function BottomBar({
     computeSession();
     const interval = setInterval(computeSession, 60000); // Update every minute
     return () => clearInterval(interval);
-  }, [exchangeCode]);
+  }, [exchangeCode, marketStatus]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
