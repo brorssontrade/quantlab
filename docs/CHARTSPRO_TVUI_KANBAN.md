@@ -1048,13 +1048,22 @@
 | Status | Task ID | Task | Estimated | Dependencies |
 |--------|---------|------|-----------|---|
 | ✅ DONE | TV-21.1 | Heikin Ashi (transform OHLC → HA + render, 1 test) | 3h | None |
+| 📋 READY | TV-21.2 | Bars (OHLC Bars – native lwcharts bar series) | 1h | TV-21.1 |
+| 📋 READY | TV-21.3 | Hollow Candles (up=hollow, down=filled styling) | 2h | TV-21.2 |
+| 🔮 BACKLOG | TV-21.4 | Renko (time-agnostic transform, box rendering) | 6h | TV-21.3 |
 
 **TV-21.1 DONE 2025-01-12:** Pure transform util `runtime/heikinAshi.ts`, integrated in `applyBaseSeries`, added to `ChartTypeSelector`, `cp21.spec.ts` fixture test (5 bars → exact HA), `dump().ui.chartType` exposes "heikinAshi". Commit `35ab2a2`.
 
-**Total TV-21: 3h (initial)**  
-**Acceptance:** Heikin Ashi chart type funkar, transformation testad med fixture, dump() visar chartType.
+**TV-21.2 Bars:** Minimal risk, high parity-win. LightweightCharts has native bar/ohlc series, no transforms needed. Default stays "candles", dump().ui.chartType updated. 2-3 deterministic tests.
 
-**Future Epics (TV-22.x):** Renko, Kagi, Point & Figure, Line Break, Range charts, Orderflow (Footprint, TPO, Session Volume Profile) – separate backlog.
+**TV-21.3 Hollow Candles:** TradingView-style: up-candles hollow (transparent body + border), down-candles filled. Same data as candles, styling per bar. 2-3 tests verifying chartType + style.
+
+**TV-21.4 Renko:** Larger scope – time-agnostic transform + box rendering. Defer until 21.2/21.3 stable.
+
+**Total TV-21: 12h (expanded)**  
+**Acceptance:** All chart types switch correctly, dump().ui.chartType updated, no timeframe/range side-effects.
+
+**Future Epics (TV-22.x):** Kagi, Point & Figure, Line Break, Range charts, Orderflow (Footprint, TPO, Session Volume Profile) – separate backlog.
 
 ---
 
