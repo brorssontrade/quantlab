@@ -20,6 +20,7 @@ import { ApiStatusBadge } from "./components/ApiStatusBadge";
 import { ModalPortal } from "./components/Modal/ModalPortal";
 import { IndicatorsModal } from "./components/Modal/IndicatorsModal";
 import { TextModal } from "./components/Modal/TextModal";
+import { RenkoSettingsModal } from "./components/Modal/RenkoSettingsModal";
 import { useOhlcvQuery } from "./hooks/useOhlcv";
 import { getLastHealthCheck, setQAForceDataMode } from "./runtime/dataClient";
 import type { LwChartsApi } from "./qaTypes";
@@ -380,6 +381,11 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
   const handleIndicatorsClick = useCallback(() => {
     // Open indicators modal (portal), keep RightPanel as list view
     setModalState({ open: true, kind: "indicators" });
+  }, []);
+
+  // TV-22.0b: Renko settings button opens central modal
+  const handleRenkoSettingsClick = useCallback(() => {
+    setModalState({ open: true, kind: "renkoSettings" });
   }, []);
 
   const handleAlertsClick = useCallback(() => {
@@ -831,6 +837,7 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
             chartType={chartType}
             onChartTypeChange={handleChartTypeChange}
             onSettingsClick={() => setSettingsPanelOpen(true)}
+            onRenkoSettingsClick={handleRenkoSettingsClick}
             onIndicatorsClick={handleIndicatorsClick}
             onAlertsClick={handleAlertsClick}
             onObjectsClick={handleObjectsClick}
@@ -1247,6 +1254,22 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
             }
             setEditingTextId(null);
           }}
+        />
+      </ModalPortal>
+
+      {/* TV-22.0b: Renko settings modal */}
+      <ModalPortal
+        open={modalState.open && modalState.kind === "renkoSettings"}
+        kind="renkoSettings"
+        onClose={() => setModalState({ open: false, kind: null })}
+      >
+        <RenkoSettingsModal
+          settings={renkoSettings}
+          onSave={(next) => {
+            handleRenkoSettingsChange(next);
+            setModalState({ open: false, kind: null });
+          }}
+          onCancel={() => setModalState({ open: false, kind: null })}
         />
       </ModalPortal>
     </div>

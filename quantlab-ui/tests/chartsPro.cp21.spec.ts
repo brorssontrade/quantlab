@@ -880,3 +880,319 @@ test.describe("TV-22.0c: Renko Settings Wiring (Integration)", () => {
     expect(dump.render?.renko?.bricksCount).toBeGreaterThan(0);
   });
 });
+
+/**
+ * TV-22.0b: Renko Settings Modal UI Tests
+ *
+ * Tests for the Renko settings modal behavior:
+ * - Open/close modal via gear button
+ * - Mode switching (auto/fixed)
+ * - Save persists to dump().ui.renko
+ * - Cancel reverts changes
+ * - Esc closes modal
+ */
+test.describe("TV-22.0b: Renko Settings Modal", () => {
+  test("gear button appears when chartType is renko", async ({ page }) => {
+    await gotoChartsPro(page);
+
+    // Gear button should not be visible when chart type is not renko
+    const gearButton = page.getByTestId("renko-settings-open");
+    await expect(gearButton).not.toBeVisible();
+
+    // Switch to renko
+    await page.getByTestId("chart-type-button").click();
+    await page.getByTestId("chart-type-option-renko").click();
+
+    // Wait for chart type to be renko
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.chartType;
+    }, { timeout: 5000 }).toBe("renko");
+
+    // Gear button should now be visible
+    await expect(gearButton).toBeVisible();
+  });
+
+  test("clicking gear button opens renko settings modal", async ({ page }) => {
+    await gotoChartsPro(page);
+
+    // Switch to renko
+    await page.getByTestId("chart-type-button").click();
+    await page.getByTestId("chart-type-option-renko").click();
+
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.chartType;
+    }, { timeout: 5000 }).toBe("renko");
+
+    // Modal should not be visible yet
+    await expect(page.getByTestId("renko-settings-modal")).not.toBeVisible();
+
+    // Click gear button
+    await page.getByTestId("renko-settings-open").click();
+
+    // Modal should be visible
+    await expect(page.getByTestId("renko-settings-modal")).toBeVisible();
+  });
+
+  test("modal shows auto/fixed mode buttons", async ({ page }) => {
+    await gotoChartsPro(page);
+
+    // Switch to renko and open modal
+    await page.getByTestId("chart-type-button").click();
+    await page.getByTestId("chart-type-option-renko").click();
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.chartType;
+    }, { timeout: 5000 }).toBe("renko");
+
+    await page.getByTestId("renko-settings-open").click();
+    await expect(page.getByTestId("renko-settings-modal")).toBeVisible();
+
+    // Mode buttons should be visible
+    await expect(page.getByTestId("renko-settings-mode-auto")).toBeVisible();
+    await expect(page.getByTestId("renko-settings-mode-fixed")).toBeVisible();
+
+    // Save and cancel buttons should be visible
+    await expect(page.getByTestId("renko-settings-save")).toBeVisible();
+    await expect(page.getByTestId("renko-settings-cancel")).toBeVisible();
+  });
+
+  test("switching to fixed mode shows fixed box size input", async ({ page }) => {
+    await gotoChartsPro(page);
+
+    // Switch to renko and open modal
+    await page.getByTestId("chart-type-button").click();
+    await page.getByTestId("chart-type-option-renko").click();
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.chartType;
+    }, { timeout: 5000 }).toBe("renko");
+
+    await page.getByTestId("renko-settings-open").click();
+    await expect(page.getByTestId("renko-settings-modal")).toBeVisible();
+
+    // Switch to fixed mode
+    await page.getByTestId("renko-settings-mode-fixed").click();
+
+    // Fixed box size input should be visible
+    await expect(page.getByTestId("renko-settings-fixed-box-size")).toBeVisible();
+
+    // ATR period input should NOT be visible in fixed mode
+    await expect(page.getByTestId("renko-settings-atr-period")).not.toBeVisible();
+  });
+
+  test("switching to auto mode shows ATR period input", async ({ page }) => {
+    await gotoChartsPro(page);
+
+    // Pre-set to fixed mode via localStorage
+    await page.evaluate(() => {
+      localStorage.setItem("cp.renko", JSON.stringify({
+        mode: "fixed",
+        fixedBoxSize: 2,
+        atrPeriod: 14,
+        autoMinBoxSize: 0.01,
+        rounding: "none"
+      }));
+    });
+
+    await page.reload();
+    await gotoChartsPro(page);
+
+    // Switch to renko and open modal
+    await page.getByTestId("chart-type-button").click();
+    await page.getByTestId("chart-type-option-renko").click();
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.chartType;
+    }, { timeout: 5000 }).toBe("renko");
+
+    await page.getByTestId("renko-settings-open").click();
+    await expect(page.getByTestId("renko-settings-modal")).toBeVisible();
+
+    // Currently should be in fixed mode
+    await expect(page.getByTestId("renko-settings-fixed-box-size")).toBeVisible();
+
+    // Switch to auto mode
+    await page.getByTestId("renko-settings-mode-auto").click();
+
+    // ATR period input should be visible
+    await expect(page.getByTestId("renko-settings-atr-period")).toBeVisible();
+    await expect(page.getByTestId("renko-settings-auto-min-box-size")).toBeVisible();
+
+    // Fixed box size should NOT be visible in auto mode
+    await expect(page.getByTestId("renko-settings-fixed-box-size")).not.toBeVisible();
+  });
+
+  test("Save updates dump().ui.renko and persists to localStorage", async ({ page }) => {
+    await gotoChartsPro(page);
+
+    // Switch to renko
+    await page.getByTestId("chart-type-button").click();
+    await page.getByTestId("chart-type-option-renko").click();
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.chartType;
+    }, { timeout: 5000 }).toBe("renko");
+
+    // Open modal
+    await page.getByTestId("renko-settings-open").click();
+    await expect(page.getByTestId("renko-settings-modal")).toBeVisible();
+
+    // Switch to fixed mode and set box size
+    await page.getByTestId("renko-settings-mode-fixed").click();
+    const boxSizeInput = page.getByTestId("renko-settings-fixed-box-size");
+    await boxSizeInput.fill("3.5");
+
+    // Switch to nice rounding
+    await page.getByTestId("renko-settings-rounding-nice").click();
+
+    // Save
+    await page.getByTestId("renko-settings-save").click();
+
+    // Modal should close
+    await expect(page.getByTestId("renko-settings-modal")).not.toBeVisible();
+
+    // Verify dump().ui.renko is updated
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.renko;
+    }, { timeout: 5000 }).toMatchObject({
+      mode: "fixed",
+      fixedBoxSize: 3.5,
+      rounding: "nice"
+    });
+
+    // Verify localStorage is updated
+    const stored = await page.evaluate(() => {
+      const data = localStorage.getItem("cp.renko");
+      return data ? JSON.parse(data) : null;
+    });
+    expect(stored).toMatchObject({
+      mode: "fixed",
+      fixedBoxSize: 3.5,
+      rounding: "nice"
+    });
+  });
+
+  test("Cancel reverts changes and does not persist", async ({ page }) => {
+    await gotoChartsPro(page);
+
+    // Switch to renko
+    await page.getByTestId("chart-type-button").click();
+    await page.getByTestId("chart-type-option-renko").click();
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.chartType;
+    }, { timeout: 5000 }).toBe("renko");
+
+    // Get initial settings
+    const initialSettings = await page.evaluate(() => {
+      const dump = (window as any).__lwcharts?.dump?.();
+      return dump?.ui?.renko;
+    });
+
+    // Open modal
+    await page.getByTestId("renko-settings-open").click();
+    await expect(page.getByTestId("renko-settings-modal")).toBeVisible();
+
+    // Make some changes
+    await page.getByTestId("renko-settings-mode-fixed").click();
+    await page.getByTestId("renko-settings-fixed-box-size").fill("999");
+    await page.getByTestId("renko-settings-rounding-nice").click();
+
+    // Cancel
+    await page.getByTestId("renko-settings-cancel").click();
+
+    // Modal should close
+    await expect(page.getByTestId("renko-settings-modal")).not.toBeVisible();
+
+    // Settings should be unchanged
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.renko;
+    }, { timeout: 5000 }).toMatchObject(initialSettings);
+  });
+
+  test("Esc key closes modal without saving", async ({ page }) => {
+    await gotoChartsPro(page);
+
+    // Switch to renko
+    await page.getByTestId("chart-type-button").click();
+    await page.getByTestId("chart-type-option-renko").click();
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.chartType;
+    }, { timeout: 5000 }).toBe("renko");
+
+    // Get initial settings
+    const initialSettings = await page.evaluate(() => {
+      const dump = (window as any).__lwcharts?.dump?.();
+      return dump?.ui?.renko;
+    });
+
+    // Open modal
+    await page.getByTestId("renko-settings-open").click();
+    await expect(page.getByTestId("renko-settings-modal")).toBeVisible();
+
+    // Make some changes
+    await page.getByTestId("renko-settings-mode-fixed").click();
+
+    // Press Esc
+    await page.keyboard.press("Escape");
+
+    // Modal should close
+    await expect(page.getByTestId("renko-settings-modal")).not.toBeVisible();
+
+    // Settings should be unchanged
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.renko;
+    }, { timeout: 5000 }).toMatchObject(initialSettings);
+  });
+
+  test("saved settings affect dump().render.renko when in renko mode", async ({ page }) => {
+    await gotoChartsPro(page);
+
+    // Switch to renko
+    await page.getByTestId("chart-type-button").click();
+    await page.getByTestId("chart-type-option-renko").click();
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.chartType;
+    }, { timeout: 5000 }).toBe("renko");
+
+    // Wait for initial render to complete
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.render?.renko?.bricksCount;
+    }, { timeout: 5000 }).toBeGreaterThan(0);
+
+    // Open modal and change to fixed mode with specific box size
+    await page.getByTestId("renko-settings-open").click();
+    await expect(page.getByTestId("renko-settings-modal")).toBeVisible();
+    await page.getByTestId("renko-settings-mode-fixed").click();
+    await page.getByTestId("renko-settings-fixed-box-size").fill("2.5");
+    await page.getByTestId("renko-settings-save").click();
+
+    // Wait for modal to close
+    await expect(page.getByTestId("renko-settings-modal")).not.toBeVisible();
+
+    // Verify dump().ui.renko was updated first (this triggers re-render)
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.renko?.mode;
+    }, { timeout: 5000 }).toBe("fixed");
+
+    // Verify render reflects the new settings
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.render?.renko?.modeUsed;
+    }, { timeout: 5000 }).toBe("fixed");
+
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.render?.renko?.boxSizeUsed;
+    }, { timeout: 5000 }).toBe(2.5);
+  });
+});

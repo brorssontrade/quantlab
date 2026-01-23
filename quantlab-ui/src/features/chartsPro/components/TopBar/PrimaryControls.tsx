@@ -23,6 +23,8 @@ interface PrimaryControlsProps {
   onReload: () => void;
   loading?: boolean;
   onSettingsClick?: () => void;
+  /** TV-22.0b: Callback to open Renko settings modal */
+  onRenkoSettingsClick?: () => void;
 }
 
 export function PrimaryControls({
@@ -35,6 +37,7 @@ export function PrimaryControls({
   onReload,
   loading,
   onSettingsClick,
+  onRenkoSettingsClick,
 }: PrimaryControlsProps) {
   return (
     <div
@@ -66,7 +69,11 @@ export function PrimaryControls({
 
       {/* Chart Type Selector (TV-10.1) */}
       <ToolGroup label="Type" className="md:flex-none">
-        <ChartTypeSelector value={chartType} onChange={onChartTypeChange} />
+        <ChartTypeSelector
+          value={chartType}
+          onChange={onChartTypeChange}
+          onRenkoSettingsClick={onRenkoSettingsClick}
+        />
       </ToolGroup>
 
       {/* Settings Button (TV-10.2) */}

@@ -3590,6 +3590,15 @@ const fitToContent = useCallback(() => {
     });
   }, [chartSettings, chartType, theme, rebindTestApiWithSample]);
 
+  // TV-22.0b: Re-apply base series when renkoSettings change (only in renko mode)
+  useEffect(() => {
+    if (!chartReady || chartType !== "renko") return;
+    const rows = lastLoadedBaseRowsRef.current;
+    if (rows && rows.length > 0) {
+      applyBaseSeries(rows);
+    }
+  }, [chartReady, chartType, renkoSettings, applyBaseSeries]);
+
 
   useEffect(() => {
     if (!chartReady || !chartRef.current) return;

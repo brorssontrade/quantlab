@@ -10,7 +10,7 @@
  */
 
 import { useState, useRef, useEffect } from "react";
-import { BarChart3, CandlestickChart, TrendingUp, AreaChart, Boxes } from "lucide-react";
+import { BarChart3, CandlestickChart, TrendingUp, AreaChart, Boxes, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { type UIChartType } from "../../runtime/seriesFactory";
 
@@ -20,6 +20,8 @@ export type ChartType = UIChartType;
 interface ChartTypeSelectorProps {
   value: ChartType;
   onChange: (type: ChartType) => void;
+  /** TV-22.0b: Callback to open Renko settings modal */
+  onRenkoSettingsClick?: () => void;
 }
 
 const CHART_TYPES: Array<{ value: ChartType; label: string; icon: React.ElementType }> = [
@@ -32,12 +34,13 @@ const CHART_TYPES: Array<{ value: ChartType; label: string; icon: React.ElementT
   { value: "area", label: "Area", icon: AreaChart },
 ];
 
-export function ChartTypeSelector({ value, onChange }: ChartTypeSelectorProps) {
+export function ChartTypeSelector({ value, onChange, onRenkoSettingsClick }: ChartTypeSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const selectedType = CHART_TYPES.find((t) => t.value === value) || CHART_TYPES[0];
   const Icon = selectedType.icon;
+  const isRenko = value === "renko";
 
   // Close dropdown when clicking outside or pressing Esc
   useEffect(() => {
@@ -69,7 +72,7 @@ export function ChartTypeSelector({ value, onChange }: ChartTypeSelectorProps) {
   };
 
   return (
-    <div className="relative" ref={dropdownRef} data-testid="chart-type-selector">
+    <div className="relative flex items-center gap-1" ref={dropdownRef} data-testid="chart-type-selector">
       <Button
         variant="outline"
         size="sm"
@@ -81,6 +84,23 @@ export function ChartTypeSelector({ value, onChange }: ChartTypeSelectorProps) {
         <Icon className="h-3.5 w-3.5" />
         <span className="hidden sm:inline">{selectedType.label}</span>
       </Button>
+
+      {/* TV-22.0b: Renko settings gear button (only when renko is selected) */}
+      {isRenko && onRenkoSettingsClick && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={(e) => {
+            e.stopPropagation();
+            onRenkoSettingsClick();
+          }}
+          className="h-8 w-8 p-0"
+          data-testid="renko-settings-open"
+          title="Renko Settings"
+        >
+          <Settings className="h-3.5 w-3.5" />
+        </Button>
+      )}
 
       {isOpen && (
         <div

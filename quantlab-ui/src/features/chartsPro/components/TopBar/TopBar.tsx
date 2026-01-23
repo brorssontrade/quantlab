@@ -36,6 +36,9 @@ interface TopBarProps {
   // Settings (TV-10.2)
   onSettingsClick?: () => void;
 
+  /** TV-22.0b: Callback to open Renko settings modal */
+  onRenkoSettingsClick?: () => void;
+
   // TV-12: RightPanel actions
   onIndicatorsClick?: () => void;
   onAlertsClick?: () => void;
@@ -78,6 +81,7 @@ export function TopBar({
   chartType,
   onChartTypeChange,
   onSettingsClick,
+  onRenkoSettingsClick,
   onIndicatorsClick,
   onAlertsClick,
   onObjectsClick,
@@ -124,6 +128,7 @@ export function TopBar({
         onReload={onReload}
         loading={loading}
         onSettingsClick={onSettingsClick}
+        onRenkoSettingsClick={onRenkoSettingsClick}
       />
 
       {/* Row 2: Theme + RightPanel Actions + Utilities (responsive wrapping) */}
