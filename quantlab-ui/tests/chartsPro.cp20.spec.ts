@@ -2355,6 +2355,48 @@ test.describe("TV-20: LeftToolbar Tool Groups + Flyout", () => {
   });
 
   // ====================================================================
+  // HOTKEY GUARDRAIL - Prevents future hotkey collisions
+  // ====================================================================
+  test.describe("Hotkey Guardrail", () => {
+    test("all hotkeys map to unique tools (no collisions)", async ({ page }) => {
+      // This test ensures no future regression introduces hotkey collisions
+      // Each key should map to exactly one tool
+      const hotkeyMap: Array<{ key: string; expectedTool: string }> = [
+        { key: "f", expectedTool: "flatTopChannel" },
+        { key: "b", expectedTool: "fibRetracement" },
+        { key: "s", expectedTool: "shortPosition" },
+        { key: "l", expectedTool: "longPosition" },
+        { key: "p", expectedTool: "pitchfork" },
+        { key: "g", expectedTool: "regressionTrend" },
+        { key: "h", expectedTool: "hline" },
+        { key: "v", expectedTool: "vline" },
+        { key: "t", expectedTool: "trendline" },
+        { key: "c", expectedTool: "channel" },
+        { key: "r", expectedTool: "rectangle" },
+        { key: "n", expectedTool: "text" },
+      ];
+
+      for (const { key, expectedTool } of hotkeyMap) {
+        // First reset to select
+        await page.keyboard.press("Escape");
+        await expect.poll(async () => {
+          const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+          return dump?.ui?.activeTool;
+        }, { timeout: 2000 }).toBe("select");
+
+        // Press the hotkey
+        await page.keyboard.press(key);
+
+        // Verify it maps to the expected tool
+        await expect.poll(async () => {
+          const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+          return dump?.ui?.activeTool;
+        }, { timeout: 2000, message: `Hotkey '${key}' should select '${expectedTool}'` }).toBe(expectedTool);
+      }
+    });
+  });
+
+  // ====================================================================
   // TV-20.12: Long Position & Short Position
   // ====================================================================
   test.describe("TV-20.12: Long Position", () => {
