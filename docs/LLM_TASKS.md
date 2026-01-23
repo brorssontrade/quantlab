@@ -109,6 +109,51 @@ export const FIB_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.272, 1.618] 
 
 ---
 
+### 2026-01-23 (TV-20.11a – Regression Trend deterministic tests)
+
+**Status:** ✅ **COMPLETE** (0 skipped, repeat-each=3 flake-free)
+
+**Task Description:** "Gör regressionTrend-testerna deterministiska (0 skipped), utöka dump() contract med beräknade regression-värden."
+
+**Root Cause:** Det ursprungliga drag-testet krävde pixel-precis hit detection för att dra p2-handtaget. Detta är instabilt i automatiserade tester.
+
+**Approach:**
+1. Utöka dump() contract med beräknade regression-värden (slope, intercept, stdev, n, bandK, windowStart, windowEnd)
+2. Ersätt pixel-baserat drag-test med deterministiskt test som verifierar computed values via dump()
+3. Alla assertions använder expect.poll() för flake-free execution
+
+**Extended dump() Contract:**
+```typescript
+{
+  type: "regressionTrend",
+  p1: { timeMs: number, price: number },
+  p2: { timeMs: number, price: number },
+  points: [p1, p2],
+  n: number,           // bars in regression window
+  slope: number,       // linear regression slope
+  intercept: number,   // regression y-intercept (price at x=0)
+  stdev: number,       // standard deviation of residuals
+  bandK: 2,            // band multiplier (±2σ)
+  windowStart: number, // min(p1.timeMs, p2.timeMs)
+  windowEnd: number    // max(p1.timeMs, p2.timeMs)
+}
+```
+
+**Files Changed:**
+- `quantlab-ui/src/features/chartsPro/components/ChartViewport.tsx` (extended dump() contract)
+- `quantlab-ui/tests/chartsPro.cp20.spec.ts` (replaced skip with deterministic test)
+
+**Test Results & Gates:**
+- npm build ✅ (2473 modules)
+- chartsPro.cp20 Regression ✅ **12/12 (4×3 repeat-each) 0 SKIPPED**
+- tvParity ✅ (35/35 passed)
+- tvUI ✅ (169/171 passed, 2 pre-existing skipped)
+
+**Commits:**
+- `e13d769` fix(frontend): TV-20.11a Regression Trend deterministic tests
+
+---
+
 ### 2026-01-25 (TV-20.11 – Regression Trend Channel)
 
 **Status:** ✅ **COMPLETE** (Linear regression channel with ±2σ bands)

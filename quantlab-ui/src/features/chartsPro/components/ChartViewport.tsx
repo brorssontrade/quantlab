@@ -825,6 +825,9 @@ const overlayCanvasClassName = "chartspro-overlay__canvas absolute inset-0";
         case "f":
           nextTool = "flatTopChannel";
           break;
+        case "b":
+          nextTool = "fibRetracement";
+          break;
         case "g":
           nextTool = "regressionTrend";
           break;
