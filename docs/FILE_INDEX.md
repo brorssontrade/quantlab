@@ -121,7 +121,7 @@
 | `features/chartsPro/components/Watermark.tsx` | **Day 10: Symbol watermark** | Watermark |
 | `features/chartsPro/hooks/` | Custom hooks | useOhlcv, useIndicators |
 | `features/chartsPro/state/` | State management | controls, drawings |
-| `features/chartsPro/types.ts` | **TV-7+TV-20.3: Type definitions, DrawingKind, TextDrawing, IndicatorInstance** | DrawingKind, TextDrawing, IndicatorInstance |
+| `features/chartsPro/types.ts` | **TV-7+TV-20: Type definitions, DrawingKind (hline, vline, trend, channel, pitchfork, rectangle, text, priceRange, dateRange, dateAndPriceRange, fibRetracement), IndicatorInstance** | DrawingKind, Drawing, Pitchfork, Channel, TextDrawing, IndicatorInstance |
 | `features/chartsPro/indicators/` | Technical indicators | SMA, EMA |
 | `features/chartsPro/theme.ts` | Chart theming (TradingView-style colors Day 10) | - |
 | `features/fundamentals/` | Fundamentals tab | FundamentalsTab |
@@ -447,3 +447,23 @@ Scheduler
 2. Update this index
 3. Update `docs/LLM.md` references
 4. Run tests to catch broken imports
+
+---
+
+## QA API: dump().objects Contract (TV-20)
+
+Drawing objects exposed via `window.__lwcharts.dump().objects`:
+
+| type | points | extra fields |
+|------|--------|--------------|
+| `hline` | `[{ price }]` | - |
+| `vline` | `[{ timeMs }]` | - |
+| `trend` | `[p1, p2]` | - |
+| `rectangle` | `[p1, p2]` | `p1, p2` |
+| `text` | `[{ timeMs, price }]` | `content, anchor` |
+| `channel` | `[p1, p2, p3]` | `p1, p2, p3` |
+| `pitchfork` | `[p1, p2, p3]` | `p1, p2, p3` |
+| `priceRange` | `[p1, p2]` | `deltaPrice, deltaPercent` |
+| `dateRange` | `[p1, p2]` | `deltaMs, deltaDays` |
+| `dateAndPriceRange` | `[p1, p2]` | `deltaPrice, deltaPercent, deltaMs, deltaDays` |
+| `fibRetracement` | `[p1, p2]` | `levels: [{ratio, price}, ...]` |
