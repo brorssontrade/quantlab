@@ -15,7 +15,7 @@ import {
   type Time,
   type TimeRange,
 } from "@/lib/lightweightCharts";
-import { createBaseSeries, type ChartType as FactoryChartType, type BaseSeriesApi } from "../runtime/seriesFactory";
+import { createBaseSeries, type ChartType, type UIChartType, type BaseSeriesApi } from "../runtime/seriesFactory";
 import { transformOhlcToHeikinAshi } from "../runtime/heikinAshi";
 import { transformOhlcToRenko, renkoToLwCandlestick, suggestBoxSize } from "../runtime/renko";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -347,8 +347,8 @@ const installLwChartsStub = () => {
 
 installLwChartsStub();
 
-
-type ChartTypeProp = "candles" | "bars" | "hollowCandles" | "line" | "area" | "heikinAshi" | "renko";
+// TV-21.4a: Use UIChartType from seriesFactory (single source of truth)
+type ChartTypeProp = UIChartType;
 
 interface ChartViewportProps {
   apiBase: string;
@@ -3259,7 +3259,8 @@ const fitToContent = useCallback(() => {
       },
     });
 
-    const targetType: FactoryChartType = chartType as FactoryChartType;
+    // TV-21.4a: chartType is now UIChartType which is a subset of ChartType - no cast needed
+    const targetType: ChartType = chartType;
     const needsNewSeries = !candleSeriesRef.current || baseSeriesTypeRef.current !== chartType;
 
     if (needsNewSeries) {

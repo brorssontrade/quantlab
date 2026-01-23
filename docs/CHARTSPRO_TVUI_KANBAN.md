@@ -1070,7 +1070,14 @@
 - 8 new tests (5 unit + 3 integration)
 - Gates: build ✅ | cp21 20/20 ✅ | tvParity 35/35 ✅
 
-**Total TV-21: COMPLETE**  
+**TV-21.4a DONE 2025-01-23:** Type/plumbing hardening:
+- Single source of truth: `UIChartType` in seriesFactory.ts
+- ChartTypeSelector imports from seriesFactory
+- ChartViewport uses `UIChartType`, eliminated `as FactoryChartType` cast
+- Added `isUIChartType()` type guard
+- Gates: build ✅ | cp21 repeat-each=3 60/60 ✅ | tvParity 35/35 ✅
+
+**Total TV-21: COMPLETE + HARDENED**  
 **Acceptance:** All chart types switch correctly, dump().ui.chartType updated, no timeframe/range side-effects.
 
 **Future Epics (TV-22.x):** Kagi, Point & Figure, Line Break, Range charts, Orderflow (Footprint, TPO, Session Volume Profile) – separate backlog.

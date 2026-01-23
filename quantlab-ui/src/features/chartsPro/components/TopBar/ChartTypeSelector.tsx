@@ -12,8 +12,10 @@
 import { useState, useRef, useEffect } from "react";
 import { BarChart3, CandlestickChart, TrendingUp, AreaChart, Boxes } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { type UIChartType } from "../../runtime/seriesFactory";
 
-export type ChartType = "candles" | "bars" | "hollowCandles" | "line" | "area" | "heikinAshi" | "renko";
+// Re-export for backwards compatibility
+export type ChartType = UIChartType;
 
 interface ChartTypeSelectorProps {
   value: ChartType;

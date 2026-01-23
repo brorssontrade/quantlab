@@ -1,3 +1,28 @@
+### 2025-01-23 (TV-21.4a Type/Plumbing Hardening)
+
+**Status:** ✅ **COMPLETE** (single source of truth for ChartType)
+
+**Task Description:** "Mini-audit: eliminate duplicate ChartType definitions, remove 'as' casts, verify renko integration."
+
+**Implementation:**
+1. **Single source of truth:** Created `UIChartType` in seriesFactory.ts (subset of full `ChartType`)
+2. **ChartTypeSelector:** Now imports from seriesFactory (re-exports for backwards compat)
+3. **ChartViewport:** Uses `UIChartType` alias, removed `as FactoryChartType` cast
+4. **Type guard:** Added `isUIChartType()` for runtime validation
+5. **Verification:** Renko integration confirmed working, baseSeriesOptions already minimal (6 fields)
+
+**Files Changed:**
+- `quantlab-ui/src/features/chartsPro/runtime/seriesFactory.ts` (+UIChartType, +isUIChartType)
+- `quantlab-ui/src/features/chartsPro/components/TopBar/ChartTypeSelector.tsx` (import from seriesFactory)
+- `quantlab-ui/src/features/chartsPro/components/ChartViewport.tsx` (use UIChartType, remove cast)
+
+**Test Results & Gates:**
+- npm build ✅ (2475 modules)
+- chartsPro.cp21 repeat-each=3 ✅ **60/60 passed** (0 flakes)
+- tvParity ✅ **35/35 passed**
+
+---
+
 ### 2025-01-23 (TV-21.4 Renko + TV-21.3b Style Verification)
 
 **Status:** ✅ **COMPLETE** (TV-21 chart types fully done!)

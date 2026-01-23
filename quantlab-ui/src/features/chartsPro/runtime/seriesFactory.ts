@@ -14,6 +14,9 @@
 
 import type { IChartApi, ISeriesApi } from '@/lib/lightweightCharts';
 
+/**
+ * Full set of chart types supported by seriesFactory
+ */
 export type ChartType =
   | 'bars'
   | 'candles'
@@ -26,6 +29,24 @@ export type ChartType =
   | 'columns'
   | 'heikinAshi'
   | 'renko';
+
+/**
+ * TV-21.4a: UI-exposed chart types (subset of ChartType)
+ * Single source of truth for ChartTypeSelector and ChartViewport
+ */
+export type UIChartType = 
+  | 'candles' 
+  | 'bars' 
+  | 'hollowCandles' 
+  | 'line' 
+  | 'area' 
+  | 'heikinAshi' 
+  | 'renko';
+
+/** Type guard to check if a ChartType is a valid UIChartType */
+export function isUIChartType(type: string): type is UIChartType {
+  return ['candles', 'bars', 'hollowCandles', 'line', 'area', 'heikinAshi', 'renko'].includes(type);
+}
 
 export type BaseSeriesApi =
   | ISeriesApi<'Bar'>
