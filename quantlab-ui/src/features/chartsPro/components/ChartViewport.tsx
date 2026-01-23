@@ -26,6 +26,7 @@ import type { ChartMeta, Drawing, IndicatorInstance, NormalizedBar, RawOhlcvRow,
 import { indicatorDisplayName, indicatorParamsSummary, normalizeRows } from "../types";
 import { useChartControls, TIMEFRAME_OPTIONS } from "../state/controls";
 import type { ChartSettings } from "./TopBar/SettingsPanel";
+import type { RenkoSettings } from "../ChartsProTab";
 import { applyChartLevelSettings, applySeriesSettings, createAppliedSnapshot, type AppliedSettingsSnapshot } from "../utils/applyChartSettings";
 import {
   colorFor,
@@ -360,6 +361,8 @@ interface ChartViewportProps {
   timeframe: Tf;
   chartType?: ChartTypeProp;
   chartSettings?: ChartSettings;
+  /** TV-22.0a: Renko settings (mode, boxSize, atrPeriod, etc.) */
+  renkoSettings?: RenkoSettings;
   /** TV-19.4: Price scale mode controlled by BottomBar (auto/log/percent) */
   priceScaleMode?: "auto" | "log" | "percent";
   drawings: Drawing[];
@@ -417,6 +420,7 @@ export function ChartViewport({
   timeframe,
   chartType = "candles",
   chartSettings,
+  renkoSettings,
   priceScaleMode = "auto",
   drawings,
   selectedId,
@@ -508,6 +512,8 @@ export function ChartViewport({
   const modalOpenRef = useRef(modalOpen);
   const modalKindRef = useRef<string | null>(modalKind ?? null);
   const chartSettingsRef = useRef<ChartSettings | undefined>(chartSettings);
+  // TV-22.0a: Renko settings ref for dump()
+  const renkoSettingsRef = useRef<RenkoSettings | undefined>(renkoSettings);
   const appliedSettingsRef = useRef<AppliedSettingsSnapshot | null>(null); // TV-10.3: Track applied settings
   const timeframeRef = useRef<string>(timeframe); // TV-11: Track current timeframe for dump()
   workspaceModeRef.current = workspaceMode;
@@ -518,6 +524,7 @@ export function ChartViewport({
   modalKindRef.current = modalKind ?? null; // TV-18.1
   chartTypeRef.current = chartType; // Sync current chartType prop to ref for dump()
   chartSettingsRef.current = chartSettings; // Sync settings for dump()
+  renkoSettingsRef.current = renkoSettings; // TV-22.0a: Sync renko settings for dump()
   timeframeRef.current = timeframe; // Sync timeframe for dump()
   const seriesPointCountsRef = useRef<{ price: number; volume: number; compares: Record<string, number> }>({
     price: 0,
@@ -2195,6 +2202,8 @@ const fitToContent = useCallback(() => {
             chartType: chartTypeRef.current,
             timeframe: timeframeRef.current, // TV-11: Expose current timeframe
             settings: chartSettingsRef.current ?? null,
+            // TV-22.0a: Expose Renko settings for testing
+            renko: renkoSettingsRef.current ?? null,
             inspectorOpen,
             inspectorTab,
             compareScaleMode,

@@ -23,6 +23,7 @@ import { TextModal } from "./components/Modal/TextModal";
 import { useOhlcvQuery } from "./hooks/useOhlcv";
 import { getLastHealthCheck, setQAForceDataMode } from "./runtime/dataClient";
 import type { LwChartsApi } from "./qaTypes";
+import { type UIChartType } from "./runtime/seriesFactory";
 import {
   DEFAULT_SYMBOL,
   DEFAULT_THEME,
@@ -84,12 +85,32 @@ const LAYOUT_KEY = "cp.layout";
 const WORKSPACE_KEY = "cp.workspace";
 const CHART_TYPE_KEY = "cp.chart.type";
 const SETTINGS_KEY_PREFIX = "cp.settings";
+const RENKO_SETTINGS_KEY = "cp.renko";
 
 type PersistedLayout = { symbol: string; timeframe: ChartTimeframe; theme: ChartThemeName };
 type WorkspaceLayout = { mode: boolean; sidebarCollapsed: boolean; sidebarWidth: number };
 
-type ChartType = "candles" | "bars" | "line" | "area";
+// TV-22.0a: Use UIChartType from seriesFactory (single source of truth)
+type ChartType = UIChartType;
 const DEFAULT_CHART_TYPE: ChartType = "candles";
+const VALID_CHART_TYPES: ChartType[] = ["candles", "bars", "hollowCandles", "line", "area", "heikinAshi", "renko"];
+
+// TV-22.0a: Renko settings model
+export interface RenkoSettings {
+  mode: "auto" | "fixed";
+  fixedBoxSize: number;
+  atrPeriod: number;
+  autoMinBoxSize: number;
+  rounding: "none" | "nice";
+}
+
+export const DEFAULT_RENKO_SETTINGS: RenkoSettings = {
+  mode: "auto",
+  fixedBoxSize: 1,
+  atrPeriod: 14,
+  autoMinBoxSize: 0.01,
+  rounding: "none",
+};
 
 function loadChartType(): ChartType {
   if (typeof window === "undefined" || typeof window.localStorage === "undefined") {
@@ -97,8 +118,7 @@ function loadChartType(): ChartType {
   }
   try {
     const stored = window.localStorage.getItem(CHART_TYPE_KEY);
-    const validTypes: ChartType[] = ["candles", "bars", "line", "area"];
-    if (stored && validTypes.includes(stored as ChartType)) {
+    if (stored && VALID_CHART_TYPES.includes(stored as ChartType)) {
       return stored as ChartType;
     }
     return DEFAULT_CHART_TYPE;
@@ -111,6 +131,46 @@ function persistChartType(type: ChartType) {
   if (typeof window === "undefined" || typeof window.localStorage === "undefined") return;
   try {
     window.localStorage.setItem(CHART_TYPE_KEY, type);
+  } catch {
+    // ignore quota errors
+  }
+}
+
+// TV-22.0a: Load Renko settings from localStorage
+function loadRenkoSettings(): RenkoSettings {
+  if (typeof window === "undefined" || typeof window.localStorage === "undefined") {
+    return DEFAULT_RENKO_SETTINGS;
+  }
+  try {
+    const stored = window.localStorage.getItem(RENKO_SETTINGS_KEY);
+    if (!stored) return DEFAULT_RENKO_SETTINGS;
+    const parsed = JSON.parse(stored);
+    // Validate and merge with defaults
+    return {
+      mode: parsed.mode === "auto" || parsed.mode === "fixed" ? parsed.mode : DEFAULT_RENKO_SETTINGS.mode,
+      fixedBoxSize: typeof parsed.fixedBoxSize === "number" && parsed.fixedBoxSize > 0 
+        ? parsed.fixedBoxSize 
+        : DEFAULT_RENKO_SETTINGS.fixedBoxSize,
+      atrPeriod: typeof parsed.atrPeriod === "number" && parsed.atrPeriod > 0 && Number.isInteger(parsed.atrPeriod)
+        ? parsed.atrPeriod
+        : DEFAULT_RENKO_SETTINGS.atrPeriod,
+      autoMinBoxSize: typeof parsed.autoMinBoxSize === "number" && parsed.autoMinBoxSize > 0
+        ? parsed.autoMinBoxSize
+        : DEFAULT_RENKO_SETTINGS.autoMinBoxSize,
+      rounding: parsed.rounding === "none" || parsed.rounding === "nice"
+        ? parsed.rounding
+        : DEFAULT_RENKO_SETTINGS.rounding,
+    };
+  } catch {
+    return DEFAULT_RENKO_SETTINGS;
+  }
+}
+
+// TV-22.0a: Persist Renko settings to localStorage
+function persistRenkoSettings(settings: RenkoSettings) {
+  if (typeof window === "undefined" || typeof window.localStorage === "undefined") return;
+  try {
+    window.localStorage.setItem(RENKO_SETTINGS_KEY, JSON.stringify(settings));
   } catch {
     // ignore quota errors
   }
@@ -239,6 +299,8 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
   const [themeName, setThemeNameState] = useState<ChartThemeName>(() => loadLayout()?.theme ?? DEFAULT_THEME);
   const [chartType, setChartTypeState] = useState<ChartType>(() => loadChartType());
   const [settings, setSettings] = useState<ChartSettings>(() => loadSettings());
+  // TV-22.0a: Renko settings state with localStorage persistence
+  const [renkoSettings, setRenkoSettingsState] = useState<RenkoSettings>(() => loadRenkoSettings());
   const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
   const [layoutManagerOpen, setLayoutManagerOpen] = useState(false);
   // TV-19.3: Timezone ID (IANA format) - controlled by ChartsProTab, passed to BottomBar
@@ -405,6 +467,12 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
   const handleChartTypeChange = useCallback((next: ChartType) => {
     setChartTypeState(next);
     persistChartType(next);
+  }, []);
+
+  // TV-22.0a: Renko settings change handler with persistence
+  const handleRenkoSettingsChange = useCallback((next: RenkoSettings) => {
+    setRenkoSettingsState(next);
+    persistRenkoSettings(next);
   }, []);
 
   const toggleWorkspaceMode = useCallback(() => {
@@ -882,6 +950,7 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
                   timeframe={timeframe as Tf}
                   chartType={chartType}
                   chartSettings={settings}
+                  renkoSettings={renkoSettings}
                   priceScaleMode={scaleMode}
                   drawings={drawingsStore.drawings}
                   selectedId={drawingsStore.selectedId}

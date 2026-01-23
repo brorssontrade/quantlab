@@ -447,3 +447,121 @@ test.describe("TV-21.4: Renko Integration", () => {
     }).toBe("candles");
   });
 });
+
+/**
+ * TV-22.0a: Renko Settings State + Persistence
+ *
+ * Tests:
+ * - dump().ui.renko exposes current settings
+ * - Default settings match expected defaults
+ * - Settings persist to localStorage (integration)
+ */
+test.describe("TV-22.0a: Renko Settings State", () => {
+  test("dump().ui.renko exposes default settings", async ({ page }) => {
+    // Clear localStorage and navigate
+    await page.addInitScript(() => {
+      localStorage.removeItem("cp.renko");
+    });
+    await gotoChartsPro(page, { mock: true });
+    await page.waitForSelector('[data-testid="tv-chart-root"]');
+
+    // Wait for chart to be ready
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.chartType;
+    }, { timeout: 5000 }).toBe("candles");
+
+    // Check renko settings are exposed in dump
+    const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+    expect(dump?.ui?.renko).toBeDefined();
+    expect(dump.ui.renko).toMatchObject({
+      mode: "auto",
+      fixedBoxSize: 1,
+      atrPeriod: 14,
+      autoMinBoxSize: 0.01,
+      rounding: "none",
+    });
+  });
+
+  test("renko settings default behavior unchanged for users who never customize", async ({ page }) => {
+    // Clear localStorage and navigate
+    await page.addInitScript(() => {
+      localStorage.removeItem("cp.renko");
+    });
+    await gotoChartsPro(page, { mock: true });
+    await page.waitForSelector('[data-testid="tv-chart-root"]');
+
+    // Switch to Renko chart type
+    const chartTypeBtn = page.locator('[data-testid="chart-type-button"]');
+    await chartTypeBtn.click();
+    await page.locator('[data-testid="chart-type-option-renko"]').click();
+
+    // Wait for Renko chart
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.chartType;
+    }, { timeout: 5000 }).toBe("renko");
+
+    // Settings should still be defaults (mode: auto)
+    const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+    expect(dump.ui.renko?.mode).toBe("auto");
+    
+    // Chart should render with auto box size (bricks > 0)
+    expect(dump.render?.pricePoints).toBeGreaterThan(0);
+  });
+
+  test("localStorage cp.renko persists settings on reload", async ({ page }) => {
+    // Pre-seed localStorage with custom settings BEFORE any navigation
+    await page.addInitScript(() => {
+      localStorage.setItem("cp.renko", JSON.stringify({
+        mode: "fixed",
+        fixedBoxSize: 2.5,
+        atrPeriod: 20,
+        autoMinBoxSize: 0.05,
+        rounding: "nice",
+      }));
+    });
+
+    // Navigate to chart
+    await gotoChartsPro(page, { mock: true });
+    await page.waitForSelector('[data-testid="tv-chart-root"]');
+
+    // Wait for chart to be ready
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.chartType;
+    }, { timeout: 5000 }).toBe("candles");
+
+    // Check persisted settings are loaded
+    const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+    expect(dump.ui.renko).toMatchObject({
+      mode: "fixed",
+      fixedBoxSize: 2.5,
+      atrPeriod: 20,
+      autoMinBoxSize: 0.05,
+      rounding: "nice",
+    });
+  });
+
+  test("invalid localStorage falls back to defaults", async ({ page }) => {
+    // Set invalid renko settings BEFORE navigation
+    await page.addInitScript(() => {
+      localStorage.setItem("cp.renko", "not-valid-json{{{");
+    });
+
+    // Navigate to chart
+    await gotoChartsPro(page, { mock: true });
+    await page.waitForSelector('[data-testid="tv-chart-root"]');
+
+    // Wait for chart to be ready
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.chartType;
+    }, { timeout: 5000 }).toBe("candles");
+
+    // Should fall back to defaults
+    const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+    expect(dump.ui.renko?.mode).toBe("auto");
+    expect(dump.ui.renko?.fixedBoxSize).toBe(1);
+  });
+});
