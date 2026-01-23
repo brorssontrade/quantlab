@@ -1,3 +1,49 @@
+### 2025-01-12 (TV-21.1 – Heikin Ashi Chart Type)
+
+**Status:** ✅ **COMPLETE** (transform util, ChartTypeSelector integration, fixture test)
+
+**Task Description:** "Implementera Heikin Ashi chart type med ren transform util, testad med fixture data, dump().ui.chartType visar 'heikinAshi'."
+
+**Implementation:**
+1. **Created pure transform util** `runtime/heikinAshi.ts` - unit-testable without UI
+2. **Formula:** HA_Close = (O+H+L+C)/4, HA_Open = (prevHA_Open+prevHA_Close)/2, HA_High = max(), HA_Low = min()
+3. **Integrated transform** in ChartViewport.tsx `applyBaseSeries` when `chartType === "heikinAshi"`
+4. **Added heikinAshi option** to TopBar/ChartTypeSelector.tsx (between Bars and Line)
+5. **dump().ui.chartType** exposes "heikinAshi" when selected, stays "candles" by default (tvParity stable)
+6. **cp21.spec.ts fixture test**: 5 OHLC bars → exact HA values, verified with toBeCloseTo(4 decimals)
+
+**Files Created/Changed:**
+- `quantlab-ui/src/features/chartsPro/runtime/heikinAshi.ts` (NEW - 85 lines)
+- `quantlab-ui/src/features/chartsPro/components/ChartViewport.tsx` (+HA transform in applyBaseSeries)
+- `quantlab-ui/src/features/chartsPro/components/TopBar/ChartTypeSelector.tsx` (+heikinAshi type)
+- `quantlab-ui/tests/chartsPro.cp21.spec.ts` (NEW - 5 tests)
+
+**Test Results & Gates:**
+- npm build ✅ (2474 modules)
+- chartsPro.cp21 ✅ **5/5 passed**
+- tvUI+tvParity ✅ **50/50 passed** (default chartType unchanged)
+
+**Commits:**
+- `35ab2a2` feat(chartspro): TV-21.1 Heikin Ashi chart type
+
+---
+
+### 2025-01-12 (Hotkey Guardrail Test)
+
+**Status:** ✅ **COMPLETE** (prevent future collisions)
+
+**Task Description:** "Lägg till guardrail-test som trycker F/B/S/L/P/G/H/V/T/C/R/N och verifierar att varje hotkey mappar till ett unikt tool."
+
+**Implementation:**
+- Added test to chartsPro.cp20.spec.ts that iterates over all 12 defined hotkeys
+- Asserts each hotkey produces a different activeTool value
+- Prevents accidental hotkey collision regressions
+
+**Commits:**
+- `3f7d660` test(chartspro): add hotkey guardrail test
+
+---
+
 ### 2026-01-23 (TV-20.12b – Short Position tool)
 
 **Status:** ✅ **COMPLETE** (3-click workflow, inverted semantics from Long, risk/reward calculation)

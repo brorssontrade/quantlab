@@ -1047,7 +1047,9 @@
 
 | Status | Task ID | Task | Estimated | Dependencies |
 |--------|---------|------|-----------|---|
-| 📋 READY | TV-21.1 | Heikin Ashi (transform OHLC → HA + render, 1 test) | 3h | None |
+| ✅ DONE | TV-21.1 | Heikin Ashi (transform OHLC → HA + render, 1 test) | 3h | None |
+
+**TV-21.1 DONE 2025-01-12:** Pure transform util `runtime/heikinAshi.ts`, integrated in `applyBaseSeries`, added to `ChartTypeSelector`, `cp21.spec.ts` fixture test (5 bars → exact HA), `dump().ui.chartType` exposes "heikinAshi". Commit `35ab2a2`.
 
 **Total TV-21: 3h (initial)**  
 **Acceptance:** Heikin Ashi chart type funkar, transformation testad med fixture, dump() visar chartType.
