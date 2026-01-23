@@ -45,7 +45,7 @@ export interface OhlcvResponse {
   meta?: Record<string, unknown>;
 }
 
-export type DrawingKind = "hline" | "vline" | "trend" | "channel" | "rectangle" | "text" | "priceRange" | "dateRange" | "dateAndPriceRange";
+export type DrawingKind = "hline" | "vline" | "trend" | "channel" | "rectangle" | "text" | "priceRange" | "dateRange" | "dateAndPriceRange" | "fibRetracement";
 
 export interface DrawingStyle {
   color: string;
@@ -137,7 +137,17 @@ export interface DateAndPriceRange extends DrawingBase {
   p2: TrendPoint; // End point
 }
 
-export type Drawing = HLine | VLine | Trend | Channel | Rectangle | TextDrawing | PriceRange | DateRange | DateAndPriceRange;
+/** Fibonacci Retracement - key levels between two price points */
+export interface FibRetracement extends DrawingBase {
+  kind: "fibRetracement";
+  p1: TrendPoint; // Start point (usually swing low/high)
+  p2: TrendPoint; // End point (usually swing high/low)
+}
+
+/** Standard Fibonacci ratios for retracement levels */
+export const FIB_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.272, 1.618] as const;
+
+export type Drawing = HLine | VLine | Trend | Channel | Rectangle | TextDrawing | PriceRange | DateRange | DateAndPriceRange | FibRetracement;
 
 export interface CompareSeriesConfig {
   id: string;

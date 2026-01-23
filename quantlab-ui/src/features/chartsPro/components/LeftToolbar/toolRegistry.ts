@@ -96,7 +96,7 @@ export const TOOL_GROUPS: ToolGroup[] = [
     label: "Fibonacci",
     icon: "🔢",
     tools: [
-      { id: "fibRetracement", label: "Fib Retracement", icon: "⧗", status: "disabled", tooltip: "Coming soon" },
+      { id: "fibRetracement", label: "Fib Retracement", icon: "⧗", shortcut: "F", status: "enabled", tooltip: "Fibonacci retracement levels" },
       { id: "fibExtension", label: "Fib Extension", icon: "⧕", status: "disabled", tooltip: "Coming soon" },
       { id: "fibFan", label: "Fib Fan", icon: "⫿", status: "disabled", tooltip: "Coming soon" },
     ],

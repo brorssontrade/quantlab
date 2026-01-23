@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { BusinessDay, IChartApi, ISeriesApi, SeriesType, UTCTimestamp } from "@/lib/lightweightCharts";
 
-import type { DateAndPriceRange, DateRange, Drawing, DrawingKind, NormalizedBar, PriceRange, Tf, Trend } from "../types";
+import type { DateAndPriceRange, DateRange, Drawing, DrawingKind, FibRetracement, NormalizedBar, PriceRange, Tf, Trend } from "../types";
+import { FIB_LEVELS } from "../types";
 import { describeTrend, tsMsToUtc } from "../types";
 import type { Tool } from "../state/controls";
 import { useOverlayCanvas } from "./overlayCanvasContext";
@@ -41,7 +42,8 @@ type DrawingGeometry =
   | { kind: "text"; x: number; y: number; width: number; height: number; content: string }
   | { kind: "priceRange"; segment: SegmentGeometry; deltaPrice: number; deltaPercent: number }
   | { kind: "dateRange"; segment: SegmentGeometry; deltaMs: number; barsCount: number }
-  | { kind: "dateAndPriceRange"; segment: SegmentGeometry; deltaPrice: number; deltaPercent: number; deltaMs: number; barsCount: number };
+  | { kind: "dateAndPriceRange"; segment: SegmentGeometry; deltaPrice: number; deltaPercent: number; deltaMs: number; barsCount: number }
+  | { kind: "fibRetracement"; segment: SegmentGeometry; levels: Array<{ ratio: number; price: number; y: number }> };
 
 type PointerState =
   | { mode: "idle" }
@@ -58,6 +60,7 @@ const COLORS: Record<Drawing["kind"], string> = {
   priceRange: "#06b6d4", // cyan for measure tools
   dateRange: "#06b6d4", // cyan for measure tools
   dateAndPriceRange: "#06b6d4", // cyan for combined measure tool
+  fibRetracement: "#f59e0b", // amber for fibonacci tools
 };
 
 const HIT_TOLERANCE = 8;
@@ -300,6 +303,9 @@ export function DrawingLayer({
           break;
         case "dateAndPriceRange":
           drawDateAndPriceRange(ctx, drawing as DateAndPriceRange, geometry, selectedId === drawing.id, colors, timeframe);
+          break;
+        case "fibRetracement":
+          drawFibRetracement(ctx, drawing as FibRetracement, geometry, selectedId === drawing.id, colors);
           break;
         default:
           break;
@@ -626,6 +632,29 @@ export function DrawingLayer({
             }
             break;
           }
+          case "fibRetracement": {
+            const { segment, levels } = geometry;
+            // Check endpoint handles first (p1, p2)
+            if (distance(point.x, point.y, segment.x1, segment.y1) <= HANDLE_RADIUS + 2) {
+              return { drawing, handle: "p1" };
+            }
+            if (distance(point.x, point.y, segment.x2, segment.y2) <= HANDLE_RADIUS + 2) {
+              return { drawing, handle: "p2" };
+            }
+            // Check if click is on any level line (horizontal lines at each fib level)
+            for (const level of levels) {
+              if (Math.abs(point.y - level.y) <= HIT_TOLERANCE &&
+                  point.x >= Math.min(segment.x1, segment.x2) - HIT_TOLERANCE &&
+                  point.x <= Math.max(segment.x1, segment.x2) + HIT_TOLERANCE) {
+                return { drawing, handle: "line" };
+              }
+            }
+            // Check the diagonal trend line between p1 and p2
+            if (distanceToSegment(point.x, point.y, segment) <= HIT_TOLERANCE) {
+              return { drawing, handle: "line" };
+            }
+            break;
+          }
           default:
             break;
         }
@@ -828,6 +857,26 @@ export function DrawingLayer({
           requestRender();
           break;
         }
+        case "fibRetracement": {
+          const drawing: Drawing = {
+            id: createId(),
+            kind: "fibRetracement",
+            symbol,
+            tf: timeframe,
+            p1: { timeMs: point.timeMs, price: point.price },
+            p2: { timeMs: point.timeMs, price: point.price },
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            z: Date.now(),
+            style: { color: COLORS.fibRetracement, width: 1 },
+          };
+          pushDraft(drawing);
+          pointerState.current = { mode: "drawing", id: drawing.id, kind: "fibRetracement" };
+          draftIdRef.current = drawing.id;
+          pendingCommitRef.current = true;
+          requestRender();
+          break;
+        }
         default:
           break;
       }
@@ -888,6 +937,13 @@ export function DrawingLayer({
           };
           pushDraft(next, { transient: true, select: false });
         } else if (drawing.kind === "dateAndPriceRange") {
+          const next: Drawing = {
+            ...drawing,
+            p2: { timeMs: targetPoint.timeMs, price: targetPoint.price },
+            updatedAt: Date.now(),
+          };
+          pushDraft(next, { transient: true, select: false });
+        } else if (drawing.kind === "fibRetracement") {
           const next: Drawing = {
             ...drawing,
             p2: { timeMs: targetPoint.timeMs, price: targetPoint.price },
@@ -1081,6 +1137,33 @@ export function DrawingLayer({
           }
           case "dateAndPriceRange": {
             // dateAndPriceRange: drag p1 or p2 endpoints, or move whole measurement
+            if (state.handle === "p1") {
+              pushDraft({
+                ...drawing,
+                p1: { timeMs: targetPoint.timeMs, price: targetPoint.price },
+                updatedAt: Date.now(),
+              }, { transient: true, select: false });
+            } else if (state.handle === "p2") {
+              pushDraft({
+                ...drawing,
+                p2: { timeMs: targetPoint.timeMs, price: targetPoint.price },
+                updatedAt: Date.now(),
+              }, { transient: true, select: false });
+            } else if (state.handle === "line" && pointerOrigin.current) {
+              const dt = targetPoint.timeMs - pointerOrigin.current.timeMs;
+              const dp = targetPoint.price - pointerOrigin.current.price;
+              pointerOrigin.current = targetPoint;
+              pushDraft({
+                ...drawing,
+                p1: { timeMs: drawing.p1.timeMs + dt, price: drawing.p1.price + dp },
+                p2: { timeMs: drawing.p2.timeMs + dt, price: drawing.p2.price + dp },
+                updatedAt: Date.now(),
+              }, { transient: true, select: false });
+            }
+            break;
+          }
+          case "fibRetracement": {
+            // fibRetracement: drag p1 or p2 endpoints, or move whole fib
             if (state.handle === "p1") {
               pushDraft({
                 ...drawing,
@@ -1716,6 +1799,93 @@ function drawDateAndPriceRange(
   }
 }
 
+function drawFibRetracement(
+  ctx: CanvasRenderingContext2D,
+  drawing: FibRetracement,
+  geometry: Extract<DrawingGeometry, { kind: "fibRetracement" }>,
+  selected: boolean,
+  colors: OverlayColors,
+) {
+  const { segment, levels } = geometry;
+  const color = drawing.style?.color ?? colors.line;
+  const lineWidth = selected ? SELECTED_LINE_WIDTH : (drawing.style?.width ?? LINE_WIDTH);
+  
+  // Define colors for different fib levels (TradingView style)
+  const levelColors: Record<number, string> = {
+    0: "#787B86",      // gray for 0%
+    0.236: "#F7525F",  // red
+    0.382: "#F7525F",  // red
+    0.5: "#787B86",    // gray for 50%
+    0.618: "#22AB94",  // green (golden ratio)
+    0.786: "#22AB94",  // green
+    1: "#787B86",      // gray for 100%
+    1.272: "#2962FF",  // blue for extension
+    1.618: "#2962FF",  // blue for extension (golden ratio extension)
+  };
+  
+  // Get the x-range for the fib tool (from p1 to p2)
+  const minX = Math.min(segment.x1, segment.x2);
+  const maxX = Math.max(segment.x1, segment.x2);
+  const fibWidth = maxX - minX;
+  
+  // Extend lines a bit beyond the p1-p2 range (TradingView style)
+  const extendLeft = 0;
+  const extendRight = fibWidth * 0.5; // Extend 50% to the right
+  
+  ctx.setLineDash([]);
+  ctx.font = "11px sans-serif";
+  ctx.textBaseline = "middle";
+  
+  // Draw each fib level as a horizontal line with label
+  for (const level of levels) {
+    if (typeof level.y !== "number" || !isFinite(level.y)) continue;
+    
+    const levelColor = levelColors[level.ratio] ?? color;
+    const isMainLevel = [0, 0.5, 0.618, 1].includes(level.ratio);
+    
+    // Draw the horizontal level line
+    ctx.strokeStyle = selected ? colors.selection : levelColor;
+    ctx.lineWidth = isMainLevel ? lineWidth : lineWidth * 0.7;
+    ctx.beginPath();
+    ctx.moveTo(minX - extendLeft, level.y);
+    ctx.lineTo(maxX + extendRight, level.y);
+    ctx.stroke();
+    
+    // Draw label (ratio + price) at the right end
+    const labelText = `${(level.ratio * 100).toFixed(1)}% (${level.price.toFixed(2)})`;
+    ctx.textAlign = "left";
+    ctx.fillStyle = levelColor;
+    ctx.fillText(labelText, maxX + extendRight + 5, level.y);
+  }
+  
+  // Draw the diagonal trend line connecting p1 and p2 (subtle)
+  ctx.strokeStyle = selected ? colors.selection : color;
+  ctx.lineWidth = lineWidth * 0.5;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(segment.x1, segment.y1);
+  ctx.lineTo(segment.x2, segment.y2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  
+  // Draw handles when selected
+  if (selected) {
+    drawHandleCircle(ctx, segment.x1, segment.y1, colors);
+    drawHandleCircle(ctx, segment.x2, segment.y2, colors);
+  }
+  
+  // Draw small markers at p1 and p2 even when not selected (subtle reference points)
+  if (!selected) {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(segment.x1, segment.y1, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(segment.x2, segment.y2, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
 interface GeometryViewport {
   width: number;
   height: number;
@@ -1752,6 +1922,8 @@ function geometrySignature(drawing: Drawing, viewport: GeometryViewport) {
     case "dateRange":
       return `${drawing.id}:${drawing.updatedAt}:${drawing.p1.timeMs}:${drawing.p1.price}:${drawing.p2.timeMs}:${drawing.p2.price}:${base}`;
     case "dateAndPriceRange":
+      return `${drawing.id}:${drawing.updatedAt}:${drawing.p1.timeMs}:${drawing.p1.price}:${drawing.p2.timeMs}:${drawing.p2.price}:${base}`;
+    case "fibRetracement":
       return `${drawing.id}:${drawing.updatedAt}:${drawing.p1.timeMs}:${drawing.p1.price}:${drawing.p2.timeMs}:${drawing.p2.price}:${base}`;
     default:
       return base;
@@ -1892,6 +2064,37 @@ function buildDrawingGeometry({
         deltaPercent,
         deltaMs,
         barsCount,
+      };
+    }
+    case "fibRetracement": {
+      const coords = trendSegmentCoords(chart, series, drawing.p1, drawing.p2, width, height);
+      if (!coords) return null;
+      
+      // Compute fib levels based on p1 and p2 prices
+      const p1Price = drawing.p1.price;
+      const p2Price = drawing.p2.price;
+      const priceRange = p2Price - p1Price;
+      
+      // Calculate price and y-position for each standard fib level
+      // Levels are measured from p2 towards p1:
+      // - 0% = p2 (the end of the move)
+      // - 100% = p1 (the start of the move)
+      // - >100% = extension beyond p1
+      const levels = FIB_LEVELS.map(ratio => {
+        const price = p2Price - priceRange * ratio;
+        // Get y coordinate for this price level
+        const y = series.priceToCoordinate(price);
+        return {
+          ratio,
+          price,
+          y: y ?? coords.y2 - (coords.y2 - coords.y1) * ratio, // Fallback if conversion fails
+        };
+      });
+      
+      return {
+        kind: "fibRetracement",
+        segment: createSegment(coords.x1, coords.y1, coords.x2, coords.y2),
+        levels,
       };
     }
     default:

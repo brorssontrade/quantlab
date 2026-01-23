@@ -1414,4 +1414,159 @@ test.describe("TV-20: LeftToolbar Tool Groups + Flyout", () => {
       }, { timeout: 3000 }).toBeUndefined();
     });
   });
+
+  test.describe("TV-20.7: Fibonacci Retracement", () => {
+    test("activate fibRetracement tool via toolbar", async ({ page }) => {
+      // Click the Fibonacci group to open flyout
+      const fibGroup = page.locator('[data-testid="lefttoolbar-group-fibonacci"]');
+      await fibGroup.click();
+      
+      // Then click Fib Retracement tool
+      const fibTool = page.locator('[data-testid="tool-fibRetracement"]');
+      await fibTool.waitFor({ state: "visible", timeout: 3000 });
+      await fibTool.click();
+
+      // Wait for tool to be active using poll
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.activeTool;
+      }, { timeout: 3000 }).toBe("fibRetracement");
+    });
+
+    test("create fibRetracement and verify levels via dump()", async ({ page }) => {
+      // Activate fibRetracement tool
+      const fibGroup = page.locator('[data-testid="lefttoolbar-group-fibonacci"]');
+      await fibGroup.click();
+      
+      const fibTool = page.locator('[data-testid="tool-fibRetracement"]');
+      await fibTool.waitFor({ state: "visible", timeout: 3000 });
+      await fibTool.click();
+
+      // Wait for tool to be active
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.activeTool;
+      }, { timeout: 3000 }).toBe("fibRetracement");
+
+      // Get chart canvas and draw fibRetracement
+      const chartWrapper = page.locator('[data-testid="tv-chart-root"]');
+      await expect(chartWrapper).toBeVisible({ timeout: 5000 });
+      const box = await chartWrapper.boundingBox();
+      expect(box).toBeTruthy();
+      if (!box) return;
+
+      // Draw fib from lower-left to upper-right (typical uptrend retracement)
+      const x1 = box.x + box.width * 0.25;
+      const y1 = box.y + box.height * 0.7; // Lower price (p1)
+      const x2 = box.x + box.width * 0.65;
+      const y2 = box.y + box.height * 0.3; // Higher price (p2)
+
+      await page.mouse.move(x1, y1);
+      await page.mouse.down();
+      await page.mouse.move(x2, y2);
+      await page.mouse.up();
+
+      // Wait for fibRetracement object to appear using poll
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.objects?.some((d: any) => d.type === "fibRetracement");
+      }, { timeout: 3000 }).toBe(true);
+
+      // Verify fib has correct structure with levels array
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      const fibObj = dump?.objects?.find((d: any) => d.type === "fibRetracement");
+      
+      expect(fibObj).toBeTruthy();
+      expect(fibObj.p1).toBeDefined();
+      expect(fibObj.p2).toBeDefined();
+      expect(fibObj.levels).toBeDefined();
+      expect(Array.isArray(fibObj.levels)).toBe(true);
+      
+      // Verify we have the standard fib levels (at least 7 key levels)
+      expect(fibObj.levels.length).toBeGreaterThanOrEqual(7);
+      
+      // Verify each level has ratio and price
+      for (const level of fibObj.levels) {
+        expect(typeof level.ratio).toBe("number");
+        expect(typeof level.price).toBe("number");
+      }
+      
+      // Verify key ratios exist: 0, 0.382, 0.5, 0.618, 1
+      const ratios = fibObj.levels.map((l: any) => l.ratio);
+      expect(ratios).toContain(0);
+      expect(ratios).toContain(0.382);
+      expect(ratios).toContain(0.5);
+      expect(ratios).toContain(0.618);
+      expect(ratios).toContain(1);
+    });
+
+    test("delete fibRetracement removes it from dump()", async ({ page }) => {
+      // Activate fibRetracement tool
+      const fibGroup = page.locator('[data-testid="lefttoolbar-group-fibonacci"]');
+      await fibGroup.click();
+      
+      const fibTool = page.locator('[data-testid="tool-fibRetracement"]');
+      await fibTool.waitFor({ state: "visible", timeout: 3000 });
+      await fibTool.click();
+
+      // Wait for tool activation
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.activeTool;
+      }, { timeout: 3000 }).toBe("fibRetracement");
+
+      // Get chart canvas
+      const chartWrapper = page.locator('[data-testid="tv-chart-root"]');
+      await expect(chartWrapper).toBeVisible({ timeout: 5000 });
+      const box = await chartWrapper.boundingBox();
+      expect(box).toBeTruthy();
+      if (!box) return;
+
+      // Create fibRetracement
+      const x1 = box.x + box.width * 0.3;
+      const y1 = box.y + box.height * 0.6;
+      const x2 = box.x + box.width * 0.6;
+      const y2 = box.y + box.height * 0.4;
+
+      await page.mouse.move(x1, y1);
+      await page.mouse.down();
+      await page.mouse.move(x2, y2);
+      await page.mouse.up();
+
+      // Wait for fib to appear
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.objects?.some((d: any) => d.type === "fibRetracement");
+      }, { timeout: 3000 }).toBe(true);
+
+      // Switch to select tool
+      await page.keyboard.press("Escape");
+
+      // Wait for tool to switch
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.activeTool;
+      }, { timeout: 3000 }).toBe("select");
+
+      // Click on the fib to select it (click on a level line - use midpoint)
+      const midX = (x1 + x2) / 2;
+      const midY = (y1 + y2) / 2;
+      await page.mouse.click(midX, midY);
+
+      // Wait for selection
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.selectedObjectId != null;
+      }, { timeout: 3000 }).toBe(true);
+
+      // Delete with Delete key
+      await page.keyboard.press("Delete");
+
+      // Verify fibRetracement is removed
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.objects?.some((d: any) => d.type === "fibRetracement");
+      }, { timeout: 3000 }).toBe(false);
+    });
+  });
 });

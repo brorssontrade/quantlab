@@ -2308,6 +2308,22 @@ const fitToContent = useCallback(() => {
               deltaMs: Math.abs(d.p2.timeMs - d.p1.timeMs),
               deltaDays: Math.abs(d.p2.timeMs - d.p1.timeMs) / (1000 * 60 * 60 * 24),
             }),
+            // FibRetracement computed values for Fibonacci tests
+            ...(d.kind === "fibRetracement" && {
+              p1: d.p1,
+              p2: d.p2,
+              levels: (() => {
+                const p1Price = d.p1.price;
+                const p2Price = d.p2.price;
+                const priceRange = p2Price - p1Price;
+                // Standard fib levels: 0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.272, 1.618
+                const FIB_RATIOS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.272, 1.618];
+                return FIB_RATIOS.map(ratio => ({
+                  ratio,
+                  price: p2Price - priceRange * ratio,
+                }));
+              })(),
+            }),
           })),
           // Alerts contract (count only for now, full list via API)
           alerts: {
