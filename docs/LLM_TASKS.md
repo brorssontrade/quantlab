@@ -109,6 +109,72 @@ export const FIB_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.272, 1.618] 
 
 ---
 
+### 2026-01-25 (TV-20.9 – Andrew's Pitchfork)
+
+**Status:** ✅ **COMPLETE** (Full Andrew's Pitchfork with 3-click workflow, median line + parallel tines)
+
+**Task Description:** "Implementera Andrew's Pitchfork: 3-klick (p1 pivot, p2 vänster tine, p3 höger tine), median + 2 parallella tines, full edit lifecycle, dump() kontrakt."
+
+**Implementation:**
+1. **Pitchfork interface**: `{ p1, p2, p3 }` where p1=pivot, p2/p3=tine anchors
+2. **3-click workflow**: Click 1 sets p1, Click 2 sets p2, Click 3 sets p3 → commit + auto-select
+3. **Geometry**: Median from p1 to midpoint(p2,p3), tines parallel through p2 and p3
+4. **Rendering**: 3 solid lines (median + 2 tines) with handles at p1/p2/p3
+5. **Full edit lifecycle**: Select, drag p1/p2/p3, drag line to move entire pitchfork, delete
+6. **Hotkey "P"**: Added to ChartViewport.tsx keyboard handler
+
+**Pitchfork 3-Point Model:**
+```typescript
+interface Pitchfork extends DrawingBase {
+  kind: "pitchfork";
+  p1: TrendPoint;  // Pivot (origin of median)
+  p2: TrendPoint;  // Left tine anchor
+  p3: TrendPoint;  // Right tine anchor
+}
+```
+
+**Geometry Computation:**
+```typescript
+// Midpoint of p2-p3 (base of pitchfork)
+const midX = (p2x + p3x) / 2;
+const midY = (p2y + p3y) / 2;
+
+// Median: from p1 through midpoint, extended
+// Left tine: parallel to median, through p2
+// Right tine: parallel to median, through p3
+```
+
+**dump() Contract:**
+```typescript
+{
+  type: "pitchfork",
+  p1: { timeMs: number, price: number },
+  p2: { timeMs: number, price: number },
+  p3: { timeMs: number, price: number },
+  points: [p1, p2, p3]
+}
+```
+
+**Files Changed:**
+- `quantlab-ui/src/features/chartsPro/types.ts` (Pitchfork interface)
+- `quantlab-ui/src/features/chartsPro/components/LeftToolbar/controls.ts` (Tool type + VALID_TOOLS)
+- `quantlab-ui/src/features/chartsPro/components/LeftToolbar/toolRegistry.ts` (pitchforks group)
+- `quantlab-ui/src/features/chartsPro/ChartsProTab.tsx` (validTools Sets)
+- `quantlab-ui/src/features/chartsPro/components/DrawingLayer.tsx` (~13 case blocks)
+- `quantlab-ui/src/features/chartsPro/components/ChartViewport.tsx` (dump() + hotkey "P")
+- `quantlab-ui/tests/chartsPro.cp20.spec.ts` (+4 tests)
+- `docs/CHARTSPRO_TVUI_KANBAN.md` (TV-20.9 marked DONE)
+
+**Test Results & Gates:**
+- npm build ✅ (2473 modules)
+- chartsPro.cp20 ✅ **12/12 tests (4×3 repeat-each) FLAKE-FREE**
+- tvParity ✅ (35/35 passed)
+
+**Commits:**
+- `pending` feat(frontend): TV-20.9 Andrew's Pitchfork
+
+---
+
 ### 2026-01-24 (TV-20.8 – 3-Point Parallel Channel)
 
 **Status:** ✅ **COMPLETE** (Full 3-point Parallel Channel with TradingView-style 3-click workflow)

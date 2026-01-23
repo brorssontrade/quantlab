@@ -902,6 +902,9 @@
 | ✅ DONE | TV-20.6c | Measure: Date & Price Range (combined tool) | 1h | TV-20.6b |
 | ✅ DONE | TV-20.7 | Fibonacci Retracement (2-click, 9 levels, full edit lifecycle) | 2h | TV-20.5 |
 | ✅ DONE | TV-20.8 | Parallel Channel (3-click p1→p2→p3, baseline+parallel+midline) | 2h | TV-20.1 |
+| ✅ DONE | TV-20.9 | Andrew's Pitchfork (3-click, median+tines, full edit lifecycle) | 2h | TV-20.8 |
+| 📋 READY | TV-20.10 | Flat Top/Bottom Channel (horizontal side + trend side) | 1.5h | TV-20.9 |
+| 📋 READY | TV-20.11 | Regression Trend Channel (linear regression midline + ±σ bands) | 2h | TV-20.10 |
 
 **Commits:**
 - TV-20.1: `4f5e95a` fix(frontend): TV-20.1 LeftToolbar ToolGroups + Flyout
@@ -916,10 +919,11 @@
 - TV-20.6 tests: `f96923e` fix(frontend): TV-20.6 tests use expect.poll instead of waitForTimeout
 - TV-20.7: `81824ec` feat(frontend): TV-20.7 Fibonacci Retracement tool
 - TV-20.8: `409434d` feat(frontend): TV-20.8 3-point Parallel Channel
+- TV-20.9: `pending` feat(frontend): TV-20.9 Andrew's Pitchfork
 
-**Gate Results (TV-20.8):**
+**Gate Results (TV-20.9):**
 - build ✅ (2473 modules)
-- cp20 ✅ (72/72 tests, 15/15 TV-20.8 = 5×3 repeat-each) **FLAKE-FREE**
+- cp20 ✅ (TV-20.9 tests: 12/12 = 4×3 repeat-each) **FLAKE-FREE**
 - tvParity ✅ (35/35 passed)
 
 **dump() contracts for Measure tools:**
@@ -938,10 +942,39 @@
 
 // channel (3-point)
 { type: "channel", p1, p2, p3, points: [p1, p2, p3] }
+
+// pitchfork (Andrew's Pitchfork)
+{ type: "pitchfork", p1, p2, p3, points: [p1, p2, p3] }
 ```
 
-**Total TV-20: 20h** (revised with Parallel Channel complete)  
-**Acceptance:** All drawing tools complete including Rectangle, Text, Measure tools, Fibonacci Retracement, and Parallel Channel. Full edit lifecycle, TradingView-style rendering.
+---
+
+### TV-20.9 Andrew's Pitchfork – ✅ COMPLETED
+
+| Criterion | Description | Status |
+|-----------|-------------|--------|
+| **Tool Location** | LeftToolbar → Pitchforks group with shortcut "P" | ✅ |
+| **3-Click Workflow** | Click 1: p1 (pivot), Click 2: p2 (left tine anchor), Click 3: p3 (right tine anchor) → commit + auto-select | ✅ |
+| **Render** | Median line (p1 → midpoint of p2-p3), two parallel tines through p2 and p3 | ✅ |
+| **Handles** | 3 circular handles at p1, p2, p3 when selected | ✅ |
+| **Edit Lifecycle** | select, drag p1/p2/p3 individually, drag median line to move entire pitchfork, delete | ✅ |
+| **Magnet/Snap** | Respects magnet toggle when placing/dragging points | ✅ |
+| **dump() Contract** | `{ type: "pitchfork", p1, p2, p3, points: [p1, p2, p3] }` | ✅ |
+| **Tests (cp20)** | 4 tests × 3 repeats = 12/12 passing | ✅ |
+| **No waitForTimeout** | All tests use expect.poll() | ✅ |
+| **Gates** | build ✅ + cp20×3 ✅ + tvParity ✅ | ✅ |
+
+**Implementation Details:**
+- Tool in Pitchforks group (`toolRegistry.ts`) with shortcut "P"
+- Hotkey "P" added to `ChartViewport.tsx` keyboard handler
+- 3-click workflow follows channel pattern (phase 1→2→commit)
+- Geometry: median from p1 to midpoint(p2,p3), tines parallel through p2/p3
+- DrawingLayer.tsx: 13 modifications (DrawingGeometry, render, hitTest, beginDrawing, updateDrawing×2, handlePointerDown, handlePointerUp, geometrySignature, buildDrawingGeometry, drawPitchfork, cloneDrawingState)
+- ChartViewport.tsx dump() extended with pitchfork points + p1/p2/p3 fields
+- Color: #ec4899 (pink)
+
+**Total TV-20: 25.5h** (revised with Pitchfork + Flat Top/Bottom + Regression Channel planned)  
+**Acceptance:** All drawing tools complete including Rectangle, Text, Measure tools, Fibonacci Retracement, Parallel Channel, and Pitchfork. Full edit lifecycle, TradingView-style rendering.
 
 ---
 

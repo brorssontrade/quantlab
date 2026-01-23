@@ -45,7 +45,7 @@ export interface OhlcvResponse {
   meta?: Record<string, unknown>;
 }
 
-export type DrawingKind = "hline" | "vline" | "trend" | "channel" | "rectangle" | "text" | "priceRange" | "dateRange" | "dateAndPriceRange" | "fibRetracement";
+export type DrawingKind = "hline" | "vline" | "trend" | "channel" | "rectangle" | "text" | "priceRange" | "dateRange" | "dateAndPriceRange" | "fibRetracement" | "pitchfork";
 
 export interface DrawingStyle {
   color: string;
@@ -147,7 +147,15 @@ export interface FibRetracement extends DrawingBase {
 /** Standard Fibonacci ratios for retracement levels */
 export const FIB_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.272, 1.618] as const;
 
-export type Drawing = HLine | VLine | Trend | Channel | Rectangle | TextDrawing | PriceRange | DateRange | DateAndPriceRange | FibRetracement;
+/** Andrew's Pitchfork - 3-point tool with median line and parallel tines */
+export interface Pitchfork extends DrawingBase {
+  kind: "pitchfork";
+  p1: TrendPoint; // Pivot point (origin of median line)
+  p2: TrendPoint; // Left tine anchor (forms one side of the base)
+  p3: TrendPoint; // Right tine anchor (forms other side of the base)
+}
+
+export type Drawing = HLine | VLine | Trend | Channel | Rectangle | TextDrawing | PriceRange | DateRange | DateAndPriceRange | FibRetracement | Pitchfork;
 
 export interface CompareSeriesConfig {
   id: string;

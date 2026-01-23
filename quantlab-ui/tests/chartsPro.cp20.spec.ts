@@ -1833,4 +1833,178 @@ test.describe("TV-20: LeftToolbar Tool Groups + Flyout", () => {
       }, { timeout: 3000 }).toBe(false);
     });
   });
+
+  test.describe("TV-20.9: Andrew's Pitchfork", () => {
+    test("should select pitchfork tool via hotkey P", async ({ page }) => {
+      await page.keyboard.press("p");
+      
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.activeTool;
+      }, { timeout: 3000 }).toBe("pitchfork");
+    });
+
+    test("should create pitchfork via 3 clicks and expose in dump()", async ({ page }) => {
+      // Clear existing drawings
+      await page.evaluate(() => {
+        const charts = (window as any).__lwcharts;
+        if (charts?.set) charts.set({ drawings: [] });
+      });
+
+      // Select pitchfork tool
+      await page.keyboard.press("p");
+      
+      // Wait for tool to be selected
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.activeTool;
+      }, { timeout: 3000 }).toBe("pitchfork");
+      
+      // Get chart canvas
+      const chartWrapper = page.locator('[data-testid="tv-chart-root"]');
+      await expect(chartWrapper).toBeVisible({ timeout: 5000 });
+      const box = await chartWrapper.boundingBox();
+      if (!box) return;
+      
+      // p1 = pivot point (left side, middle height)
+      const p1X = box.x + box.width * 0.2;
+      const p1Y = box.y + box.height * 0.5;
+      // p2 = left tine anchor (middle, higher)
+      const p2X = box.x + box.width * 0.5;
+      const p2Y = box.y + box.height * 0.3;
+      // p3 = right tine anchor (middle, lower)
+      const p3X = box.x + box.width * 0.5;
+      const p3Y = box.y + box.height * 0.7;
+      
+      // 3 clicks to create pitchfork
+      await page.mouse.click(p1X, p1Y);
+      await page.mouse.click(p2X, p2Y);
+      await page.mouse.click(p3X, p3Y);
+
+      // Wait for pitchfork and verify structure
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.objects?.some((d: any) => d.type === "pitchfork");
+      }, { timeout: 3000 }).toBe(true);
+
+      // Verify pitchfork has correct structure
+      const pitchfork = await page.evaluate(() => {
+        const dump = (window as any).__lwcharts?.dump?.();
+        return dump?.objects?.find((d: any) => d.type === "pitchfork");
+      });
+
+      expect(pitchfork).toBeTruthy();
+      expect(pitchfork.type).toBe("pitchfork");
+      expect(pitchfork.points).toHaveLength(3);
+      expect(pitchfork.p1).toBeDefined();
+      expect(pitchfork.p2).toBeDefined();
+      expect(pitchfork.p3).toBeDefined();
+      expect(pitchfork.p1.timeMs).toBeGreaterThan(0);
+      // Price can be negative (depending on chart scale), just verify it's a number
+      expect(typeof pitchfork.p1.price).toBe("number");
+    });
+
+    test("should drag p2 and update dump()", async ({ page }) => {
+      // Setup: create a pitchfork
+      await page.evaluate(() => {
+        const charts = (window as any).__lwcharts;
+        if (charts?.set) charts.set({ drawings: [] });
+      });
+
+      await page.keyboard.press("p");
+      
+      // Wait for tool
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.activeTool;
+      }, { timeout: 3000 }).toBe("pitchfork");
+      
+      // Get chart canvas
+      const chartWrapper = page.locator('[data-testid="tv-chart-root"]');
+      await expect(chartWrapper).toBeVisible({ timeout: 5000 });
+      const box = await chartWrapper.boundingBox();
+      if (!box) return;
+      
+      const p1X = box.x + box.width * 0.2;
+      const p1Y = box.y + box.height * 0.5;
+      const p2X = box.x + box.width * 0.5;
+      const p2Y = box.y + box.height * 0.3;
+      const p3X = box.x + box.width * 0.5;
+      const p3Y = box.y + box.height * 0.7;
+      
+      // 3 clicks to create pitchfork
+      await page.mouse.click(p1X, p1Y);
+      await page.mouse.click(p2X, p2Y);
+      await page.mouse.click(p3X, p3Y);
+
+      // Wait for pitchfork
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.objects?.some((d: any) => d.type === "pitchfork");
+      }, { timeout: 3000 }).toBe(true);
+
+      // Get initial p2 price
+      const initialP2Price = await page.evaluate(() => {
+        const dump = (window as any).__lwcharts?.dump?.();
+        const pitchfork = dump?.objects?.find((d: any) => d.type === "pitchfork");
+        return pitchfork?.p2?.price;
+      });
+
+      // Find p2 position and drag it
+      await page.mouse.move(p2X, p2Y);
+      await page.mouse.down();
+      await page.mouse.move(p2X, p2Y - 30, { steps: 5 }); // Move up = higher price
+      await page.mouse.up();
+
+      // Verify p2 moved (price changed)
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        const pitchfork = dump?.objects?.find((d: any) => d.type === "pitchfork");
+        return pitchfork?.p2?.price !== initialP2Price;
+      }, { timeout: 3000 }).toBe(true);
+    });
+
+    test("should delete pitchfork with Delete key", async ({ page }) => {
+      // Setup: create a pitchfork
+      await page.evaluate(() => {
+        const charts = (window as any).__lwcharts;
+        if (charts?.set) charts.set({ drawings: [] });
+      });
+
+      await page.keyboard.press("p");
+      
+      // Wait for tool
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.activeTool;
+      }, { timeout: 3000 }).toBe("pitchfork");
+      
+      // Get chart canvas
+      const chartWrapper = page.locator('[data-testid="tv-chart-root"]');
+      await expect(chartWrapper).toBeVisible({ timeout: 5000 });
+      const box = await chartWrapper.boundingBox();
+      if (!box) return;
+      
+      // 3 clicks to create pitchfork
+      await page.mouse.click(box.x + box.width * 0.2, box.y + box.height * 0.5);
+      await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.3);
+      await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.7);
+
+      // Verify pitchfork created and selected
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        const pitchfork = dump?.objects?.find((d: any) => d.type === "pitchfork");
+        return pitchfork?.selected;
+      }, { timeout: 3000 }).toBe(true);
+
+      // Delete with Delete key
+      await page.keyboard.press("Delete");
+
+      // Verify pitchfork removed
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.objects?.some((d: any) => d.type === "pitchfork");
+      }, { timeout: 3000 }).toBe(false);
+    });
+  });
 });

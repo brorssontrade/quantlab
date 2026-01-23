@@ -819,6 +819,9 @@ const overlayCanvasClassName = "chartspro-overlay__canvas absolute inset-0";
         case "n":
           nextTool = "text";
           break;
+        case "p":
+          nextTool = "pitchfork";
+          break;
         default:
           return;
       }
@@ -2280,6 +2283,8 @@ const fitToContent = useCallback(() => {
               ? [{ timeMs: d.p1.timeMs, price: d.p1.price }, { timeMs: d.p2.timeMs, price: d.p2.price }]
               : d.kind === "dateAndPriceRange"
               ? [{ timeMs: d.p1.timeMs, price: d.p1.price }, { timeMs: d.p2.timeMs, price: d.p2.price }]
+              : d.kind === "pitchfork"
+              ? [{ timeMs: d.p1.timeMs, price: d.p1.price }, { timeMs: d.p2.timeMs, price: d.p2.price }, { timeMs: d.p3.timeMs, price: d.p3.price }]
               : [],
             // Raw p1/p2 for rectangle tests
             ...(d.kind === "rectangle" && { p1: d.p1, p2: d.p2 }),
@@ -2310,6 +2315,12 @@ const fitToContent = useCallback(() => {
             }),
             // Parallel channel raw points for channel tests
             ...(d.kind === "channel" && {
+              p1: d.p1,
+              p2: d.p2,
+              p3: d.p3,
+            }),
+            // Pitchfork raw points for pitchfork tests
+            ...(d.kind === "pitchfork" && {
               p1: d.p1,
               p2: d.p2,
               p3: d.p3,

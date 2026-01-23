@@ -102,6 +102,16 @@ export const TOOL_GROUPS: ToolGroup[] = [
     ],
   },
   {
+    id: "pitchforks",
+    label: "Pitchforks",
+    icon: "⋔",
+    tools: [
+      { id: "pitchfork", label: "Pitchfork", icon: "⋔", shortcut: "P", status: "enabled", tooltip: "Andrew's Pitchfork - median line with parallel tines" },
+      { id: "schiff", label: "Schiff Pitchfork", icon: "⋕", status: "disabled", tooltip: "Coming soon" },
+      { id: "modSchiff", label: "Modified Schiff", icon: "⋖", status: "disabled", tooltip: "Coming soon" },
+    ],
+  },
+  {
     id: "patterns",
     label: "Patterns",
     icon: "📊",
@@ -162,6 +172,6 @@ export function getEnabledTools(): ToolDefinition[] {
  * Validate tool ID matches controls.ts Tool type
  */
 export function isValidToolId(toolId: string): toolId is Tool {
-  const validTools = ["select", "trendline", "hline", "vline", "channel", "rectangle", "text", "priceRange", "dateRange", "dateAndPriceRange"];
+  const validTools = ["select", "trendline", "hline", "vline", "channel", "rectangle", "text", "priceRange", "dateRange", "dateAndPriceRange", "fibRetracement", "pitchfork"];
   return validTools.includes(toolId);
 }
