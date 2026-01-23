@@ -831,6 +831,9 @@ const overlayCanvasClassName = "chartspro-overlay__canvas absolute inset-0";
         case "g":
           nextTool = "regressionTrend";
           break;
+        case "l":
+          nextTool = "longPosition";
+          break;
         default:
           return;
       }
@@ -2393,6 +2396,24 @@ const fitToContent = useCallback(() => {
                 }
                 const stdev = Math.sqrt(sumResidual2 / n);
                 return { n, slope, intercept, stdev, bandK: 2, windowStart: minTime, windowEnd: maxTime };
+              })(),
+            }),
+            // Long Position computed values for risk/reward tests
+            ...(d.kind === "longPosition" && {
+              p1: d.p1,
+              p2: d.p2,
+              p3: d.p3,
+              points: [d.p1, d.p2, d.p3],
+              ...(() => {
+                const entryPrice = d.p1.price;
+                const stopPrice = d.p2.price;
+                const targetPrice = d.p3.price;
+                const riskPrice = Math.abs(entryPrice - stopPrice);
+                const rewardPrice = Math.abs(targetPrice - entryPrice);
+                const riskPercent = entryPrice !== 0 ? (riskPrice / entryPrice) * 100 : 0;
+                const rewardPercent = entryPrice !== 0 ? (rewardPrice / entryPrice) * 100 : 0;
+                const riskRewardRatio = riskPrice > 0 ? rewardPrice / riskPrice : 0;
+                return { riskPrice, rewardPrice, riskPercent, rewardPercent, riskRewardRatio };
               })(),
             }),
             // FibRetracement computed values for Fibonacci tests

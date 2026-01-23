@@ -45,7 +45,7 @@ export interface OhlcvResponse {
   meta?: Record<string, unknown>;
 }
 
-export type DrawingKind = "hline" | "vline" | "trend" | "channel" | "rectangle" | "text" | "priceRange" | "dateRange" | "dateAndPriceRange" | "fibRetracement" | "pitchfork" | "flatTopChannel" | "flatBottomChannel" | "regressionTrend";
+export type DrawingKind = "hline" | "vline" | "trend" | "channel" | "rectangle" | "text" | "priceRange" | "dateRange" | "dateAndPriceRange" | "fibRetracement" | "pitchfork" | "flatTopChannel" | "flatBottomChannel" | "regressionTrend" | "longPosition";
 
 export interface DrawingStyle {
   color: string;
@@ -180,7 +180,17 @@ export interface RegressionTrend extends DrawingBase {
   p2: TrendPoint; // End of regression window
 }
 
-export type Drawing = HLine | VLine | Trend | Channel | Rectangle | TextDrawing | PriceRange | DateRange | DateAndPriceRange | FibRetracement | Pitchfork | FlatTopChannel | FlatBottomChannel | RegressionTrend;
+/** Long Position - 3-point risk/reward visualization (TradingView-style)
+ * p1 = Entry, p2 = Stop Loss, p3 = Take Profit
+ * Shows green profit zone, red risk zone, and R:R ratio */
+export interface LongPosition extends DrawingBase {
+  kind: "longPosition";
+  p1: TrendPoint; // Entry point (price level where you enter)
+  p2: TrendPoint; // Stop Loss (below entry for long)
+  p3: TrendPoint; // Take Profit (above entry for long)
+}
+
+export type Drawing = HLine | VLine | Trend | Channel | Rectangle | TextDrawing | PriceRange | DateRange | DateAndPriceRange | FibRetracement | Pitchfork | FlatTopChannel | FlatBottomChannel | RegressionTrend | LongPosition;
 
 export interface CompareSeriesConfig {
   id: string;

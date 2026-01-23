@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { BusinessDay, IChartApi, ISeriesApi, SeriesType, UTCTimestamp } from "@/lib/lightweightCharts";
 
-import type { DateAndPriceRange, DateRange, Drawing, DrawingKind, FibRetracement, NormalizedBar, PriceRange, Tf, Trend } from "../types";
+import type { DateAndPriceRange, DateRange, Drawing, DrawingKind, FibRetracement, LongPosition, NormalizedBar, PriceRange, Tf, Trend } from "../types";
 import { FIB_LEVELS } from "../types";
 import { describeTrend, tsMsToUtc } from "../types";
 import type { Tool } from "../state/controls";
@@ -17,7 +17,7 @@ type ChartPoint = {
   snapOrigin?: { timeMs: number; price: number };
 };
 
-type DragHandle = "line" | "p1" | "p2" | "upper" | "lower" | "hline" | "vline" | "rect_tl" | "rect_tr" | "rect_bl" | "rect_br";
+type DragHandle = "line" | "p1" | "p2" | "p3" | "upper" | "lower" | "hline" | "vline" | "rect_tl" | "rect_tr" | "rect_bl" | "rect_br";
 
 type HitResult = { drawing: Drawing; handle: DragHandle };
 
@@ -47,7 +47,8 @@ type DrawingGeometry =
   | { kind: "dateRange"; segment: SegmentGeometry; deltaMs: number; barsCount: number }
   | { kind: "dateAndPriceRange"; segment: SegmentGeometry; deltaPrice: number; deltaPercent: number; deltaMs: number; barsCount: number }
   | { kind: "fibRetracement"; segment: SegmentGeometry; levels: Array<{ ratio: number; price: number; y: number }> }
-  | { kind: "regressionTrend"; midline: SegmentGeometry; upperBand: SegmentGeometry; lowerBand: SegmentGeometry; slope: number; intercept: number; stdev: number };
+  | { kind: "regressionTrend"; midline: SegmentGeometry; upperBand: SegmentGeometry; lowerBand: SegmentGeometry; slope: number; intercept: number; stdev: number }
+  | { kind: "longPosition"; entry: { x: number; y: number }; stop: { x: number; y: number }; target: { x: number; y: number }; riskPrice: number; rewardPrice: number; riskPercent: number; rewardPercent: number; ratio: number };
 
 type PointerState =
   | { mode: "idle" }
@@ -69,6 +70,7 @@ const COLORS: Record<Drawing["kind"], string> = {
   dateAndPriceRange: "#06b6d4", // cyan for combined measure tool
   fibRetracement: "#f59e0b", // amber for fibonacci tools
   regressionTrend: "#10b981", // green/emerald for regression tools
+  longPosition: "#22c55e", // green for long position (profit color)
 };
 
 const HIT_TOLERANCE = 8;
@@ -325,6 +327,9 @@ export function DrawingLayer({
           break;
         case "regressionTrend":
           drawRegressionTrend(ctx, drawing, geometry as Extract<DrawingGeometry, { kind: "regressionTrend" }>, selectedId === drawing.id, colors);
+          break;
+        case "longPosition":
+          drawLongPosition(ctx, drawing as LongPosition, geometry as Extract<DrawingGeometry, { kind: "longPosition" }>, selectedId === drawing.id, colors);
           break;
         default:
           break;
@@ -759,6 +764,32 @@ export function DrawingLayer({
             }
             break;
           }
+          case "longPosition": {
+            const { entry, stop, target } = geometry as Extract<DrawingGeometry, { kind: "longPosition" }>;
+            // Check p1 (entry), p2 (stop), p3 (target) handles
+            if (distance(point.x, point.y, entry.x, entry.y) <= HANDLE_RADIUS + 2) {
+              return { drawing, handle: "p1" };
+            }
+            if (distance(point.x, point.y, stop.x, stop.y) <= HANDLE_RADIUS + 2) {
+              return { drawing, handle: "p2" };
+            }
+            if (distance(point.x, point.y, target.x, target.y) <= HANDLE_RADIUS + 2) {
+              return { drawing, handle: "p3" };
+            }
+            // Check horizontal lines at entry, stop, target levels
+            const minX = Math.min(entry.x, stop.x, target.x) - 50;
+            const maxX = Math.max(entry.x, stop.x, target.x) + 50;
+            if (Math.abs(point.y - entry.y) <= HIT_TOLERANCE && point.x >= minX && point.x <= maxX) {
+              return { drawing, handle: "line" };
+            }
+            if (Math.abs(point.y - stop.y) <= HIT_TOLERANCE && point.x >= minX && point.x <= maxX) {
+              return { drawing, handle: "line" };
+            }
+            if (Math.abs(point.y - target.y) <= HIT_TOLERANCE && point.x >= minX && point.x <= maxX) {
+              return { drawing, handle: "line" };
+            }
+            break;
+          }
           default:
             break;
         }
@@ -1038,6 +1069,28 @@ export function DrawingLayer({
           requestRender();
           break;
         }
+        case "longPosition": {
+          // 3-click workflow: click1=entry (p1), click2=stop (p2), click3=target (p3)
+          const drawing: Drawing = {
+            id: createId(),
+            kind: "longPosition",
+            symbol,
+            tf: timeframe,
+            p1: { timeMs: point.timeMs, price: point.price }, // Entry
+            p2: { timeMs: point.timeMs, price: point.price }, // Stop (below entry for long)
+            p3: { timeMs: point.timeMs, price: point.price }, // Target (above entry for long)
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            z: Date.now(),
+            style: { color: COLORS.longPosition, width: 1 },
+          };
+          pushDraft(drawing);
+          pointerState.current = { mode: "drawing", id: drawing.id, kind: "longPosition", phase: 1 };
+          draftIdRef.current = drawing.id;
+          pendingCommitRef.current = false; // Don't commit on first mouse up (3-click workflow)
+          requestRender();
+          break;
+        }
         default:
           break;
       }
@@ -1169,6 +1222,26 @@ export function DrawingLayer({
             updatedAt: Date.now(),
           };
           pushDraft(next, { transient: true, select: false });
+        } else if (drawing.kind === "longPosition") {
+          // 3-click workflow: phase 1 = drawing stop (p2), phase 2 = drawing target (p3)
+          const phase = state.phase ?? 0;
+          if (phase === 1) {
+            // Drawing stop loss level (p2)
+            const next: Drawing = {
+              ...drawing,
+              p2: { timeMs: targetPoint.timeMs, price: targetPoint.price },
+              updatedAt: Date.now(),
+            };
+            pushDraft(next, { transient: true, select: false });
+          } else if (phase === 2) {
+            // Drawing target level (p3)
+            const next: Drawing = {
+              ...drawing,
+              p3: { timeMs: targetPoint.timeMs, price: targetPoint.price },
+              updatedAt: Date.now(),
+            };
+            pushDraft(next, { transient: true, select: false });
+          }
         }
         requestRender();
         return;
@@ -1520,6 +1593,40 @@ export function DrawingLayer({
             }
             break;
           }
+          case "longPosition": {
+            // longPosition: drag entry (p1), stop (p2), target (p3), or move whole position
+            if (state.handle === "p1") {
+              pushDraft({
+                ...drawing,
+                p1: { timeMs: targetPoint.timeMs, price: targetPoint.price },
+                updatedAt: Date.now(),
+              }, { transient: true, select: false });
+            } else if (state.handle === "p2") {
+              pushDraft({
+                ...drawing,
+                p2: { timeMs: targetPoint.timeMs, price: targetPoint.price },
+                updatedAt: Date.now(),
+              }, { transient: true, select: false });
+            } else if (state.handle === "p3") {
+              pushDraft({
+                ...drawing,
+                p3: { timeMs: targetPoint.timeMs, price: targetPoint.price },
+                updatedAt: Date.now(),
+              }, { transient: true, select: false });
+            } else if (state.handle === "line" && pointerOrigin.current) {
+              const dt = targetPoint.timeMs - pointerOrigin.current.timeMs;
+              const dp = targetPoint.price - pointerOrigin.current.price;
+              pointerOrigin.current = targetPoint;
+              pushDraft({
+                ...drawing,
+                p1: { timeMs: drawing.p1.timeMs + dt, price: drawing.p1.price + dp },
+                p2: { timeMs: drawing.p2.timeMs + dt, price: drawing.p2.price + dp },
+                p3: { timeMs: drawing.p3.timeMs + dt, price: drawing.p3.price + dp },
+                updatedAt: Date.now(),
+              }, { transient: true, select: false });
+            }
+            break;
+          }
           default:
             break;
         }
@@ -1685,6 +1792,35 @@ export function DrawingLayer({
         return;
       }
       
+      // Handle multi-click tool phase advancement (longPosition: 3-click)
+      if (state.mode === "drawing" && state.kind === "longPosition" && state.phase) {
+        event.preventDefault();
+        const drawing = activeDraftRef.current;
+        if (!drawing || drawing.kind !== "longPosition") return;
+        
+        if (state.phase === 1) {
+          // Phase 1→2: Lock p2 (stop loss), start defining p3 (target)
+          pushDraft({
+            ...drawing,
+            p2: { timeMs: point.timeMs, price: point.price },
+            updatedAt: Date.now(),
+          }, { transient: false, select: false });
+          pointerState.current = { mode: "drawing", id: drawing.id, kind: "longPosition", phase: 2 };
+          requestRender();
+        } else if (state.phase === 2) {
+          // Phase 2→commit: Lock p3 (target) and commit
+          const finalDrawing: Drawing = {
+            ...drawing,
+            p3: { timeMs: point.timeMs, price: point.price },
+            updatedAt: Date.now(),
+          };
+          onUpsert(finalDrawing, { select: true });
+          resetPointerSession();
+          setTool("select");
+        }
+        return;
+      }
+      
       const hit = hitTest(point);
       if (tool === "select") {
         handleSelection(point, event, hit);
@@ -1722,6 +1858,10 @@ export function DrawingLayer({
       }
       if (state.mode === "drawing" && (state.kind === "flatTopChannel" || state.kind === "flatBottomChannel") && state.phase) {
         // Flat channel is in multi-click workflow - don't reset
+        return;
+      }
+      if (state.mode === "drawing" && state.kind === "longPosition" && state.phase) {
+        // Long position is in multi-click workflow - don't reset
         return;
       }
       if (pendingCommitRef.current && activeDraftRef.current) {
@@ -2026,6 +2166,103 @@ function drawRegressionTrend(
   if (selected) {
     drawHandleCircle(ctx, midline.x1, midline.y1, colors);
     drawHandleCircle(ctx, midline.x2, midline.y2, colors);
+  }
+}
+
+function drawLongPosition(
+  ctx: CanvasRenderingContext2D,
+  drawing: LongPosition,
+  geometry: Extract<DrawingGeometry, { kind: "longPosition" }>,
+  selected: boolean,
+  colors: OverlayColors,
+) {
+  const { entry, stop, target, riskPrice, rewardPrice, riskPercent, rewardPercent, ratio } = geometry;
+  const baseColor = drawing.style?.color || COLORS.longPosition;
+  const lineWidth = selected ? SELECTED_LINE_WIDTH : (drawing.style?.width ?? LINE_WIDTH);
+  
+  // Compute zone bounds
+  const minX = Math.min(entry.x, stop.x, target.x) - 30;
+  const maxX = Math.max(entry.x, stop.x, target.x) + 100;
+  const zoneWidth = maxX - minX;
+  
+  // Draw profit zone (entry to target) - green with fill
+  const profitTop = Math.min(entry.y, target.y);
+  const profitBottom = Math.max(entry.y, target.y);
+  const profitHeight = profitBottom - profitTop;
+  
+  ctx.save();
+  ctx.globalAlpha = 0.15;
+  ctx.fillStyle = "#22c55e"; // green
+  ctx.fillRect(minX, profitTop, zoneWidth, profitHeight);
+  ctx.restore();
+  
+  // Draw risk zone (entry to stop) - red with fill
+  const riskTop = Math.min(entry.y, stop.y);
+  const riskBottom = Math.max(entry.y, stop.y);
+  const riskHeight = riskBottom - riskTop;
+  
+  ctx.save();
+  ctx.globalAlpha = 0.15;
+  ctx.fillStyle = "#ef4444"; // red
+  ctx.fillRect(minX, riskTop, zoneWidth, riskHeight);
+  ctx.restore();
+  
+  ctx.setLineDash([]);
+  
+  // Draw horizontal lines at each level
+  // Entry line (neutral color)
+  ctx.strokeStyle = selected ? colors.selection : baseColor;
+  ctx.lineWidth = lineWidth;
+  ctx.beginPath();
+  ctx.moveTo(minX, entry.y);
+  ctx.lineTo(maxX, entry.y);
+  ctx.stroke();
+  
+  // Stop line (red)
+  ctx.strokeStyle = selected ? colors.selection : "#ef4444";
+  ctx.beginPath();
+  ctx.moveTo(minX, stop.y);
+  ctx.lineTo(maxX, stop.y);
+  ctx.stroke();
+  
+  // Target line (green)
+  ctx.strokeStyle = selected ? colors.selection : "#22c55e";
+  ctx.beginPath();
+  ctx.moveTo(minX, target.y);
+  ctx.lineTo(maxX, target.y);
+  ctx.stroke();
+  
+  // Draw labels
+  ctx.font = "11px sans-serif";
+  ctx.textBaseline = "middle";
+  
+  const labelX = maxX + 5;
+  
+  // Entry label
+  ctx.fillStyle = colors.text;
+  ctx.textAlign = "left";
+  ctx.fillText(`Entry`, labelX, entry.y);
+  
+  // Stop label with risk info
+  ctx.fillStyle = "#ef4444";
+  ctx.fillText(`Stop (−${riskPrice.toFixed(2)}, −${riskPercent.toFixed(1)}%)`, labelX, stop.y);
+  
+  // Target label with reward info
+  ctx.fillStyle = "#22c55e";
+  ctx.fillText(`Target (+${rewardPrice.toFixed(2)}, +${rewardPercent.toFixed(1)}%)`, labelX, target.y);
+  
+  // Draw R:R ratio in the middle
+  const midY = (entry.y + target.y) / 2;
+  ctx.fillStyle = colors.text;
+  ctx.font = "bold 12px sans-serif";
+  ctx.textAlign = "left";
+  ctx.fillText(`R:R ${ratio.toFixed(2)}`, labelX, midY);
+  
+  // Draw handles when selected
+  if (selected) {
+    drawHandleCircle(ctx, entry.x, entry.y, colors);
+    drawHandleCircle(ctx, stop.x, stop.y, colors);
+    drawHandleCircle(ctx, target.x, target.y, colors);
   }
 }
 
@@ -2477,6 +2714,8 @@ function geometrySignature(drawing: Drawing, viewport: GeometryViewport) {
       return `${drawing.id}:${drawing.updatedAt}:${drawing.p1.timeMs}:${drawing.p1.price}:${drawing.p2.timeMs}:${drawing.p2.price}:${base}`;
     case "regressionTrend":
       return `${drawing.id}:${drawing.updatedAt}:${drawing.p1.timeMs}:${drawing.p1.price}:${drawing.p2.timeMs}:${drawing.p2.price}:${base}`;
+    case "longPosition":
+      return `${drawing.id}:${drawing.updatedAt}:${drawing.p1.timeMs}:${drawing.p1.price}:${drawing.p2.timeMs}:${drawing.p2.price}:${drawing.p3.timeMs}:${drawing.p3.price}:${base}`;
     default:
       return base;
   }
@@ -2879,6 +3118,40 @@ function buildDrawingGeometry({
         slope,
         intercept,
         stdev,
+      };
+    }
+    case "longPosition": {
+      // p1 = entry, p2 = stop loss, p3 = target
+      const p1x = coordinateFromTime(chart, drawing.p1.timeMs, width);
+      const p1y = resolveYCoordinate(series, drawing.p1.price, height);
+      const p2x = coordinateFromTime(chart, drawing.p2.timeMs, width);
+      const p2y = resolveYCoordinate(series, drawing.p2.price, height);
+      const p3x = coordinateFromTime(chart, drawing.p3.timeMs, width);
+      const p3y = resolveYCoordinate(series, drawing.p3.price, height);
+      
+      if (p1x == null || p1y == null || p2x == null || p2y == null || p3x == null || p3y == null) return null;
+      
+      // Calculate risk and reward
+      const entryPrice = drawing.p1.price;
+      const stopPrice = drawing.p2.price;
+      const targetPrice = drawing.p3.price;
+      
+      const riskPrice = Math.abs(entryPrice - stopPrice);
+      const rewardPrice = Math.abs(targetPrice - entryPrice);
+      const riskPercent = entryPrice !== 0 ? (riskPrice / entryPrice) * 100 : 0;
+      const rewardPercent = entryPrice !== 0 ? (rewardPrice / entryPrice) * 100 : 0;
+      const ratio = riskPrice > 0 ? rewardPrice / riskPrice : 0;
+      
+      return {
+        kind: "longPosition",
+        entry: { x: p1x, y: p1y },
+        stop: { x: p2x, y: p2y },
+        target: { x: p3x, y: p3y },
+        riskPrice,
+        rewardPrice,
+        riskPercent,
+        rewardPercent,
+        ratio,
       };
     }
     default:
