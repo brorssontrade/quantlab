@@ -89,12 +89,12 @@ export interface Trend extends DrawingBase {
   showSlope?: boolean;
 }
 
+/** Parallel Channel - 3-point definition (p1-p2 = baseline, p3 = parallel offset) */
 export interface Channel extends DrawingBase {
   kind: "channel";
-  trendId: string;
-  offsetTop: number;
-  offsetBottom: number;
-  lockWidth?: boolean;
+  p1: TrendPoint; // Baseline start
+  p2: TrendPoint; // Baseline end
+  p3: TrendPoint; // Offset point defining parallel distance (projects perpendicular to baseline)
 }
 
 /** Rectangle zone - two corners define the box */

@@ -1569,4 +1569,268 @@ test.describe("TV-20: LeftToolbar Tool Groups + Flyout", () => {
       }, { timeout: 3000 }).toBe(false);
     });
   });
+
+  test.describe("TV-20.8: Parallel Channel (3-click)", () => {
+    test("should create a channel with 3 clicks and verify dump() p1/p2/p3", async ({ page }) => {
+      // Clear any existing drawings first
+      await page.evaluate(() => {
+        const charts = (window as any).__lwcharts;
+        if (charts?.set) charts.set({ drawings: [] });
+      });
+
+      // Select channel tool (shortcut C)
+      await page.keyboard.press("c");
+
+      // Wait for tool to be active
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.activeTool;
+      }, { timeout: 3000 }).toBe("channel");
+
+      // Get chart canvas
+      const chartWrapper = page.locator('[data-testid="tv-chart-root"]');
+      await expect(chartWrapper).toBeVisible({ timeout: 5000 });
+      const box = await chartWrapper.boundingBox();
+      expect(box).toBeTruthy();
+      if (!box) return;
+
+      // 3-click workflow for channel:
+      // Click 1: p1 (baseline start)
+      const x1 = box.x + box.width * 0.25;
+      const y1 = box.y + box.height * 0.4;
+      await page.mouse.click(x1, y1);
+
+      // Click 2: p2 (baseline end) - immediately after click 1
+      const x2 = box.x + box.width * 0.75;
+      const y2 = box.y + box.height * 0.6;
+      await page.mouse.click(x2, y2);
+
+      // Click 3: p3 (parallel offset point) - immediately after click 2
+      const x3 = box.x + box.width * 0.5;
+      const y3 = box.y + box.height * 0.25; // Above the baseline
+      await page.mouse.click(x3, y3);
+
+      // Verify channel created with correct structure
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        const channel = dump?.objects?.find((d: any) => d.type === "channel");
+        if (!channel) return null;
+        return {
+          hasP1: channel.p1 != null && typeof channel.p1.timeMs === "number" && typeof channel.p1.price === "number",
+          hasP2: channel.p2 != null && typeof channel.p2.timeMs === "number" && typeof channel.p2.price === "number",
+          hasP3: channel.p3 != null && typeof channel.p3.timeMs === "number" && typeof channel.p3.price === "number",
+          pointsCount: channel.points?.length,
+        };
+      }, { timeout: 3000 }).toEqual({
+        hasP1: true,
+        hasP2: true,
+        hasP3: true,
+        pointsCount: 3,
+      });
+
+      // Verify tool switched back to select
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.activeTool;
+      }, { timeout: 3000 }).toBe("select");
+    });
+
+    test("should select channel and show 3 handles (p1, p2, p3)", async ({ page }) => {
+      // Setup: create a channel first
+      await page.evaluate(() => {
+        const charts = (window as any).__lwcharts;
+        if (charts?.set) charts.set({ drawings: [] });
+      });
+
+      await page.keyboard.press("c");
+      
+      // Wait for tool to be active
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.activeTool;
+      }, { timeout: 3000 }).toBe("channel");
+      
+      // Get chart canvas
+      const chartWrapper = page.locator('[data-testid="tv-chart-root"]');
+      await expect(chartWrapper).toBeVisible({ timeout: 5000 });
+      const box = await chartWrapper.boundingBox();
+      if (!box) return;
+      
+      // Create channel (3 clicks)
+      await page.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.5);
+      await page.mouse.click(box.x + box.width * 0.7, box.y + box.height * 0.5);
+      await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.3);
+
+      // Verify channel created and selected
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        const channel = dump?.objects?.find((d: any) => d.type === "channel");
+        return channel?.selected;
+      }, { timeout: 3000 }).toBe(true);
+    });
+
+    test("should move entire channel by dragging baseline", async ({ page }) => {
+      // Setup: create a channel
+      await page.evaluate(() => {
+        const charts = (window as any).__lwcharts;
+        if (charts?.set) charts.set({ drawings: [] });
+      });
+
+      await page.keyboard.press("c");
+      
+      // Wait for tool
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.activeTool;
+      }, { timeout: 3000 }).toBe("channel");
+      
+      // Get chart canvas
+      const chartWrapper = page.locator('[data-testid="tv-chart-root"]');
+      await expect(chartWrapper).toBeVisible({ timeout: 5000 });
+      const box = await chartWrapper.boundingBox();
+      if (!box) return;
+      
+      const baseX1 = box.x + box.width * 0.3;
+      const baseY = box.y + box.height * 0.5;
+      const baseX2 = box.x + box.width * 0.7;
+      const offsetY = box.y + box.height * 0.3;
+      
+      // 3 clicks to create channel
+      await page.mouse.click(baseX1, baseY);
+      await page.mouse.click(baseX2, baseY);
+      await page.mouse.click((baseX1 + baseX2) / 2, offsetY);
+
+      // Wait for channel
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.objects?.some((d: any) => d.type === "channel");
+      }, { timeout: 3000 }).toBe(true);
+
+      // Get initial p1 price
+      const initialP1Price = await page.evaluate(() => {
+        const dump = (window as any).__lwcharts?.dump?.();
+        const channel = dump?.objects?.find((d: any) => d.type === "channel");
+        return channel?.p1?.price;
+      });
+
+      // Drag the baseline (midpoint between p1 and p2)
+      const midX = (baseX1 + baseX2) / 2;
+      const midY = baseY;
+      await page.mouse.move(midX, midY);
+      await page.mouse.down();
+      await page.mouse.move(midX, midY + 50, { steps: 5 }); // Move down 50px
+      await page.mouse.up();
+
+      // Verify channel moved (p1 price should have changed)
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        const channel = dump?.objects?.find((d: any) => d.type === "channel");
+        // Price should have increased (moved down = higher price in inverted chart)
+        return channel?.p1?.price !== initialP1Price;
+      }, { timeout: 3000 }).toBe(true);
+    });
+
+    test("should adjust channel width by dragging p3", async ({ page }) => {
+      // Setup: create a channel
+      await page.evaluate(() => {
+        const charts = (window as any).__lwcharts;
+        if (charts?.set) charts.set({ drawings: [] });
+      });
+
+      await page.keyboard.press("c");
+      
+      // Wait for tool
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.activeTool;
+      }, { timeout: 3000 }).toBe("channel");
+      
+      // Get chart canvas
+      const chartWrapper = page.locator('[data-testid="tv-chart-root"]');
+      await expect(chartWrapper).toBeVisible({ timeout: 5000 });
+      const box = await chartWrapper.boundingBox();
+      if (!box) return;
+      
+      const baseX1 = box.x + box.width * 0.3;
+      const baseY = box.y + box.height * 0.5;
+      const baseX2 = box.x + box.width * 0.7;
+      const offsetX = (baseX1 + baseX2) / 2;
+      const offsetY = box.y + box.height * 0.3;
+      
+      // 3 clicks to create channel
+      await page.mouse.click(baseX1, baseY);
+      await page.mouse.click(baseX2, baseY);
+      await page.mouse.click(offsetX, offsetY);
+
+      // Wait for channel
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.objects?.some((d: any) => d.type === "channel");
+      }, { timeout: 3000 }).toBe(true);
+
+      // Get initial p3 price
+      const initialP3Price = await page.evaluate(() => {
+        const dump = (window as any).__lwcharts?.dump?.();
+        const channel = dump?.objects?.find((d: any) => d.type === "channel");
+        return channel?.p3?.price;
+      });
+
+      // Find p3 position and drag it
+      // p3 is at offsetX, offsetY (approximately)
+      await page.mouse.move(offsetX, offsetY);
+      await page.mouse.down();
+      await page.mouse.move(offsetX, offsetY - 30, { steps: 5 }); // Move up = smaller price
+      await page.mouse.up();
+
+      // Verify p3 moved (price changed)
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        const channel = dump?.objects?.find((d: any) => d.type === "channel");
+        return channel?.p3?.price !== initialP3Price;
+      }, { timeout: 3000 }).toBe(true);
+    });
+
+    test("should delete channel with Delete key", async ({ page }) => {
+      // Setup: create a channel
+      await page.evaluate(() => {
+        const charts = (window as any).__lwcharts;
+        if (charts?.set) charts.set({ drawings: [] });
+      });
+
+      await page.keyboard.press("c");
+      
+      // Wait for tool
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.activeTool;
+      }, { timeout: 3000 }).toBe("channel");
+      
+      // Get chart canvas
+      const chartWrapper = page.locator('[data-testid="tv-chart-root"]');
+      await expect(chartWrapper).toBeVisible({ timeout: 5000 });
+      const box = await chartWrapper.boundingBox();
+      if (!box) return;
+      
+      // 3 clicks to create channel
+      await page.mouse.click(box.x + box.width * 0.3, box.y + box.height * 0.5);
+      await page.mouse.click(box.x + box.width * 0.7, box.y + box.height * 0.5);
+      await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.3);
+
+      // Verify channel created and selected
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        const channel = dump?.objects?.find((d: any) => d.type === "channel");
+        return channel?.selected;
+      }, { timeout: 3000 }).toBe(true);
+
+      // Delete with Delete key
+      await page.keyboard.press("Delete");
+
+      // Verify channel removed
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.objects?.some((d: any) => d.type === "channel");
+      }, { timeout: 3000 }).toBe(false);
+    });
+  });
 });

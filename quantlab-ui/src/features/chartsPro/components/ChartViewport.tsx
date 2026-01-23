@@ -2273,7 +2273,7 @@ const fitToContent = useCallback(() => {
               : d.kind === "text"
               ? [{ timeMs: d.anchor.timeMs, price: d.anchor.price }]
               : d.kind === "channel"
-              ? [] // Channel references trendId
+              ? [{ timeMs: d.p1.timeMs, price: d.p1.price }, { timeMs: d.p2.timeMs, price: d.p2.price }, { timeMs: d.p3.timeMs, price: d.p3.price }]
               : d.kind === "priceRange"
               ? [{ timeMs: d.p1.timeMs, price: d.p1.price }, { timeMs: d.p2.timeMs, price: d.p2.price }]
               : d.kind === "dateRange"
@@ -2307,6 +2307,12 @@ const fitToContent = useCallback(() => {
               deltaPercent: d.p1.price !== 0 ? ((d.p2.price - d.p1.price) / d.p1.price) * 100 : 0,
               deltaMs: Math.abs(d.p2.timeMs - d.p1.timeMs),
               deltaDays: Math.abs(d.p2.timeMs - d.p1.timeMs) / (1000 * 60 * 60 * 24),
+            }),
+            // Parallel channel raw points for channel tests
+            ...(d.kind === "channel" && {
+              p1: d.p1,
+              p2: d.p2,
+              p3: d.p3,
             }),
             // FibRetracement computed values for Fibonacci tests
             ...(d.kind === "fibRetracement" && {

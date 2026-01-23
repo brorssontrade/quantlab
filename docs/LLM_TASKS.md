@@ -109,6 +109,74 @@ export const FIB_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.272, 1.618] 
 
 ---
 
+### 2026-01-24 (TV-20.8 – 3-Point Parallel Channel)
+
+**Status:** ✅ **COMPLETE** (Full 3-point Parallel Channel with TradingView-style 3-click workflow)
+
+**Task Description:** "Implementera 3-punkts Parallel Channel: p1→p2 baseline, p3 offset, TradingView-stil (2 parallella linjer + mittlinje), full edit lifecycle, dump() kontrakt för tester."
+
+**Implementation:**
+1. **Refactored Channel interface** from `{ trendId, offsetTop, offsetBottom }` to standalone `{ p1, p2, p3 }`
+2. **3-click workflow**: Click 1 sets p1, Click 2 locks p2 (baseline), Click 3 locks p3 (offset)
+3. **Geometry computation**: Perpendicular offset from p3 to baseline determines channel width
+4. **Rendering**: Baseline, parallel line, and midline with 3 handles at p1, p2, p3
+5. **Full edit lifecycle**: Select, drag p1/p2/p3 individually, drag line to move entire channel, delete
+
+**Key Bug Fix:**
+- **handlePointerUp** was resetting session on every mouse up
+- Added check to preserve state during multi-click workflow (channel phase 1→2→commit)
+
+**Channel 3-Point Model:**
+```typescript
+interface Channel extends DrawingBase {
+  kind: "channel";
+  p1: TrendPoint;  // Baseline start
+  p2: TrendPoint;  // Baseline end
+  p3: TrendPoint;  // Offset point (perpendicular distance defines width)
+}
+```
+
+**Geometry Computation:**
+```typescript
+// Perpendicular unit normal to baseline
+const nx = -dy / len;
+const ny = dx / len;
+
+// Signed distance from p3 to baseline
+const offsetDist = (p3.x - baseline.x1) * nx + (p3.y - baseline.y1) * ny;
+
+// Parallel line = baseline shifted by offsetDist * normal
+// Midline = average of baseline and parallel
+```
+
+**dump() Contract:**
+```typescript
+{
+  type: "channel",
+  p1: { timeMs: number, price: number },
+  p2: { timeMs: number, price: number },
+  p3: { timeMs: number, price: number },
+  points: [p1, p2, p3]
+}
+```
+
+**Files Changed:**
+- `quantlab-ui/src/features/chartsPro/types.ts` (Channel interface → p1/p2/p3)
+- `quantlab-ui/src/features/chartsPro/components/DrawingLayer.tsx` (~15 case blocks)
+- `quantlab-ui/src/features/chartsPro/components/ChartViewport.tsx` (dump() contract)
+- `quantlab-ui/tests/chartsPro.cp20.spec.ts` (+5 tests)
+- `docs/CHARTSPRO_TVUI_KANBAN.md` (TV-20.8 marked DONE)
+
+**Test Results & Gates:**
+- npm build ✅ (2473 modules)
+- chartsPro.cp20 ✅ **72/72 tests, 15/15 TV-20.8 = 5×3 repeat-each FLAKE-FREE**
+- tvParity ✅ (35/35 passed)
+
+**Commits:**
+- `409434d` feat(frontend): TV-20.8 3-point Parallel Channel
+
+---
+
 ### 2026-01-23 (TV-20.6 Tests Flake Fix)
 
 **Status:** ✅ **COMPLETE** (All TV-20.6 measure tests now use expect.poll() instead of waitForTimeout())

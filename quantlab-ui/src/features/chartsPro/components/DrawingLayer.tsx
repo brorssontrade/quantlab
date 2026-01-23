@@ -37,7 +37,7 @@ type DrawingGeometry =
   | { kind: "hline"; segment: SegmentGeometry }
   | { kind: "vline"; segment: SegmentGeometry }
   | { kind: "trend"; segment: SegmentGeometry }
-  | { kind: "channel"; base?: SegmentGeometry | null; upper?: SegmentGeometry | null; lower?: SegmentGeometry | null }
+  | { kind: "channel"; baseline: SegmentGeometry; parallel: SegmentGeometry; midline: SegmentGeometry; p3: { x: number; y: number } }
   | { kind: "rectangle"; x: number; y: number; w: number; h: number; path: Path2D }
   | { kind: "text"; x: number; y: number; width: number; height: number; content: string }
   | { kind: "priceRange"; segment: SegmentGeometry; deltaPrice: number; deltaPercent: number }
@@ -47,7 +47,7 @@ type DrawingGeometry =
 
 type PointerState =
   | { mode: "idle" }
-  | { mode: "drawing"; id: string; kind: DrawingKind }
+  | { mode: "drawing"; id: string; kind: DrawingKind; phase?: number } // phase for multi-click tools (channel: 1=baseline, 2=offset)
   | { mode: "drag"; id: string; handle: DragHandle };
 
 const COLORS: Record<Drawing["kind"], string> = {
@@ -545,11 +545,26 @@ export function DrawingLayer({
             break;
           }
           case "channel": {
-            if (geometry.upper && distanceToSegment(point.x, point.y, geometry.upper) <= HIT_TOLERANCE) {
-              return { drawing, handle: "upper" };
+            const { baseline, parallel, midline, p3 } = geometry;
+            // Check endpoint handles first (p1, p2 on baseline, p3 for offset)
+            if (distance(point.x, point.y, baseline.x1, baseline.y1) <= HANDLE_RADIUS + 2) {
+              return { drawing, handle: "p1" };
             }
-            if (geometry.lower && distanceToSegment(point.x, point.y, geometry.lower) <= HIT_TOLERANCE) {
-              return { drawing, handle: "lower" };
+            if (distance(point.x, point.y, baseline.x2, baseline.y2) <= HANDLE_RADIUS + 2) {
+              return { drawing, handle: "p2" };
+            }
+            if (distance(point.x, point.y, p3.x, p3.y) <= HANDLE_RADIUS + 2) {
+              return { drawing, handle: "p3" };
+            }
+            // Check line segments for move
+            if (distanceToSegment(point.x, point.y, baseline) <= HIT_TOLERANCE) {
+              return { drawing, handle: "line" };
+            }
+            if (distanceToSegment(point.x, point.y, parallel) <= HIT_TOLERANCE) {
+              return { drawing, handle: "line" };
+            }
+            if (distanceToSegment(point.x, point.y, midline) <= HIT_TOLERANCE) {
+              return { drawing, handle: "line" };
             }
             break;
           }
@@ -721,33 +736,24 @@ export function DrawingLayer({
           break;
         }
         case "channel": {
-          const hit = hitTest(point, { includeLocked: true });
-          const base =
-            hit?.drawing.kind === "trend"
-              ? (hit.drawing as Trend)
-              : selectedId
-                ? trendMap.get(selectedId)
-                : undefined;
-          if (!base) return;
-          const basePrice = valueOnTrend(base, point.timeMs);
-          const diff = point.price - basePrice;
+          // 3-click workflow: click1=p1, click2=p2, click3=p3
           const drawing: Drawing = {
             id: createId(),
             kind: "channel",
             symbol,
             tf: timeframe,
-            trendId: base.id,
-            offsetTop: diff >= 0 ? diff : 0,
-            offsetBottom: diff < 0 ? Math.abs(diff) : 0,
+            p1: { timeMs: point.timeMs, price: point.price },
+            p2: { timeMs: point.timeMs, price: point.price },
+            p3: { timeMs: point.timeMs, price: point.price },
             createdAt: Date.now(),
             updatedAt: Date.now(),
             z: Date.now(),
-            style: { color: COLORS.channel, width: 1, dash: [6, 4] },
+            style: { color: COLORS.channel, width: 1 },
           };
           pushDraft(drawing);
-          pointerState.current = { mode: "drawing", id: drawing.id, kind: "channel" };
+          pointerState.current = { mode: "drawing", id: drawing.id, kind: "channel", phase: 1 };
           draftIdRef.current = drawing.id;
-          pendingCommitRef.current = true;
+          pendingCommitRef.current = false; // Don't commit on first mouse up
           requestRender();
           break;
         }
@@ -904,17 +910,26 @@ export function DrawingLayer({
           };
           pushDraft(next, { transient: true, select: false });
         } else if (drawing.kind === "channel") {
-          const base = trendMap.get(drawing.trendId);
-          if (!base) return;
-          const basePrice = valueOnTrend(base, targetPoint.timeMs);
-          const diff = targetPoint.price - basePrice;
-          const next: Drawing = {
-            ...drawing,
-            offsetTop: diff >= 0 ? diff : drawing.offsetTop,
-            offsetBottom: diff < 0 ? Math.abs(diff) : drawing.offsetBottom,
-            updatedAt: Date.now(),
-          };
-          pushDraft(next, { transient: true, select: false });
+          // 3-click channel: phase 1 updates p2, phase 2 updates p3
+          const phase = state.phase ?? 1;
+          if (phase === 1) {
+            // Drawing baseline: update p2
+            const next: Drawing = {
+              ...drawing,
+              p2: { timeMs: targetPoint.timeMs, price: targetPoint.price },
+              p3: { timeMs: targetPoint.timeMs, price: targetPoint.price },
+              updatedAt: Date.now(),
+            };
+            pushDraft(next, { transient: true, select: false });
+          } else if (phase === 2) {
+            // Drawing offset: update p3
+            const next: Drawing = {
+              ...drawing,
+              p3: { timeMs: targetPoint.timeMs, price: targetPoint.price },
+              updatedAt: Date.now(),
+            };
+            pushDraft(next, { transient: true, select: false });
+          }
         } else if (drawing.kind === "rectangle") {
           const next: Drawing = {
             ...drawing,
@@ -992,20 +1007,35 @@ export function DrawingLayer({
             }
             break;
           case "channel":
-            if (state.handle === "upper") {
-              const base = trendMap.get(drawing.trendId);
-              if (!base) break;
+            // 3-point channel: handles for p1, p2, p3, baseline, parallel, midline
+            if (state.handle === "p1") {
               pushDraft({
                 ...drawing,
-                offsetTop: Math.max(0, targetPoint.price - valueOnTrend(base, targetPoint.timeMs)),
+                p1: { timeMs: targetPoint.timeMs, price: targetPoint.price },
                 updatedAt: Date.now(),
               }, { transient: true, select: false });
-            } else if (state.handle === "lower") {
-              const base = trendMap.get(drawing.trendId);
-              if (!base) break;
+            } else if (state.handle === "p2") {
               pushDraft({
                 ...drawing,
-                offsetBottom: Math.max(0, valueOnTrend(base, targetPoint.timeMs) - targetPoint.price),
+                p2: { timeMs: targetPoint.timeMs, price: targetPoint.price },
+                updatedAt: Date.now(),
+              }, { transient: true, select: false });
+            } else if (state.handle === "p3") {
+              pushDraft({
+                ...drawing,
+                p3: { timeMs: targetPoint.timeMs, price: targetPoint.price },
+                updatedAt: Date.now(),
+              }, { transient: true, select: false });
+            } else if (state.handle === "line" && pointerOrigin.current) {
+              // Move entire channel
+              const dt = targetPoint.timeMs - pointerOrigin.current.timeMs;
+              const dp = targetPoint.price - pointerOrigin.current.price;
+              pointerOrigin.current = targetPoint;
+              pushDraft({
+                ...drawing,
+                p1: { timeMs: drawing.p1.timeMs + dt, price: drawing.p1.price + dp },
+                p2: { timeMs: drawing.p2.timeMs + dt, price: drawing.p2.price + dp },
+                p3: { timeMs: drawing.p3.timeMs + dt, price: drawing.p3.price + dp },
                 updatedAt: Date.now(),
               }, { transient: true, select: false });
             }
@@ -1265,6 +1295,37 @@ export function DrawingLayer({
       const point = computePoint(event);
       if (!point) return;
       pointerOrigin.current = point;
+      
+      // Handle multi-click tool phase advancement (channel: 3-click)
+      const state = pointerState.current;
+      if (state.mode === "drawing" && state.kind === "channel" && state.phase) {
+        event.preventDefault();
+        const drawing = activeDraftRef.current;
+        if (!drawing || drawing.kind !== "channel") return;
+        
+        if (state.phase === 1) {
+          // Phase 1→2: Lock p2 (baseline end), start defining p3
+          pushDraft({
+            ...drawing,
+            p2: { timeMs: point.timeMs, price: point.price },
+            updatedAt: Date.now(),
+          }, { transient: false, select: false });
+          pointerState.current = { mode: "drawing", id: drawing.id, kind: "channel", phase: 2 };
+          requestRender();
+        } else if (state.phase === 2) {
+          // Phase 2→commit: Lock p3 and commit
+          const finalDrawing: Drawing = {
+            ...drawing,
+            p3: { timeMs: point.timeMs, price: point.price },
+            updatedAt: Date.now(),
+          };
+          onUpsert(finalDrawing, { select: true });
+          resetPointerSession();
+          setTool("select");
+        }
+        return;
+      }
+      
       const hit = hitTest(point);
       if (tool === "select") {
         handleSelection(point, event, hit);
@@ -1288,6 +1349,12 @@ export function DrawingLayer({
       if (spaceDraggingRef.current) {
         spaceDraggingRef.current = false;
         if (spacePanRef.current) updateCursor(CURSORS.grab);
+        return;
+      }
+      // Don't reset session for multi-click tools in progress (channel 3-click workflow)
+      const state = pointerState.current;
+      if (state.mode === "drawing" && state.kind === "channel" && state.phase) {
+        // Channel is in multi-click workflow - don't reset
         return;
       }
       if (pendingCommitRef.current && activeDraftRef.current) {
@@ -1454,34 +1521,35 @@ function drawChannel(
   colors: OverlayColors,
 ) {
   if (drawing.kind !== "channel") return;
-  ctx.setLineDash([6, 4]);
-  if (geometry.base) {
-    ctx.strokeStyle = colors.line;
-    ctx.lineWidth = LINE_WIDTH;
-    ctx.stroke(geometry.base.path);
-  }
+  
+  const { baseline, parallel, midline, p3 } = geometry;
   const stroke = drawing.style?.color || colors.line;
   const baseWidth = drawing.style?.width ?? LINE_WIDTH;
-  ctx.setLineDash(drawing.style?.dash || [6, 4]);
+  
+  // Draw baseline (solid)
   ctx.strokeStyle = selected ? colors.selection : stroke;
   ctx.lineWidth = selected ? SELECTED_LINE_WIDTH : baseWidth;
-  if (geometry.upper) {
-    ctx.stroke(geometry.upper.path);
-  }
-  if (geometry.lower) {
-    ctx.stroke(geometry.lower.path);
-  }
+  ctx.setLineDash([]);
+  ctx.stroke(baseline.path);
+  
+  // Draw parallel line (solid)
+  ctx.stroke(parallel.path);
+  
+  // Draw midline (dashed, subtle)
+  ctx.setLineDash([4, 4]);
+  ctx.lineWidth = (selected ? SELECTED_LINE_WIDTH : baseWidth) * 0.6;
+  ctx.globalAlpha = 0.5;
+  ctx.stroke(midline.path);
+  ctx.globalAlpha = 1;
+  ctx.setLineDash([]);
+  
+  // Draw handles when selected
   if (selected) {
-    if (geometry.upper) {
-      const midUpperX = (geometry.upper.x1 + geometry.upper.x2) / 2;
-      const midUpperY = (geometry.upper.y1 + geometry.upper.y2) / 2;
-      drawHandleCircle(ctx, midUpperX, midUpperY, colors);
-    }
-    if (geometry.lower) {
-      const midLowerX = (geometry.lower.x1 + geometry.lower.x2) / 2;
-      const midLowerY = (geometry.lower.y1 + geometry.lower.y2) / 2;
-      drawHandleCircle(ctx, midLowerX, midLowerY, colors);
-    }
+    // p1 and p2 handles on baseline
+    drawHandleCircle(ctx, baseline.x1, baseline.y1, colors);
+    drawHandleCircle(ctx, baseline.x2, baseline.y2, colors);
+    // p3 handle for offset
+    drawHandleCircle(ctx, p3.x, p3.y, colors);
   }
 }
 
@@ -1912,7 +1980,7 @@ function geometrySignature(drawing: Drawing, viewport: GeometryViewport) {
     case "trend":
       return `${drawing.id}:${drawing.updatedAt}:${drawing.p1.timeMs}:${drawing.p1.price}:${drawing.p2.timeMs}:${drawing.p2.price}:${base}`;
     case "channel":
-      return `${drawing.id}:${drawing.updatedAt}:${drawing.trendId}:${drawing.offsetTop}:${drawing.offsetBottom}:${base}`;
+      return `${drawing.id}:${drawing.updatedAt}:${drawing.p1.timeMs}:${drawing.p1.price}:${drawing.p2.timeMs}:${drawing.p2.price}:${drawing.p3.timeMs}:${drawing.p3.price}:${base}`;
     case "rectangle":
       return `${drawing.id}:${drawing.updatedAt}:${drawing.p1.timeMs}:${drawing.p1.price}:${drawing.p2.timeMs}:${drawing.p2.price}:${base}`;
     case "text":
@@ -1966,16 +2034,51 @@ function buildDrawingGeometry({
       };
     }
     case "channel": {
-      const baseTrend = trends.get(drawing.trendId);
-      if (!baseTrend) return null;
-      const baseCoords = trendSegmentCoords(chart, series, baseTrend.p1, baseTrend.p2, width, height);
-      const upper = channelLineCoords(baseTrend, drawing.offsetTop, chart, series, width, height);
-      const lower = channelLineCoords(baseTrend, -drawing.offsetBottom, chart, series, width, height);
+      // 3-point channel: p1-p2 = baseline, p3 = offset point
+      const baseCoords = trendSegmentCoords(chart, series, drawing.p1, drawing.p2, width, height);
+      if (!baseCoords) return null;
+      
+      const p3x = coordinateFromTime(chart, drawing.p3.timeMs, width);
+      const p3y = resolveYCoordinate(series, drawing.p3.price, height);
+      if (p3x == null || p3y == null) return null;
+      
+      // Compute perpendicular offset from baseline to p3 in pixel space
+      const dx = baseCoords.x2 - baseCoords.x1;
+      const dy = baseCoords.y2 - baseCoords.y1;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      if (len === 0) return null;
+      
+      // Unit normal vector (perpendicular to baseline)
+      const nx = -dy / len;
+      const ny = dx / len;
+      
+      // Distance from p3 to baseline (signed)
+      const p3OffsetX = p3x - baseCoords.x1;
+      const p3OffsetY = p3y - baseCoords.y1;
+      const offsetDist = p3OffsetX * nx + p3OffsetY * ny;
+      
+      // Parallel line endpoints (offset from baseline by offsetDist)
+      const parallel = {
+        x1: baseCoords.x1 + nx * offsetDist,
+        y1: baseCoords.y1 + ny * offsetDist,
+        x2: baseCoords.x2 + nx * offsetDist,
+        y2: baseCoords.y2 + ny * offsetDist,
+      };
+      
+      // Midline endpoints (halfway between baseline and parallel)
+      const midline = {
+        x1: (baseCoords.x1 + parallel.x1) / 2,
+        y1: (baseCoords.y1 + parallel.y1) / 2,
+        x2: (baseCoords.x2 + parallel.x2) / 2,
+        y2: (baseCoords.y2 + parallel.y2) / 2,
+      };
+      
       return {
         kind: "channel",
-        base: baseCoords ? createSegment(baseCoords.x1, baseCoords.y1, baseCoords.x2, baseCoords.y2) : null,
-        upper: upper ? createSegment(upper.x1, upper.y1, upper.x2, upper.y2) : null,
-        lower: lower ? createSegment(lower.x1, lower.y1, lower.x2, lower.y2) : null,
+        baseline: createSegment(baseCoords.x1, baseCoords.y1, baseCoords.x2, baseCoords.y2),
+        parallel: createSegment(parallel.x1, parallel.y1, parallel.x2, parallel.y2),
+        midline: createSegment(midline.x1, midline.y1, midline.x2, midline.y2),
+        p3: { x: p3x, y: p3y },
       };
     }
     case "rectangle": {
@@ -2194,6 +2297,9 @@ function cloneDrawingState(drawing: Drawing): Drawing {
   }
   if (drawing.kind === "rectangle") {
     return { ...drawing, p1: { ...drawing.p1 }, p2: { ...drawing.p2 } };
+  }
+  if (drawing.kind === "channel") {
+    return { ...drawing, p1: { ...drawing.p1 }, p2: { ...drawing.p2 }, p3: { ...drawing.p3 } };
   }
   if (drawing.kind === "text") {
     return { ...drawing, anchor: { ...drawing.anchor } };

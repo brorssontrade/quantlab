@@ -901,6 +901,7 @@
 | ✅ DONE | TV-20.6b | Measure: Date Range (2-click, bars, deltaMs) | 1h | TV-20.6a |
 | ✅ DONE | TV-20.6c | Measure: Date & Price Range (combined tool) | 1h | TV-20.6b |
 | ✅ DONE | TV-20.7 | Fibonacci Retracement (2-click, 9 levels, full edit lifecycle) | 2h | TV-20.5 |
+| ✅ DONE | TV-20.8 | Parallel Channel (3-click p1→p2→p3, baseline+parallel+midline) | 2h | TV-20.1 |
 
 **Commits:**
 - TV-20.1: `4f5e95a` fix(frontend): TV-20.1 LeftToolbar ToolGroups + Flyout
@@ -914,11 +915,11 @@
 - TV-20.6c: `36a2885` feat(frontend): TV-20.6c Measure Date & Price Range combined tool
 - TV-20.6 tests: `f96923e` fix(frontend): TV-20.6 tests use expect.poll instead of waitForTimeout
 - TV-20.7: `81824ec` feat(frontend): TV-20.7 Fibonacci Retracement tool
+- TV-20.8: `409434d` feat(frontend): TV-20.8 3-point Parallel Channel
 
-**Gate Results (TV-20.7):**
+**Gate Results (TV-20.8):**
 - build ✅ (2473 modules)
-- cp20 ✅ (117/117 = 39×3 repeat-each) **FLAKE-FREE**
-- tvUI leftToolbar ✅ (3/3 passed)
+- cp20 ✅ (72/72 tests, 15/15 TV-20.8 = 5×3 repeat-each) **FLAKE-FREE**
 - tvParity ✅ (35/35 passed)
 
 **dump() contracts for Measure tools:**
@@ -934,10 +935,13 @@
 
 // fibRetracement
 { type: "fibRetracement", p1, p2, levels: [{ratio: 0, price: X}, {ratio: 0.236, price: Y}, ...] }
+
+// channel (3-point)
+{ type: "channel", p1, p2, p3, points: [p1, p2, p3] }
 ```
 
-**Total TV-20: 18h** (revised with Fibonacci Retracement complete)  
-**Acceptance:** Measure group + Fibonacci Retracement complete. All tools show values via dump() contract, full edit lifecycle, TradingView-style rendering.
+**Total TV-20: 20h** (revised with Parallel Channel complete)  
+**Acceptance:** All drawing tools complete including Rectangle, Text, Measure tools, Fibonacci Retracement, and Parallel Channel. Full edit lifecycle, TradingView-style rendering.
 
 ---
 
