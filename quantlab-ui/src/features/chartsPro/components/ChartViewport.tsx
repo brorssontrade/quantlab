@@ -16,6 +16,7 @@ import {
   type TimeRange,
 } from "@/lib/lightweightCharts";
 import { createBaseSeries, type ChartType as FactoryChartType, type BaseSeriesApi } from "../runtime/seriesFactory";
+import { transformOhlcToHeikinAshi } from "../runtime/heikinAshi";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
 import { toast } from "sonner";
@@ -346,7 +347,7 @@ const installLwChartsStub = () => {
 installLwChartsStub();
 
 
-type ChartTypeProp = "candles" | "bars" | "line" | "area";
+type ChartTypeProp = "candles" | "bars" | "line" | "area" | "heikinAshi";
 
 interface ChartViewportProps {
   apiBase: string;
@@ -2738,6 +2739,12 @@ const fitToContent = useCallback(() => {
           baseClose: baseAnchorClose,
           compareCloses: {},
         };
+      }
+      
+      // TV-21.1: Apply Heikin Ashi transform if chartType is heikinAshi
+      if (chartType === "heikinAshi" && dataToApply.length > 0) {
+        const haBars = transformOhlcToHeikinAshi(dataToApply);
+        dataToApply = haBars as NormalizedBar[];
       }
       
       // Build candle data with transformed values
