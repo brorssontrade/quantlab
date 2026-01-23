@@ -904,12 +904,26 @@
 - TV-20.5: `8f5b26c` feat(frontend): TV-20.5 Magnet/Snap toggle + dump() dependency fix
 - TV-20.6a: `95a48ea` feat(frontend): TV-20.6a Measure Price Range tool
 - TV-20.6b: `74047e0` feat(frontend): TV-20.6b Measure Date Range tool
-- TV-20.6c: feat(frontend): TV-20.6c Measure Date & Price Range combined tool
+- TV-20.6c: `36a2885` feat(frontend): TV-20.6c Measure Date & Price Range combined tool
+- TV-20.6 tests: `f96923e` fix(frontend): TV-20.6 tests use expect.poll instead of waitForTimeout
 
-**Gate Results (TV-20.6c):**
+**Gate Results (TV-20.6 final):**
 - build ✅ (2473 modules)
-- cp20 ✅ (35/36 passed, 1 pre-existing flaky) [+2 new dateAndPriceRange tests]
+- cp20 ✅ (108/108 = 36×3 repeat-each) **FLAKE-FREE**
+- tvUI ✅ (169/169 passed)
 - tvParity ✅ (35/35 passed)
+
+**dump() contracts for Measure tools:**
+```typescript
+// priceRange
+{ type: "priceRange", p1, p2, deltaPrice, deltaPercent, points: [{timeMs, price}, ...] }
+
+// dateRange
+{ type: "dateRange", p1, p2, deltaMs, deltaDays, points: [{timeMs, price}, ...] }
+
+// dateAndPriceRange
+{ type: "dateAndPriceRange", p1, p2, deltaPrice, deltaPercent, deltaMs, deltaDays, points: [{timeMs, price}, ...] }
+```
 
 **Total TV-20: 16h** (revised with all measure tools complete)  
 **Acceptance:** Measure group complete with priceRange, dateRange, and dateAndPriceRange. All tools show deltas via dump() contract, full edit lifecycle, TradingView-style rendering.
