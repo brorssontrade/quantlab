@@ -45,7 +45,7 @@ export interface OhlcvResponse {
   meta?: Record<string, unknown>;
 }
 
-export type DrawingKind = "hline" | "vline" | "trend" | "channel" | "rectangle" | "text";
+export type DrawingKind = "hline" | "vline" | "trend" | "channel" | "rectangle" | "text" | "priceRange";
 
 export interface DrawingStyle {
   color: string;
@@ -116,7 +116,14 @@ export interface TextDrawing extends DrawingBase {
   backgroundColor?: string; // Optional background
 }
 
-export type Drawing = HLine | VLine | Trend | Channel | Rectangle | TextDrawing;
+/** Price Range measurement - two points showing Δprice and Δ% */
+export interface PriceRange extends DrawingBase {
+  kind: "priceRange";
+  p1: TrendPoint; // Start point
+  p2: TrendPoint; // End point
+}
+
+export type Drawing = HLine | VLine | Trend | Channel | Rectangle | TextDrawing | PriceRange;
 
 export interface CompareSeriesConfig {
   id: string;

@@ -116,7 +116,7 @@ export const TOOL_GROUPS: ToolGroup[] = [
     label: "Measure",
     icon: "📏",
     tools: [
-      { id: "priceRange", label: "Price Range", icon: "↕", status: "disabled", tooltip: "Coming soon" },
+      { id: "priceRange", label: "Price Range", icon: "↕", status: "enabled", tooltip: "Measure price difference" },
       { id: "dateRange", label: "Date Range", icon: "↔", status: "disabled", tooltip: "Coming soon" },
       { id: "longPosition", label: "Long Position", icon: "📈", status: "disabled", tooltip: "Coming soon" },
       { id: "shortPosition", label: "Short Position", icon: "📉", status: "disabled", tooltip: "Coming soon" },
@@ -161,6 +161,6 @@ export function getEnabledTools(): ToolDefinition[] {
  * Validate tool ID matches controls.ts Tool type
  */
 export function isValidToolId(toolId: string): toolId is Tool {
-  const validTools = ["select", "trendline", "hline", "vline", "channel", "rectangle", "text"];
+  const validTools = ["select", "trendline", "hline", "vline", "channel", "rectangle", "text", "priceRange"];
   return validTools.includes(toolId);
 }

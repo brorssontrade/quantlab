@@ -1,3 +1,49 @@
+### 2026-01-23 (TV-20.6a – Measure: Price Range)
+
+**Status:** ✅ **COMPLETE** (Price Range measure tool with Δprice and Δ% display)
+
+**Task Description:** "Measure: Price Range (2-click, Δprice, Δ%) – draw a line between two price points, display price difference and percentage change."
+
+**Implementation:**
+1. **types.ts** – Added `PriceRange` interface with p1/p2 TrendPoints, updated `DrawingKind` and `Drawing` unions
+2. **controls.ts** – Added `"priceRange"` to `Tool` type and `VALID_TOOLS` array
+3. **toolRegistry.ts** – Enabled priceRange tool in measure group
+4. **DrawingLayer.tsx** – Full priceRange lifecycle: beginDrawing, updateDrawing (draw+drag), hitTest, render, geometrySignature, buildDrawingGeometry, drawPriceRange function
+5. **ChartViewport.tsx** – Added priceRange to dump().objects with deltaPrice and deltaPercent computed values
+6. **ChartsProTab.tsx** – Updated validTools Sets (2 places)
+
+**dump() Contract for priceRange:**
+```typescript
+{
+  type: "priceRange",
+  points: [{ timeMs, price }, { timeMs, price }],
+  p1: { timeMs, price },
+  p2: { timeMs, price },
+  deltaPrice: number,    // p2.price - p1.price
+  deltaPercent: number   // ((p2.price - p1.price) / p1.price) * 100
+}
+```
+
+**Files Changed:**
+- `quantlab-ui/src/features/chartsPro/types.ts` (PriceRange interface)
+- `quantlab-ui/src/features/chartsPro/state/controls.ts` (Tool type)
+- `quantlab-ui/src/features/chartsPro/components/LeftToolbar/toolRegistry.ts` (enable priceRange)
+- `quantlab-ui/src/features/chartsPro/components/DrawingLayer.tsx` (~100 lines added)
+- `quantlab-ui/src/features/chartsPro/components/ChartViewport.tsx` (dump() contract)
+- `quantlab-ui/src/features/chartsPro/ChartsProTab.tsx` (validTools)
+- `quantlab-ui/tests/chartsPro.cp20.spec.ts` (+2 TV-20.6a tests)
+
+**Test Results & Gates:**
+- npm build ✅ (2473 modules)
+- chartsPro.cp20 ✅ (32/32 passed) [+2 priceRange tests]
+- tvUI ✅ (169/171 passed, 2 skipped)
+- tvParity ✅ (35/35 passed)
+
+**Commits:**
+- feat(frontend): TV-20.6a Measure Price Range tool
+
+---
+
 ### 2026-01-23 (TV-20.5 – Magnet/Snap Toggle + dump() Fix)
 
 **Status:** ✅ **COMPLETE** (Magnet toggle works, snap to OHLC functional, dump().ui.magnet reflects state)

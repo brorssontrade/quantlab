@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { BusinessDay, IChartApi, ISeriesApi, SeriesType, UTCTimestamp } from "@/lib/lightweightCharts";
 
-import type { Drawing, DrawingKind, NormalizedBar, Tf, Trend } from "../types";
+import type { Drawing, DrawingKind, NormalizedBar, PriceRange, Tf, Trend } from "../types";
 import { describeTrend, tsMsToUtc } from "../types";
 import type { Tool } from "../state/controls";
 import { useOverlayCanvas } from "./overlayCanvasContext";
@@ -38,7 +38,8 @@ type DrawingGeometry =
   | { kind: "trend"; segment: SegmentGeometry }
   | { kind: "channel"; base?: SegmentGeometry | null; upper?: SegmentGeometry | null; lower?: SegmentGeometry | null }
   | { kind: "rectangle"; x: number; y: number; w: number; h: number; path: Path2D }
-  | { kind: "text"; x: number; y: number; width: number; height: number; content: string };
+  | { kind: "text"; x: number; y: number; width: number; height: number; content: string }
+  | { kind: "priceRange"; segment: SegmentGeometry; deltaPrice: number; deltaPercent: number };
 
 type PointerState =
   | { mode: "idle" }
@@ -52,6 +53,7 @@ const COLORS: Record<Drawing["kind"], string> = {
   channel: "#a855f7",
   rectangle: "#22c55e",
   text: "#eab308",
+  priceRange: "#06b6d4", // cyan for measure tools
 };
 
 const HIT_TOLERANCE = 8;
@@ -285,6 +287,9 @@ export function DrawingLayer({
           break;
         case "text":
           drawText(ctx, drawing, geometry, selectedId === drawing.id, colors);
+          break;
+        case "priceRange":
+          drawPriceRange(ctx, drawing as PriceRange, geometry, selectedId === drawing.id, colors);
           break;
         default:
           break;
@@ -569,6 +574,20 @@ export function DrawingLayer({
             }
             break;
           }
+          case "priceRange": {
+            const { segment } = geometry;
+            // p1 = start point, p2 = end point
+            if (distance(point.x, point.y, segment.x1, segment.y1) <= HANDLE_RADIUS + 2) {
+              return { drawing, handle: "p1" };
+            }
+            if (distance(point.x, point.y, segment.x2, segment.y2) <= HANDLE_RADIUS + 2) {
+              return { drawing, handle: "p2" };
+            }
+            if (distanceToSegment(point.x, point.y, segment) <= HIT_TOLERANCE) {
+              return { drawing, handle: "line" };
+            }
+            break;
+          }
           default:
             break;
         }
@@ -711,11 +730,31 @@ export function DrawingLayer({
           onTextCreated?.(drawing.id);
           break;
         }
+        case "priceRange": {
+          const drawing: Drawing = {
+            id: createId(),
+            kind: "priceRange",
+            symbol,
+            tf: timeframe,
+            p1: { timeMs: point.timeMs, price: point.price },
+            p2: { timeMs: point.timeMs, price: point.price },
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+            z: Date.now(),
+            style: { color: COLORS.priceRange, width: 2 },
+          };
+          pushDraft(drawing);
+          pointerState.current = { mode: "drawing", id: drawing.id, kind: "priceRange" };
+          draftIdRef.current = drawing.id;
+          pendingCommitRef.current = true;
+          requestRender();
+          break;
+        }
         default:
           break;
       }
     },
-    [hitTest, pushDraft, requestRender, selectedId, symbol, timeframe, tool, trendMap],
+    [hitTest, onTextCreated, pushDraft, requestRender, selectedId, symbol, timeframe, tool, trendMap],
   );
 
   const updateDrawing = useCallback(
@@ -750,6 +789,13 @@ export function DrawingLayer({
           };
           pushDraft(next, { transient: true, select: false });
         } else if (drawing.kind === "rectangle") {
+          const next: Drawing = {
+            ...drawing,
+            p2: { timeMs: targetPoint.timeMs, price: targetPoint.price },
+            updatedAt: Date.now(),
+          };
+          pushDraft(next, { transient: true, select: false });
+        } else if (drawing.kind === "priceRange") {
           const next: Drawing = {
             ...drawing,
             p2: { timeMs: targetPoint.timeMs, price: targetPoint.price },
@@ -882,6 +928,33 @@ export function DrawingLayer({
                   timeMs: drawing.anchor.timeMs + dt, 
                   price: drawing.anchor.price + dp 
                 },
+                updatedAt: Date.now(),
+              }, { transient: true, select: false });
+            }
+            break;
+          }
+          case "priceRange": {
+            // priceRange: drag p1 or p2 endpoints, or move whole measurement
+            if (state.handle === "p1") {
+              pushDraft({
+                ...drawing,
+                p1: { timeMs: targetPoint.timeMs, price: targetPoint.price },
+                updatedAt: Date.now(),
+              }, { transient: true, select: false });
+            } else if (state.handle === "p2") {
+              pushDraft({
+                ...drawing,
+                p2: { timeMs: targetPoint.timeMs, price: targetPoint.price },
+                updatedAt: Date.now(),
+              }, { transient: true, select: false });
+            } else if (state.handle === "line" && pointerOrigin.current) {
+              const dt = targetPoint.timeMs - pointerOrigin.current.timeMs;
+              const dp = targetPoint.price - pointerOrigin.current.price;
+              pointerOrigin.current = targetPoint;
+              pushDraft({
+                ...drawing,
+                p1: { timeMs: drawing.p1.timeMs + dt, price: drawing.p1.price + dp },
+                p2: { timeMs: drawing.p2.timeMs + dt, price: drawing.p2.price + dp },
                 updatedAt: Date.now(),
               }, { transient: true, select: false });
             }
@@ -1259,6 +1332,63 @@ function drawText(
   }
 }
 
+function drawPriceRange(
+  ctx: CanvasRenderingContext2D,
+  drawing: PriceRange,
+  geometry: Extract<DrawingGeometry, { kind: "priceRange" }>,
+  selected: boolean,
+  colors: OverlayColors,
+) {
+  const { segment, deltaPrice, deltaPercent } = geometry;
+  const color = drawing.style?.color ?? colors.line;
+  const lineWidth = selected ? SELECTED_LINE_WIDTH : (drawing.style?.width ?? LINE_WIDTH);
+  
+  // Draw line connecting p1 and p2
+  ctx.strokeStyle = selected ? colors.selection : color;
+  ctx.lineWidth = lineWidth;
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.moveTo(segment.x1, segment.y1);
+  ctx.lineTo(segment.x2, segment.y2);
+  ctx.stroke();
+  
+  // Draw horizontal extension lines at both ends (TV-style measurement)
+  const extLen = 15;
+  ctx.beginPath();
+  ctx.moveTo(segment.x1 - extLen, segment.y1);
+  ctx.lineTo(segment.x1 + extLen, segment.y1);
+  ctx.moveTo(segment.x2 - extLen, segment.y2);
+  ctx.lineTo(segment.x2 + extLen, segment.y2);
+  ctx.stroke();
+  
+  // Draw label showing Δprice and Δ%
+  const sign = deltaPrice >= 0 ? "+" : "";
+  const label = `${sign}${deltaPrice.toFixed(2)} (${sign}${deltaPercent.toFixed(2)}%)`;
+  const labelX = (segment.x1 + segment.x2) / 2;
+  const labelY = (segment.y1 + segment.y2) / 2;
+  
+  ctx.font = "12px sans-serif";
+  const textWidth = ctx.measureText(label).width;
+  const padding = 4;
+  
+  // Background for label
+  ctx.fillStyle = colors.labelBg;
+  ctx.fillRect(labelX - textWidth / 2 - padding, labelY - 8 - padding, textWidth + padding * 2, 16 + padding);
+  
+  // Label text
+  ctx.fillStyle = deltaPrice >= 0 ? "#22c55e" : "#ef4444"; // green/red based on direction
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(label, labelX, labelY);
+  ctx.textAlign = "left"; // reset
+  
+  // Draw handles when selected
+  if (selected) {
+    drawHandleCircle(ctx, segment.x1, segment.y1, colors);
+    drawHandleCircle(ctx, segment.x2, segment.y2, colors);
+  }
+}
+
 interface GeometryViewport {
   width: number;
   height: number;
@@ -1290,6 +1420,8 @@ function geometrySignature(drawing: Drawing, viewport: GeometryViewport) {
       return `${drawing.id}:${drawing.updatedAt}:${drawing.p1.timeMs}:${drawing.p1.price}:${drawing.p2.timeMs}:${drawing.p2.price}:${base}`;
     case "text":
       return `${drawing.id}:${drawing.updatedAt}:${drawing.anchor.timeMs}:${drawing.anchor.price}:${drawing.content}:${drawing.fontSize ?? 12}:${base}`;
+    case "priceRange":
+      return `${drawing.id}:${drawing.updatedAt}:${drawing.p1.timeMs}:${drawing.p1.price}:${drawing.p2.timeMs}:${drawing.p2.price}:${base}`;
     default:
       return base;
   }
@@ -1373,6 +1505,19 @@ function buildDrawingGeometry({
         width: textWidth, 
         height: textHeight, 
         content 
+      };
+    }
+    case "priceRange": {
+      const coords = trendSegmentCoords(chart, series, drawing.p1, drawing.p2, width, height);
+      if (!coords) return null;
+      // Compute deltas for display
+      const deltaPrice = drawing.p2.price - drawing.p1.price;
+      const deltaPercent = drawing.p1.price !== 0 ? (deltaPrice / drawing.p1.price) * 100 : 0;
+      return {
+        kind: "priceRange",
+        segment: createSegment(coords.x1, coords.y1, coords.x2, coords.y2),
+        deltaPrice,
+        deltaPercent,
       };
     }
     default:

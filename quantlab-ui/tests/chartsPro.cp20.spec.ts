@@ -1016,4 +1016,128 @@ test.describe("TV-20: LeftToolbar Tool Groups + Flyout", () => {
       expect(trendObj.points.length).toBe(2);
     });
   });
+
+  test.describe("TV-20.6a: Price Range Measure", () => {
+    test("create priceRange and verify deltas via dump()", async ({ page }) => {
+      // Select Price Range tool via LeftToolbar flyout
+      // First click the Measure group to open flyout
+      const measureGroup = page.locator('[data-testid="lefttoolbar-group-measure"]');
+      await measureGroup.click();
+      await page.waitForTimeout(300);
+      
+      // Then click Price Range tool
+      const priceRangeTool = page.locator('[data-testid="tool-priceRange"]');
+      await priceRangeTool.waitFor({ state: "visible", timeout: 3000 });
+      await priceRangeTool.click();
+      await page.waitForTimeout(300);
+
+      // Verify tool is active
+      const toolAfterSelect = await page.evaluate(() => (window as any).__lwcharts?.dump?.()?.ui?.activeTool);
+      expect(toolAfterSelect).toBe("priceRange");
+
+      // Get chart canvas and draw priceRange
+      // Use the main chart wrapper instead of drawing-overlay for more reliable clicks
+      const chartWrapper = page.locator('[data-testid="tv-chart-root"]');
+      await expect(chartWrapper).toBeVisible({ timeout: 5000 });
+      const box = await chartWrapper.boundingBox();
+      expect(box).toBeTruthy();
+      if (!box) return;
+
+      // Define points: p1 (higher price, lower Y) and p2 (lower price, higher Y)
+      const x1 = box.x + box.width * 0.3;
+      const y1 = box.y + box.height * 0.3; // Higher price (lower Y)
+      
+      const x2 = box.x + box.width * 0.6;
+      const y2 = box.y + box.height * 0.6; // Lower price (higher Y)
+
+      // Draw priceRange with drag pattern (down -> move -> up)
+      await page.mouse.move(x1, y1);
+      await page.mouse.down();
+      await page.mouse.move(x2, y2);
+      await page.mouse.up();
+      await page.waitForTimeout(200);
+
+      // Verify priceRange was created and has correct deltas
+      const dumpAfter = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      const priceRangeObj = dumpAfter?.objects?.find((d: any) => d.type === "priceRange");
+      
+      expect(priceRangeObj).toBeTruthy();
+      expect(priceRangeObj.p1).toBeDefined();
+      expect(priceRangeObj.p2).toBeDefined();
+      expect(typeof priceRangeObj.deltaPrice).toBe("number");
+      expect(typeof priceRangeObj.deltaPercent).toBe("number");
+      
+      // Delta should be non-zero (sign depends on price direction)
+      expect(priceRangeObj.deltaPrice).not.toBe(0);
+      expect(priceRangeObj.deltaPercent).not.toBe(0);
+      
+      // Points array should have 2 entries
+      expect(priceRangeObj.points.length).toBe(2);
+    });
+
+    test("move priceRange endpoint updates deltas", async ({ page }) => {
+      // Select Price Range tool
+      const measureGroup = page.locator('[data-testid="lefttoolbar-group-measure"]');
+      await measureGroup.click();
+      await page.waitForTimeout(300);
+      
+      const priceRangeTool = page.locator('[data-testid="tool-priceRange"]');
+      await priceRangeTool.waitFor({ state: "visible", timeout: 3000 });
+      await priceRangeTool.click();
+      await page.waitForTimeout(300);
+
+      // Get chart canvas
+      const chartWrapper = page.locator('[data-testid="tv-chart-root"]');
+      await expect(chartWrapper).toBeVisible({ timeout: 5000 });
+      const box = await chartWrapper.boundingBox();
+      expect(box).toBeTruthy();
+      if (!box) return;
+
+      // Create priceRange with small price difference using drag pattern
+      const x1 = box.x + box.width * 0.4;
+      const y1 = box.y + box.height * 0.45;
+      const x2 = box.x + box.width * 0.5;
+      const y2 = box.y + box.height * 0.55;
+
+      await page.mouse.move(x1, y1);
+      await page.mouse.down();
+      await page.mouse.move(x2, y2);
+      await page.mouse.up();
+      await page.waitForTimeout(200);
+
+      // Get initial deltas
+      const dumpBefore = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      const objBefore = dumpBefore?.objects?.find((d: any) => d.type === "priceRange");
+      expect(objBefore).toBeTruthy();
+      const deltaBefore = objBefore.deltaPrice;
+
+      // Switch to select tool and select the priceRange
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(100);
+
+      // Click on the priceRange to select it
+      const midX = (x1 + x2) / 2;
+      const midY = (y1 + y2) / 2;
+      await page.mouse.click(midX, midY);
+      await page.waitForTimeout(200);
+
+      // Drag the second endpoint (p2) to a different Y position
+      // This makes the delta larger
+      await page.mouse.move(x2, y2);
+      await page.waitForTimeout(100);
+      await page.mouse.down();
+      await page.mouse.move(x2, y2 + 50); // Move down = lower price = larger negative delta
+      await page.mouse.up();
+      await page.waitForTimeout(200);
+
+      // Verify deltas changed
+      const dumpAfter = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      const objAfter = dumpAfter?.objects?.find((d: any) => d.type === "priceRange");
+      expect(objAfter).toBeTruthy();
+      const deltaAfter = objAfter.deltaPrice;
+
+      // Delta should be more negative after moving p2 down
+      expect(deltaAfter).toBeLessThan(deltaBefore);
+    });
+  });
 });

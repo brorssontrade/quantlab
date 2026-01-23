@@ -2274,11 +2274,20 @@ const fitToContent = useCallback(() => {
               ? [{ timeMs: d.anchor.timeMs, price: d.anchor.price }]
               : d.kind === "channel"
               ? [] // Channel references trendId
+              : d.kind === "priceRange"
+              ? [{ timeMs: d.p1.timeMs, price: d.p1.price }, { timeMs: d.p2.timeMs, price: d.p2.price }]
               : [],
             // Raw p1/p2 for rectangle tests
             ...(d.kind === "rectangle" && { p1: d.p1, p2: d.p2 }),
             // Text content for text tests
             ...(d.kind === "text" && { content: d.content, anchor: d.anchor }),
+            // PriceRange computed values for measure tests
+            ...(d.kind === "priceRange" && {
+              p1: d.p1,
+              p2: d.p2,
+              deltaPrice: d.p2.price - d.p1.price,
+              deltaPercent: d.p1.price !== 0 ? ((d.p2.price - d.p1.price) / d.p1.price) * 100 : 0,
+            }),
           })),
           // Alerts contract (count only for now, full list via API)
           alerts: {
