@@ -1264,3 +1264,237 @@ test.describe("TV-22.0b: Renko Settings Modal", () => {
     expect(inputValue).toBe("0");
   });
 });
+
+// ────────────────────────────────────────────────────────────────────────────────
+/**
+ * TV-22.0d2: Renko Settings Modal UX Hardening Tests
+ * 
+ * Tests for:
+ * - Save disabled when input is invalid
+ * - Inline error messages
+ * - Reset to defaults
+ * - String-draft allows empty input during typing
+ */
+// ────────────────────────────────────────────────────────────────────────────────
+
+test.describe("TV-22.0d2: Renko Settings Modal UX Hardening", () => {
+  test("Save is disabled when fixedBoxSize is empty in fixed mode", async ({ page }) => {
+    await gotoChartsPro(page);
+
+    // Switch to renko and open modal
+    await page.getByTestId("chart-type-button").click();
+    await page.getByTestId("chart-type-option-renko").click();
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.chartType;
+    }, { timeout: 5000 }).toBe("renko");
+
+    await page.getByTestId("renko-settings-open").click();
+    await expect(page.getByTestId("renko-settings-modal")).toBeVisible();
+
+    // Switch to fixed mode
+    await page.getByTestId("renko-settings-mode-fixed").click();
+
+    // Clear the box size input
+    const boxSizeInput = page.getByTestId("renko-settings-fixed-box-size");
+    await boxSizeInput.fill("");
+
+    // Save button should be disabled
+    const saveBtn = page.getByTestId("renko-settings-save");
+    await expect(saveBtn).toBeDisabled();
+
+    // Error message should be visible
+    const errorMsg = page.getByTestId("renko-settings-error-fixed-box-size");
+    await expect(errorMsg).toBeVisible();
+    await expect(errorMsg).toHaveText(/must be a number/i);
+  });
+
+  test("Save is disabled when atrPeriod is 0 in auto mode", async ({ page }) => {
+    await gotoChartsPro(page);
+
+    // Switch to renko and open modal
+    await page.getByTestId("chart-type-button").click();
+    await page.getByTestId("chart-type-option-renko").click();
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.chartType;
+    }, { timeout: 5000 }).toBe("renko");
+
+    await page.getByTestId("renko-settings-open").click();
+    await expect(page.getByTestId("renko-settings-modal")).toBeVisible();
+
+    // Make sure we're in auto mode
+    await page.getByTestId("renko-settings-mode-auto").click();
+
+    // Set ATR period to 0
+    const atrInput = page.getByTestId("renko-settings-atr-period");
+    await atrInput.fill("0");
+
+    // Save button should be disabled
+    const saveBtn = page.getByTestId("renko-settings-save");
+    await expect(saveBtn).toBeDisabled();
+
+    // Error message should be visible
+    const errorMsg = page.getByTestId("renko-settings-error-atr-period");
+    await expect(errorMsg).toBeVisible();
+    await expect(errorMsg).toHaveText(/must be ≥ 1/i);
+  });
+
+  test("Reset button restores defaults and enables Save", async ({ page }) => {
+    await gotoChartsPro(page);
+
+    // Switch to renko and open modal
+    await page.getByTestId("chart-type-button").click();
+    await page.getByTestId("chart-type-option-renko").click();
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.chartType;
+    }, { timeout: 5000 }).toBe("renko");
+
+    await page.getByTestId("renko-settings-open").click();
+    await expect(page.getByTestId("renko-settings-modal")).toBeVisible();
+
+    // Switch to fixed mode and clear box size to make invalid
+    await page.getByTestId("renko-settings-mode-fixed").click();
+    await page.getByTestId("renko-settings-fixed-box-size").fill("");
+    await expect(page.getByTestId("renko-settings-save")).toBeDisabled();
+
+    // Click Reset
+    await page.getByTestId("renko-settings-reset").click();
+
+    // Should be back to auto mode (default) - check button has default variant styling
+    // The auto button should have "bg-primary" class when selected
+    await expect(page.getByTestId("renko-settings-mode-auto")).toHaveClass(/bg-primary/);
+
+    // Save should be enabled now
+    await expect(page.getByTestId("renko-settings-save")).toBeEnabled();
+  });
+
+  test("Reset + Save persists default values", async ({ page }) => {
+    await gotoChartsPro(page);
+
+    // First, set non-default values
+    await page.evaluate(() => {
+      window.localStorage.setItem("cp.renko", JSON.stringify({
+        mode: "fixed",
+        fixedBoxSize: 99,
+        atrPeriod: 50,
+        autoMinBoxSize: 5,
+        rounding: "nice",
+      }));
+    });
+
+    // Reload to pick up stored values
+    await page.reload();
+    await gotoChartsPro(page);
+
+    // Switch to renko and open modal
+    await page.getByTestId("chart-type-button").click();
+    await page.getByTestId("chart-type-option-renko").click();
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.chartType;
+    }, { timeout: 5000 }).toBe("renko");
+
+    await page.getByTestId("renko-settings-open").click();
+    await expect(page.getByTestId("renko-settings-modal")).toBeVisible();
+
+    // Click Reset
+    await page.getByTestId("renko-settings-reset").click();
+
+    // Save the defaults
+    await page.getByTestId("renko-settings-save").click();
+    await expect(page.getByTestId("renko-settings-modal")).not.toBeVisible();
+
+    // Verify dump() shows defaults
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.renko?.mode;
+    }, { timeout: 5000 }).toBe("auto");
+
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.renko?.atrPeriod;
+    }, { timeout: 5000 }).toBe(14);
+  });
+
+  test("Cancel reverts changes even after entering invalid input", async ({ page }) => {
+    await gotoChartsPro(page);
+
+    // Set known initial values
+    await page.evaluate(() => {
+      window.localStorage.setItem("cp.renko", JSON.stringify({
+        mode: "fixed",
+        fixedBoxSize: 5,
+        atrPeriod: 14,
+        autoMinBoxSize: 0.01,
+        rounding: "none",
+      }));
+    });
+
+    await page.reload();
+    await gotoChartsPro(page);
+
+    // Switch to renko and open modal
+    await page.getByTestId("chart-type-button").click();
+    await page.getByTestId("chart-type-option-renko").click();
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.chartType;
+    }, { timeout: 5000 }).toBe("renko");
+
+    await page.getByTestId("renko-settings-open").click();
+    await expect(page.getByTestId("renko-settings-modal")).toBeVisible();
+
+    // Make it invalid
+    await page.getByTestId("renko-settings-fixed-box-size").fill("");
+    await expect(page.getByTestId("renko-settings-save")).toBeDisabled();
+
+    // Cancel
+    await page.getByTestId("renko-settings-cancel").click();
+    await expect(page.getByTestId("renko-settings-modal")).not.toBeVisible();
+
+    // Verify original value is preserved in dump()
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.renko?.fixedBoxSize;
+    }, { timeout: 5000 }).toBe(5);
+  });
+
+  test("regression: autoMinBoxSize=0 still saves correctly with string-draft", async ({ page }) => {
+    await gotoChartsPro(page);
+
+    // Clear localStorage
+    await page.evaluate(() => window.localStorage.removeItem("cp.renko"));
+
+    // Switch to renko and open modal
+    await page.getByTestId("chart-type-button").click();
+    await page.getByTestId("chart-type-option-renko").click();
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.chartType;
+    }, { timeout: 5000 }).toBe("renko");
+
+    await page.getByTestId("renko-settings-open").click();
+    await expect(page.getByTestId("renko-settings-modal")).toBeVisible();
+
+    // Set autoMinBoxSize to 0
+    await page.getByTestId("renko-settings-mode-auto").click();
+    await page.getByTestId("renko-settings-auto-min-box-size").fill("0");
+
+    // Save should be enabled (0 is valid)
+    await expect(page.getByTestId("renko-settings-save")).toBeEnabled();
+
+    // No error message
+    await expect(page.getByTestId("renko-settings-error-auto-min-box-size")).not.toBeVisible();
+
+    // Save and verify
+    await page.getByTestId("renko-settings-save").click();
+    await expect(page.getByTestId("renko-settings-modal")).not.toBeVisible();
+
+    await expect.poll(async () => {
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      return dump?.ui?.renko?.autoMinBoxSize;
+    }, { timeout: 5000 }).toBe(0);
+  });
+});
