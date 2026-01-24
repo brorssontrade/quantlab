@@ -26,6 +26,11 @@ import { getLastHealthCheck, setQAForceDataMode } from "./runtime/dataClient";
 import type { LwChartsApi } from "./qaTypes";
 import { type UIChartType } from "./runtime/seriesFactory";
 import {
+  normalizeRenkoSettings,
+  DEFAULT_RENKO_SETTINGS,
+  type RenkoSettingsInput,
+} from "./runtime/renko";
+import {
   DEFAULT_SYMBOL,
   DEFAULT_THEME,
   DEFAULT_TIMEFRAME,
@@ -97,21 +102,9 @@ const DEFAULT_CHART_TYPE: ChartType = "candles";
 const VALID_CHART_TYPES: ChartType[] = ["candles", "bars", "hollowCandles", "line", "area", "heikinAshi", "renko"];
 
 // TV-22.0a: Renko settings model
-export interface RenkoSettings {
-  mode: "auto" | "fixed";
-  fixedBoxSize: number;
-  atrPeriod: number;
-  autoMinBoxSize: number;
-  rounding: "none" | "nice";
-}
-
-export const DEFAULT_RENKO_SETTINGS: RenkoSettings = {
-  mode: "auto",
-  fixedBoxSize: 1,
-  atrPeriod: 14,
-  autoMinBoxSize: 0.01,
-  rounding: "none",
-};
+// TV-22.0d1: RenkoSettings type and DEFAULT re-exported from runtime/renko.ts
+export type RenkoSettings = RenkoSettingsInput;
+export { DEFAULT_RENKO_SETTINGS };
 
 function loadChartType(): ChartType {
   if (typeof window === "undefined" || typeof window.localStorage === "undefined") {
@@ -138,6 +131,7 @@ function persistChartType(type: ChartType) {
 }
 
 // TV-22.0a: Load Renko settings from localStorage
+// TV-22.0d1: Uses shared normalizeRenkoSettings for consistent validation
 function loadRenkoSettings(): RenkoSettings {
   if (typeof window === "undefined" || typeof window.localStorage === "undefined") {
     return DEFAULT_RENKO_SETTINGS;
@@ -146,22 +140,9 @@ function loadRenkoSettings(): RenkoSettings {
     const stored = window.localStorage.getItem(RENKO_SETTINGS_KEY);
     if (!stored) return DEFAULT_RENKO_SETTINGS;
     const parsed = JSON.parse(stored);
-    // Validate and merge with defaults
-    return {
-      mode: parsed.mode === "auto" || parsed.mode === "fixed" ? parsed.mode : DEFAULT_RENKO_SETTINGS.mode,
-      fixedBoxSize: typeof parsed.fixedBoxSize === "number" && parsed.fixedBoxSize > 0 
-        ? parsed.fixedBoxSize 
-        : DEFAULT_RENKO_SETTINGS.fixedBoxSize,
-      atrPeriod: typeof parsed.atrPeriod === "number" && parsed.atrPeriod > 0 && Number.isInteger(parsed.atrPeriod)
-        ? parsed.atrPeriod
-        : DEFAULT_RENKO_SETTINGS.atrPeriod,
-      autoMinBoxSize: typeof parsed.autoMinBoxSize === "number" && parsed.autoMinBoxSize >= 0
-        ? parsed.autoMinBoxSize
-        : DEFAULT_RENKO_SETTINGS.autoMinBoxSize,
-      rounding: parsed.rounding === "none" || parsed.rounding === "nice"
-        ? parsed.rounding
-        : DEFAULT_RENKO_SETTINGS.rounding,
-    };
+    // Use shared validation helper (always returns valid settings)
+    const result = normalizeRenkoSettings(parsed);
+    return result.value;
   } catch {
     return DEFAULT_RENKO_SETTINGS;
   }

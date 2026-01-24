@@ -311,3 +311,208 @@ export function renkoToLwCandlestick(bricks: RenkoBrick[]): Array<{
     close: brick.close,
   }));
 }
+
+// ────────────────────────────────────────────────────────────────────────────────
+// TV-22.0d1: Shared Renko Settings Validation
+// ────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Default Renko settings (single source of truth)
+ */
+export const DEFAULT_RENKO_SETTINGS: RenkoSettingsInput = {
+  mode: "auto",
+  fixedBoxSize: 1,
+  atrPeriod: 14,
+  autoMinBoxSize: 0.01,
+  rounding: "none",
+};
+
+/**
+ * Validation result for a single field
+ */
+export interface FieldValidation {
+  valid: boolean;
+  error?: string;
+}
+
+/**
+ * Full validation result for RenkoSettings
+ */
+export interface RenkoSettingsValidation {
+  ok: boolean;
+  value: RenkoSettingsInput;
+  errors: {
+    mode?: string;
+    fixedBoxSize?: string;
+    atrPeriod?: string;
+    autoMinBoxSize?: string;
+    rounding?: string;
+  };
+}
+
+/**
+ * Raw input for validation (can have strings from form inputs)
+ */
+export interface RenkoSettingsRaw {
+  mode?: unknown;
+  fixedBoxSize?: unknown;
+  atrPeriod?: unknown;
+  autoMinBoxSize?: unknown;
+  rounding?: unknown;
+}
+
+/**
+ * Validate a single field and return parsed value or error
+ */
+function validateMode(value: unknown): { valid: true; value: "auto" | "fixed" } | { valid: false; error: string } {
+  if (value === "auto" || value === "fixed") {
+    return { valid: true, value };
+  }
+  return { valid: false, error: "Mode must be 'auto' or 'fixed'" };
+}
+
+function validateFixedBoxSize(value: unknown): { valid: true; value: number } | { valid: false; error: string } {
+  const num = typeof value === "string" ? parseFloat(value) : value;
+  if (typeof num !== "number" || isNaN(num)) {
+    return { valid: false, error: "Box size must be a number" };
+  }
+  if (num <= 0) {
+    return { valid: false, error: "Box size must be > 0" };
+  }
+  if (num > 10000) {
+    return { valid: false, error: "Box size must be ≤ 10000" };
+  }
+  return { valid: true, value: num };
+}
+
+function validateAtrPeriod(value: unknown): { valid: true; value: number } | { valid: false; error: string } {
+  const num = typeof value === "string" ? parseInt(value, 10) : value;
+  if (typeof num !== "number" || isNaN(num)) {
+    return { valid: false, error: "ATR period must be a number" };
+  }
+  if (!Number.isInteger(num)) {
+    return { valid: false, error: "ATR period must be an integer" };
+  }
+  if (num < 1) {
+    return { valid: false, error: "ATR period must be ≥ 1" };
+  }
+  if (num > 200) {
+    return { valid: false, error: "ATR period must be ≤ 200" };
+  }
+  return { valid: true, value: num };
+}
+
+function validateAutoMinBoxSize(value: unknown): { valid: true; value: number } | { valid: false; error: string } {
+  const num = typeof value === "string" ? parseFloat(value) : value;
+  if (typeof num !== "number" || isNaN(num)) {
+    return { valid: false, error: "Min box size must be a number" };
+  }
+  if (num < 0) {
+    return { valid: false, error: "Min box size must be ≥ 0" };
+  }
+  if (num > 10000) {
+    return { valid: false, error: "Min box size must be ≤ 10000" };
+  }
+  return { valid: true, value: num };
+}
+
+function validateRounding(value: unknown): { valid: true; value: "none" | "nice" } | { valid: false; error: string } {
+  if (value === "none" || value === "nice") {
+    return { valid: true, value };
+  }
+  return { valid: false, error: "Rounding must be 'none' or 'nice'" };
+}
+
+/**
+ * TV-22.0d1: Normalize and validate Renko settings from raw input
+ *
+ * Returns { ok: true, value, errors: {} } if valid
+ * Returns { ok: false, value: defaults, errors: { fieldName: errorMsg } } if invalid
+ *
+ * Used by:
+ * - loadRenkoSettings() in ChartsProTab (from localStorage)
+ * - RenkoSettingsModal Save handler (from form inputs)
+ */
+export function normalizeRenkoSettings(raw: RenkoSettingsRaw): RenkoSettingsValidation {
+  const errors: RenkoSettingsValidation["errors"] = {};
+  let ok = true;
+
+  // Validate mode
+  const modeResult = validateMode(raw.mode);
+  const mode = modeResult.valid ? modeResult.value : DEFAULT_RENKO_SETTINGS.mode;
+  if (!modeResult.valid) {
+    errors.mode = modeResult.error;
+    ok = false;
+  }
+
+  // Validate fixedBoxSize
+  const fixedBoxSizeResult = validateFixedBoxSize(raw.fixedBoxSize);
+  const fixedBoxSize = fixedBoxSizeResult.valid ? fixedBoxSizeResult.value : DEFAULT_RENKO_SETTINGS.fixedBoxSize;
+  if (!fixedBoxSizeResult.valid) {
+    errors.fixedBoxSize = fixedBoxSizeResult.error;
+    ok = false;
+  }
+
+  // Validate atrPeriod
+  const atrPeriodResult = validateAtrPeriod(raw.atrPeriod);
+  const atrPeriod = atrPeriodResult.valid ? atrPeriodResult.value : DEFAULT_RENKO_SETTINGS.atrPeriod;
+  if (!atrPeriodResult.valid) {
+    errors.atrPeriod = atrPeriodResult.error;
+    ok = false;
+  }
+
+  // Validate autoMinBoxSize
+  const autoMinBoxSizeResult = validateAutoMinBoxSize(raw.autoMinBoxSize);
+  const autoMinBoxSize = autoMinBoxSizeResult.valid ? autoMinBoxSizeResult.value : DEFAULT_RENKO_SETTINGS.autoMinBoxSize;
+  if (!autoMinBoxSizeResult.valid) {
+    errors.autoMinBoxSize = autoMinBoxSizeResult.error;
+    ok = false;
+  }
+
+  // Validate rounding
+  const roundingResult = validateRounding(raw.rounding);
+  const rounding = roundingResult.valid ? roundingResult.value : DEFAULT_RENKO_SETTINGS.rounding;
+  if (!roundingResult.valid) {
+    errors.rounding = roundingResult.error;
+    ok = false;
+  }
+
+  return {
+    ok,
+    value: { mode, fixedBoxSize, atrPeriod, autoMinBoxSize, rounding },
+    errors,
+  };
+}
+
+/**
+ * Validate a single field (for live inline validation)
+ */
+export function validateRenkoField(
+  field: keyof RenkoSettingsInput,
+  value: unknown
+): FieldValidation {
+  switch (field) {
+    case "mode": {
+      const result = validateMode(value);
+      return result.valid ? { valid: true } : { valid: false, error: result.error };
+    }
+    case "fixedBoxSize": {
+      const result = validateFixedBoxSize(value);
+      return result.valid ? { valid: true } : { valid: false, error: result.error };
+    }
+    case "atrPeriod": {
+      const result = validateAtrPeriod(value);
+      return result.valid ? { valid: true } : { valid: false, error: result.error };
+    }
+    case "autoMinBoxSize": {
+      const result = validateAutoMinBoxSize(value);
+      return result.valid ? { valid: true } : { valid: false, error: result.error };
+    }
+    case "rounding": {
+      const result = validateRounding(value);
+      return result.valid ? { valid: true } : { valid: false, error: result.error };
+    }
+    default:
+      return { valid: false, error: "Unknown field" };
+  }
+}
