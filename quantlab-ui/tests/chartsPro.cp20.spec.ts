@@ -2680,3 +2680,332 @@ test.describe("TV-20: LeftToolbar Tool Groups + Flyout", () => {
     });
   });
 });
+
+test.describe("TV-20.13: Favorites + Recent", () => {
+  test.describe("dump() contract", () => {
+    test.beforeEach(async ({ page }, testInfo) => {
+      // Clear localStorage before each test
+      await page.addInitScript(() => {
+        window.localStorage.removeItem("cp.leftToolbar");
+      });
+      await gotoChartsPro(page, testInfo, { mock: true });
+    });
+
+    test("dump().ui.leftToolbar exists with favorites and recents arrays", async ({ page }) => {
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.leftToolbar;
+      }, { timeout: 3000 }).toMatchObject({
+        favorites: expect.any(Array),
+        recents: expect.any(Array),
+      });
+    });
+  });
+
+  test.describe("Favorites", () => {
+    test.beforeEach(async ({ page }, testInfo) => {
+      // Clear localStorage before each test (except persistence test which has its own setup)
+      await page.addInitScript(() => {
+        window.localStorage.removeItem("cp.leftToolbar");
+      });
+      await gotoChartsPro(page, testInfo, { mock: true });
+    });
+
+    test("star button in flyout toggles favorite", async ({ page }) => {
+      // Open Lines flyout
+      const linesGroup = page.locator('[data-testid="lefttoolbar-group-lines"]');
+      await linesGroup.click();
+
+      const flyout = page.locator('[data-testid="lefttoolbar-flyout"]');
+      await expect(flyout).toBeVisible();
+
+      // Click star on trendline
+      const starBtn = page.locator('[data-testid="lefttoolbar-star-trendline"]');
+      await expect(starBtn).toBeVisible();
+      await starBtn.click();
+
+      // Verify favorite added to dump()
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.leftToolbar?.favorites;
+      }, { timeout: 2000 }).toContain("trendline");
+    });
+
+    test("favorited tool shows in Favorites section", async ({ page }) => {
+      // Open Lines flyout and favorite trendline
+      const linesGroup = page.locator('[data-testid="lefttoolbar-group-lines"]');
+      await linesGroup.click();
+      
+      const starBtn = page.locator('[data-testid="lefttoolbar-star-trendline"]');
+      await starBtn.click();
+      
+      // Close flyout
+      await page.keyboard.press("Escape");
+
+      // Verify favorite button appears in toolbar
+      const favBtn = page.locator('[data-testid="lefttoolbar-fav-trendline"]');
+      await expect(favBtn).toBeVisible();
+    });
+
+    test("clicking favorite selects tool", async ({ page }) => {
+      // First add favorite
+      const linesGroup = page.locator('[data-testid="lefttoolbar-group-lines"]');
+      await linesGroup.click();
+      await page.locator('[data-testid="lefttoolbar-star-trendline"]').click();
+      await page.keyboard.press("Escape");
+
+      // Click favorite
+      const favBtn = page.locator('[data-testid="lefttoolbar-fav-trendline"]');
+      await favBtn.click();
+
+      // Verify tool selected
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.activeTool;
+      }, { timeout: 2000 }).toBe("trendline");
+    });
+
+    test("un-star removes from favorites", async ({ page }) => {
+      // Add favorite
+      const linesGroup = page.locator('[data-testid="lefttoolbar-group-lines"]');
+      await linesGroup.click();
+      const starBtn = page.locator('[data-testid="lefttoolbar-star-trendline"]');
+      await starBtn.click();
+
+      // Verify added
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.leftToolbar?.favorites;
+      }, { timeout: 2000 }).toContain("trendline");
+
+      // Un-star
+      await starBtn.click();
+
+      // Verify removed
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.leftToolbar?.favorites;
+      }, { timeout: 2000 }).not.toContain("trendline");
+    });
+  });
+
+  test.describe("Favorites persistence", () => {
+    // No beforeEach with addInitScript - we need localStorage to persist across reload
+    test("favorites persist across reload", async ({ page }, testInfo) => {
+      // Load the app first, then clear localStorage manually
+      await gotoChartsPro(page, testInfo, { mock: true });
+      await page.evaluate(() => window.localStorage.removeItem("cp.leftToolbar"));
+      
+      // Add favorite
+      const linesGroup = page.locator('[data-testid="lefttoolbar-group-lines"]');
+      await linesGroup.click();
+      await page.locator('[data-testid="lefttoolbar-star-trendline"]').click();
+      await page.keyboard.press("Escape");
+
+      // Verify stored
+      const stored = await page.evaluate(() => window.localStorage.getItem("cp.leftToolbar"));
+      expect(stored).toBeTruthy();
+      expect(JSON.parse(stored!).favorites).toContain("trendline");
+
+      // Reload page (using page.reload to preserve localStorage)
+      await page.reload();
+      await page.waitForSelector('[data-testid="tv-leftbar-container"]', { timeout: 10000 });
+
+      // Verify favorite persisted
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.leftToolbar?.favorites;
+      }, { timeout: 3000 }).toContain("trendline");
+
+      // Verify favorite button visible
+      const favBtn = page.locator('[data-testid="lefttoolbar-fav-trendline"]');
+      await expect(favBtn).toBeVisible();
+    });
+  });
+
+  test.describe("Recents", () => {
+    test.beforeEach(async ({ page }, testInfo) => {
+      await page.addInitScript(() => {
+        window.localStorage.removeItem("cp.leftToolbar");
+      });
+      await gotoChartsPro(page, testInfo, { mock: true });
+    });
+
+    test("selecting tool via flyout adds to recents", async ({ page }) => {
+      // Select trendline from flyout
+      const linesGroup = page.locator('[data-testid="lefttoolbar-group-lines"]');
+      await linesGroup.click();
+      await page.locator('[data-testid="lefttoolbar-tool-trendline"]').click();
+
+      // Verify added to recents
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.leftToolbar?.recents;
+      }, { timeout: 2000 }).toContain("trendline");
+    });
+
+    test("recents respect max limit (5)", async ({ page }) => {
+      // Select multiple tools to fill recents
+      const toolsToSelect = ["trendline", "hline", "vline", "channel", "rectangle", "fibRetracement"];
+      
+      for (const tool of toolsToSelect) {
+        // Use keyboard shortcut where available
+        const shortcuts: Record<string, string> = {
+          trendline: "t",
+          hline: "h",
+          vline: "v",
+          channel: "c",
+          rectangle: "r",
+          fibRetracement: "b",
+        };
+        await page.keyboard.press(shortcuts[tool] ?? tool);
+        await page.waitForTimeout(100);
+      }
+
+      // Verify max 5 recents
+      const recents = await page.evaluate(() => {
+        const dump = (window as any).__lwcharts?.dump?.();
+        return dump?.ui?.leftToolbar?.recents;
+      });
+      
+      expect(recents.length).toBeLessThanOrEqual(5);
+      // Most recent should be first
+      expect(recents[0]).toBe("fibRetracement");
+    });
+
+    test("recents update order (most recent first)", async ({ page }) => {
+      // Select tools in order
+      await page.keyboard.press("t"); // trendline
+      await page.waitForTimeout(100);
+      await page.keyboard.press("h"); // hline
+      await page.waitForTimeout(100);
+      await page.keyboard.press("t"); // trendline again
+
+      // Verify trendline is first (most recent)
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.leftToolbar?.recents?.[0];
+      }, { timeout: 2000 }).toBe("trendline");
+    });
+
+    test("select tool does not appear in recents", async ({ page }) => {
+      // Press Escape to select cursor/select tool
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(100);
+
+      // Verify select is NOT in recents
+      const recents = await page.evaluate(() => {
+        const dump = (window as any).__lwcharts?.dump?.();
+        return dump?.ui?.leftToolbar?.recents;
+      });
+      
+      expect(recents).not.toContain("select");
+    });
+
+    test("favorited tool not shown in recents section", async ({ page }) => {
+      // First favorite trendline
+      const linesGroup = page.locator('[data-testid="lefttoolbar-group-lines"]');
+      await linesGroup.click();
+      await page.locator('[data-testid="lefttoolbar-star-trendline"]').click();
+      await page.keyboard.press("Escape");
+
+      // Select trendline with hotkey (should add to recents internally)
+      await page.keyboard.press("t");
+      await page.waitForTimeout(100);
+      
+      // Select another tool
+      await page.keyboard.press("h");
+
+      // Verify trendline is in favorites
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.leftToolbar?.favorites;
+      }, { timeout: 2000 }).toContain("trendline");
+
+      // Recent section button for trendline should NOT exist (it's in favorites)
+      const recentBtn = page.locator('[data-testid="lefttoolbar-recent-trendline"]');
+      await expect(recentBtn).not.toBeVisible();
+    });
+  });
+
+  test.describe("Recents persistence", () => {
+    // No beforeEach with addInitScript - we need localStorage to persist across reload
+    test("recents persist across reload", async ({ page }, testInfo) => {
+      // Load the app first, then clear localStorage manually
+      await gotoChartsPro(page, testInfo, { mock: true });
+      await page.evaluate(() => window.localStorage.removeItem("cp.leftToolbar"));
+      
+      // Select some tools
+      await page.keyboard.press("t");
+      await page.waitForTimeout(100);
+      await page.keyboard.press("h");
+      await page.waitForTimeout(100);
+
+      // Verify stored
+      const stored = await page.evaluate(() => window.localStorage.getItem("cp.leftToolbar"));
+      expect(stored).toBeTruthy();
+      const parsed = JSON.parse(stored!);
+      expect(parsed.recents).toContain("hline");
+      expect(parsed.recents).toContain("trendline");
+
+      // Reload (using page.reload to preserve localStorage)
+      await page.reload();
+      await page.waitForSelector('[data-testid="tv-leftbar-container"]', { timeout: 10000 });
+
+      // Verify persisted
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.leftToolbar?.recents;
+      }, { timeout: 3000 }).toContain("hline");
+    });
+  });
+
+  test.describe("UI visibility", () => {
+    test.beforeEach(async ({ page }, testInfo) => {
+      await page.addInitScript(() => {
+        window.localStorage.removeItem("cp.leftToolbar");
+      });
+      await gotoChartsPro(page, testInfo, { mock: true });
+    });
+
+    test("recent tools visible in dedicated section", async ({ page }) => {
+      // Select a tool
+      await page.keyboard.press("t");
+      await page.waitForTimeout(200);
+      
+      // Switch to select so trendline becomes recent
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(100);
+
+      // Recent button should be visible
+      const recentBtn = page.locator('[data-testid="lefttoolbar-recent-trendline"]');
+      await expect(recentBtn).toBeVisible();
+    });
+
+    test("clicking recent tool selects it and updates recents order", async ({ page }) => {
+      // Create some recents
+      await page.keyboard.press("t");
+      await page.waitForTimeout(100);
+      await page.keyboard.press("h");
+      await page.waitForTimeout(100);
+      await page.keyboard.press("Escape"); // back to select
+      await page.waitForTimeout(100);
+
+      // Click on trendline recent
+      const recentBtn = page.locator('[data-testid="lefttoolbar-recent-trendline"]');
+      await recentBtn.click();
+
+      // Verify tool selected
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.activeTool;
+      }, { timeout: 2000 }).toBe("trendline");
+
+      // Verify trendline moved to front of recents
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.leftToolbar?.recents?.[0];
+      }, { timeout: 2000 }).toBe("trendline");
+    });
+  });
+});

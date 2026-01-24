@@ -7,6 +7,7 @@ import { TopBar } from "./components/TopBar";
 import { ChartViewport } from "./components/ChartViewport";
 import { BottomBar } from "./components/BottomBar";
 import { LeftToolbar } from "./components/LeftToolbar/LeftToolbar";
+import { useFavoritesRecents, type LeftToolbarState } from "./components/LeftToolbar/useFavoritesRecents";
 import { ObjectTree } from "./components/ObjectTree";
 import { IndicatorPanel } from "./components/IndicatorPanel";
 import { AlertsPanel } from "./components/AlertsPanel";
@@ -336,8 +337,27 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
   });
 
   // TV-18.2: indicatorsAddOpen state removed - modal state handles this now
+  
+  // TV-20.13: LeftToolbar favorites + recents (lifted to ChartsProTab to track all tool changes)
+  const {
+    favorites,
+    recents,
+    toggleFavorite,
+    recordRecent,
+    dumpState: leftToolbarState,
+    initialized: leftToolbarInitialized,
+  } = useFavoritesRecents();
 
   const controls = useChartControls();
+  
+  // TV-20.13: Record recent when tool changes (from any source: hotkey, flyout, etc.)
+  const prevToolRef = useRef(controls.tool);
+  useEffect(() => {
+    if (controls.tool !== prevToolRef.current) {
+      prevToolRef.current = controls.tool;
+      recordRecent(controls.tool);
+    }
+  }, [controls.tool, recordRecent]);
   // Responsive breakpoints: mobile <768, tablet 768-1279, desktop ≥1280
   const isMobile = viewportWidth < 768;
   const isTablet = viewportWidth >= 768 && viewportWidth < 1280;
@@ -923,6 +943,9 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
                   onSelectTool={(tool) => {
                     controls.setTool(tool);
                   }}
+                  favorites={favorites}
+                  recents={recents}
+                  onToggleFavorite={toggleFavorite}
                 />
               </div>
               
@@ -970,6 +993,7 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
                   
                   modalOpen={modalState.open || editingTextId !== null}
                   modalKind={editingTextId !== null ? "text" : modalState.kind}
+                  leftToolbarState={leftToolbarState}
                 />
               </div>
               

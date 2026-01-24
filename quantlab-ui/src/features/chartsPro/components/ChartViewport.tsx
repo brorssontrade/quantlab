@@ -392,6 +392,8 @@ interface ChartViewportProps {
   // TV-18.1: Modal state (central portal)
   modalOpen?: boolean;
   modalKind?: string | null;
+  // TV-20.13: LeftToolbar favorites + recents for dump()
+  leftToolbarState?: { favorites: string[]; recents: string[] };
 }
 
 type CandlestickSeries = ISeriesApi<"Candlestick">;
@@ -447,6 +449,8 @@ export function ChartViewport({
   // TV-18.1: Modal state
   modalOpen = false,
   modalKind = null,
+  // TV-20.13: LeftToolbar state
+  leftToolbarState,
 }: ChartViewportProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -514,6 +518,8 @@ export function ChartViewport({
   const chartSettingsRef = useRef<ChartSettings | undefined>(chartSettings);
   // TV-22.0a: Renko settings ref for dump()
   const renkoSettingsRef = useRef<RenkoSettings | undefined>(renkoSettings);
+  // TV-20.13: LeftToolbar state ref for dump()
+  const leftToolbarStateRef = useRef(leftToolbarState);
   const appliedSettingsRef = useRef<AppliedSettingsSnapshot | null>(null); // TV-10.3: Track applied settings
   const timeframeRef = useRef<string>(timeframe); // TV-11: Track current timeframe for dump()
   workspaceModeRef.current = workspaceMode;
@@ -525,6 +531,7 @@ export function ChartViewport({
   chartTypeRef.current = chartType; // Sync current chartType prop to ref for dump()
   chartSettingsRef.current = chartSettings; // Sync settings for dump()
   renkoSettingsRef.current = renkoSettings; // TV-22.0a: Sync renko settings for dump()
+  leftToolbarStateRef.current = leftToolbarState; // TV-20.13: Sync leftToolbar state for dump()
   timeframeRef.current = timeframe; // Sync timeframe for dump()
   // TV-22.0c: Track last Renko transform result for dump().render.renko
   const lastRenkoResultRef = useRef<RenkoTransformResult | null>(null);
@@ -2218,6 +2225,8 @@ const fitToContent = useCallback(() => {
             settings: chartSettingsRef.current ?? null,
             // TV-22.0a: Expose Renko settings for testing
             renko: renkoSettingsRef.current ?? null,
+            // TV-20.13: Expose LeftToolbar favorites + recents
+            leftToolbar: leftToolbarStateRef.current ?? { favorites: [], recents: [] },
             inspectorOpen,
             inspectorTab,
             compareScaleMode,

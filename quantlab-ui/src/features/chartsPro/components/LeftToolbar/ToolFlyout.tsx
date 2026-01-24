@@ -2,6 +2,7 @@
  * ToolFlyout.tsx
  * 
  * TV-20.1: TradingView-style flyout menu for tool groups
+ * TV-20.13: Added star button for favorites
  * 
  * Features:
  * - Anchored to group button (positioned to the right)
@@ -9,10 +10,12 @@
  * - Closes on Esc and click-outside
  * - Shows all tools in group with enabled/disabled state
  * - Keyboard accessible (arrow keys, Enter, Esc)
+ * - Star button to toggle favorites (TV-20.13)
  */
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
+import { Star } from "lucide-react";
 import type { ToolGroup, ToolDefinition } from "./toolRegistry";
 import { isToolEnabled } from "./toolRegistry";
 import type { Tool } from "../../state/controls";
@@ -23,6 +26,9 @@ interface ToolFlyoutProps {
   activeTool: string;
   onSelectTool: (toolId: string) => void;
   onClose: () => void;
+  /** TV-20.13: Favorites support */
+  favorites?: string[];
+  onToggleFavorite?: (toolId: string) => void;
 }
 
 export function ToolFlyout({
@@ -31,6 +37,8 @@ export function ToolFlyout({
   activeTool,
   onSelectTool,
   onClose,
+  favorites = [],
+  onToggleFavorite,
 }: ToolFlyoutProps) {
   const flyoutRef = useRef<HTMLDivElement>(null);
   const [focusIndex, setFocusIndex] = useState(0);
@@ -156,49 +164,83 @@ export function ToolFlyout({
           const enabled = isToolEnabled(tool.id);
           const isActive = activeTool === tool.id;
           const isFocused = focusIndex === index;
+          const isFavorite = favorites.includes(tool.id);
+
+          const handleStarClick = (e: React.MouseEvent) => {
+            e.stopPropagation();
+            e.preventDefault();
+            if (enabled && onToggleFavorite) {
+              onToggleFavorite(tool.id);
+            }
+          };
 
           return (
-            <button
+            <div
               key={tool.id}
-              onClick={() => handleToolClick(tool)}
-              disabled={!enabled}
-              data-testid={`lefttoolbar-tool-${tool.id}`}
-              data-tool-id={tool.id}
-              role="menuitem"
-              aria-disabled={!enabled}
-              className={`
-                w-full flex items-center gap-3 px-3 py-2
-                text-left text-sm transition-colors
-                ${isFocused ? "bg-slate-800/60" : ""}
-                ${isActive && enabled ? "bg-purple-600/20 text-purple-300" : ""}
-                ${enabled 
-                  ? "text-slate-200 hover:bg-slate-800/80 cursor-pointer" 
-                  : "text-slate-500 cursor-not-allowed opacity-50"
-                }
-              `}
+              className="flex items-center"
             >
-              {/* Icon */}
-              <span className="w-6 text-center text-lg">
-                {tool.icon}
-              </span>
-
-              {/* Label + shortcut */}
-              <span className="flex-1">{tool.label}</span>
-
-              {/* Shortcut badge */}
-              {tool.shortcut && enabled && (
-                <span className="text-xs text-slate-500 font-mono bg-slate-800/60 px-1.5 py-0.5 rounded">
-                  {tool.shortcut}
+              <button
+                onClick={() => handleToolClick(tool)}
+                disabled={!enabled}
+                data-testid={`lefttoolbar-tool-${tool.id}`}
+                data-tool-id={tool.id}
+                role="menuitem"
+                aria-disabled={!enabled}
+                className={`
+                  flex-1 flex items-center gap-3 px-3 py-2
+                  text-left text-sm transition-colors
+                  ${isFocused ? "bg-slate-800/60" : ""}
+                  ${isActive && enabled ? "bg-purple-600/20 text-purple-300" : ""}
+                  ${enabled 
+                    ? "text-slate-200 hover:bg-slate-800/80 cursor-pointer" 
+                    : "text-slate-500 cursor-not-allowed opacity-50"
+                  }
+                `}
+              >
+                {/* Icon */}
+                <span className="w-6 text-center text-lg">
+                  {tool.icon}
                 </span>
-              )}
 
-              {/* Coming soon badge for disabled */}
-              {!enabled && (
-                <span className="text-[10px] text-slate-600 italic">
-                  {tool.tooltip || "Soon"}
-                </span>
+                {/* Label + shortcut */}
+                <span className="flex-1">{tool.label}</span>
+
+                {/* Shortcut badge */}
+                {tool.shortcut && enabled && (
+                  <span className="text-xs text-slate-500 font-mono bg-slate-800/60 px-1.5 py-0.5 rounded">
+                    {tool.shortcut}
+                  </span>
+                )}
+
+                {/* Coming soon badge for disabled */}
+                {!enabled && (
+                  <span className="text-[10px] text-slate-600 italic">
+                    {tool.tooltip || "Soon"}
+                  </span>
+                )}
+              </button>
+
+              {/* TV-20.13: Star button for favorites */}
+              {enabled && onToggleFavorite && (
+                <button
+                  onClick={handleStarClick}
+                  data-testid={`lefttoolbar-star-${tool.id}`}
+                  aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+                  className={`
+                    px-2 py-2 transition-colors
+                    ${isFavorite 
+                      ? "text-yellow-400 hover:text-yellow-300" 
+                      : "text-slate-600 hover:text-slate-400"
+                    }
+                  `}
+                >
+                  <Star 
+                    className="h-4 w-4" 
+                    fill={isFavorite ? "currentColor" : "none"}
+                  />
+                </button>
               )}
-            </button>
+            </div>
           );
         })}
       </div>

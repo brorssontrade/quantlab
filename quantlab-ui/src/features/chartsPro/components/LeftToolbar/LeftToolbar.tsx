@@ -2,6 +2,7 @@
  * LeftToolbar.tsx
  * 
  * TV-20.1: TradingView-style LeftToolbar with Tool Groups + Flyout
+ * TV-20.13: Favorites + Recent sections for faster workflow
  * 
  * Features:
  * - Tool groups with expandable flyout menus
@@ -9,6 +10,8 @@
  * - Responsive: Desktop (vertical) / Mobile (floating pill)
  * - Keyboard shortcuts maintained
  * - Flyout closes on Esc and click-outside
+ * - Favorites section: starred tools visible immediately (no flyout needed)
+ * - Recent section: last 5 tools for quick access
  * 
  * TV-3.9: Responsive behavior preserved
  * - Desktop (≥768px): Vertical toolbar in tv-leftbar grid slot
@@ -17,16 +20,22 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { Undo2, Trash2, Maximize2, ChevronUp, ChevronDown } from "lucide-react";
+import { Undo2, Trash2, Maximize2, ChevronUp, ChevronDown, Clock, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Tool } from "../../state/controls";
-import { TOOL_GROUPS, isToolEnabled } from "./toolRegistry";
+import { TOOL_GROUPS, isToolEnabled, getEnabledTools } from "./toolRegistry";
 import { ToolFlyout } from "./ToolFlyout";
-import type { ToolGroup } from "./toolRegistry";
+import type { ToolGroup, ToolDefinition } from "./toolRegistry";
 
 interface LeftToolbarProps {
   activeTool: Tool;
   onSelectTool: (tool: Tool) => void;
+  /** TV-20.13: Favorites list from parent */
+  favorites?: string[];
+  /** TV-20.13: Recents list from parent */
+  recents?: string[];
+  /** TV-20.13: Callback to toggle favorite */
+  onToggleFavorite?: (toolId: string) => void;
 }
 
 /**
@@ -45,8 +54,19 @@ function isGroupActive(group: ToolGroup, activeTool: string): boolean {
   return group.tools.some(t => t.id === activeTool);
 }
 
+/**
+ * Get tool definition by ID from all groups
+ */
+function getToolById(toolId: string): ToolDefinition | undefined {
+  for (const group of TOOL_GROUPS) {
+    const tool = group.tools.find(t => t.id === toolId);
+    if (tool) return tool;
+  }
+  return undefined;
+}
+
 /** Desktop: Vertical toolbar with flyout support */
-function DesktopToolbar({ activeTool, onSelectTool }: LeftToolbarProps) {
+function DesktopToolbar({ activeTool, onSelectTool, favorites = [], recents = [], onToggleFavorite }: LeftToolbarProps) {
   const [openGroupId, setOpenGroupId] = useState<string | null>(null);
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
   const buttonRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
@@ -81,6 +101,7 @@ function DesktopToolbar({ activeTool, onSelectTool }: LeftToolbarProps) {
   const handleToolSelect = useCallback((toolId: string) => {
     if (isToolEnabled(toolId)) {
       onSelectTool(toolId as Tool);
+      // TV-20.13: recordRecent is now handled in ChartsProTab (watches controls.tool)
     }
   }, [onSelectTool]);
 
@@ -91,6 +112,13 @@ function DesktopToolbar({ activeTool, onSelectTool }: LeftToolbarProps) {
 
   // Find the open group for flyout
   const openGroup = openGroupId ? TOOL_GROUPS.find(g => g.id === openGroupId) : null;
+  
+  // TV-20.13: Get tool definitions for favorites and recents
+  const favoriteTools = favorites.map(id => getToolById(id)).filter((t): t is ToolDefinition => t !== undefined && isToolEnabled(t.id));
+  const recentTools = recents
+    .filter(id => !favorites.includes(id)) // Don't show in recents if already in favorites
+    .map(id => getToolById(id))
+    .filter((t): t is ToolDefinition => t !== undefined && isToolEnabled(t.id));
 
   return (
     <div
@@ -98,13 +126,75 @@ function DesktopToolbar({ activeTool, onSelectTool }: LeftToolbarProps) {
         hidden md:flex flex-col items-center
         border-r border-slate-800/40
         bg-slate-950/40
+        overflow-y-auto
       "
       style={{
         gap: 'var(--cp-gap-xs)',
         padding: 'var(--cp-pad) var(--cp-pad-sm)',
+        maxHeight: '100%',
       }}
       data-testid="tv-leftbar-container"
     >
+      {/* TV-20.13: Favorites Section */}
+      {favoriteTools.length > 0 && (
+        <>
+          <div 
+            className="text-[9px] text-yellow-500/70 font-medium uppercase tracking-wider mt-1"
+            title="Starred favorites"
+          >
+            <Star className="h-3 w-3 inline-block" fill="currentColor" />
+          </div>
+          {favoriteTools.map((tool) => (
+            <Button
+              key={`fav-${tool.id}`}
+              variant={activeTool === tool.id ? "default" : "ghost"}
+              size="icon"
+              onClick={() => handleToolSelect(tool.id)}
+              title={`${tool.label}${tool.shortcut ? ` (${tool.shortcut})` : ''}`}
+              data-testid={`lefttoolbar-fav-${tool.id}`}
+              className={`h-9 w-9 ${
+                activeTool === tool.id
+                  ? "bg-slate-700 text-white"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              <span className="text-base">{tool.icon}</span>
+            </Button>
+          ))}
+          <div className="my-0.5 w-6 border-t border-yellow-500/30" />
+        </>
+      )}
+      
+      {/* TV-20.13: Recent Section */}
+      {recentTools.length > 0 && (
+        <>
+          <div 
+            className="text-[9px] text-slate-500 font-medium uppercase tracking-wider"
+            title="Recently used"
+          >
+            <Clock className="h-3 w-3 inline-block" />
+          </div>
+          {recentTools.slice(0, 3).map((tool) => (
+            <Button
+              key={`recent-${tool.id}`}
+              variant={activeTool === tool.id ? "default" : "ghost"}
+              size="icon"
+              onClick={() => handleToolSelect(tool.id)}
+              title={`${tool.label} (recent)`}
+              data-testid={`lefttoolbar-recent-${tool.id}`}
+              className={`h-8 w-8 ${
+                activeTool === tool.id
+                  ? "bg-slate-700 text-white"
+                  : "text-slate-500 hover:text-slate-300"
+              }`}
+            >
+              <span className="text-sm">{tool.icon}</span>
+            </Button>
+          ))}
+          <div className="my-0.5 w-6 border-t border-slate-700/60" />
+        </>
+      )}
+      
       {/* Tool Groups */}
       {TOOL_GROUPS.map((group) => {
         const groupActive = isGroupActive(group, activeTool);
@@ -186,6 +276,8 @@ function DesktopToolbar({ activeTool, onSelectTool }: LeftToolbarProps) {
           activeTool={activeTool}
           onSelectTool={handleToolSelect}
           onClose={handleCloseFlyout}
+          favorites={favorites}
+          onToggleFavorite={onToggleFavorite}
         />
       )}
 
@@ -340,7 +432,7 @@ function MobilePill({ activeTool, onSelectTool }: LeftToolbarProps) {
 }
 
 
-export function LeftToolbar({ activeTool, onSelectTool }: LeftToolbarProps) {
+export function LeftToolbar({ activeTool, onSelectTool, favorites, recents, onToggleFavorite }: LeftToolbarProps) {
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
@@ -354,7 +446,15 @@ export function LeftToolbar({ activeTool, onSelectTool }: LeftToolbarProps) {
   return (
     <>
       {/* Desktop: Vertical toolbar in grid slot (hidden from DOM on mobile) */}
-      {!isMobile && <DesktopToolbar activeTool={activeTool} onSelectTool={onSelectTool} />}
+      {!isMobile && (
+        <DesktopToolbar 
+          activeTool={activeTool} 
+          onSelectTool={onSelectTool} 
+          favorites={favorites}
+          recents={recents}
+          onToggleFavorite={onToggleFavorite}
+        />
+      )}
 
       {/* Mobile: Floating pill overlay (only renders on mobile) */}
       {isMobile && <MobilePill activeTool={activeTool} onSelectTool={onSelectTool} />}

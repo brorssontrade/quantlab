@@ -908,6 +908,8 @@
 | ✅ DONE | TV-20.11a | Regression Trend: deterministic tests (0 skipped) | 0.5h | TV-20.11 |
 | ✅ DONE | TV-20.12a | Long Position (3-click, Entry→Stop→Target, R:R ratio) | 1.5h | TV-20.11a |
 | ✅ DONE | TV-20.12b | Short Position (3-click, inverted semantics, R:R ratio) | 1h | TV-20.12a |
+| ✅ DONE | TV-20.13 | Favorites + Recent UX (starred tools visible immediately, last 5 tools accessible) | 2h | TV-20.1 |
+| ⏳ TODO | TV-20.14 | Drawing controls row (Lock / Hide / Remove all selected) | 1.5h | TV-20.13 |
 
 **Commits:**
 - TV-20.1: `4f5e95a` fix(frontend): TV-20.1 LeftToolbar ToolGroups + Flyout
