@@ -1080,6 +1080,50 @@
 **Total TV-21: COMPLETE + HARDENED**  
 **Acceptance:** All chart types switch correctly, dump().ui.chartType updated, no timeframe/range side-effects.
 
+---
+
+### 12.6 TV-22: Renko Settings & Polish
+
+| Status | Task ID | Task | Estimated | Dependencies |
+|--------|---------|------|-----------|---|
+| ✅ DONE | TV-22.0a | Renko settings localStorage persistence | 0.5h | TV-21.4 |
+| ✅ DONE | TV-22.0b | Renko settings modal (central, via ModalPortal) | 1.5h | TV-22.0a |
+| ✅ DONE | TV-22.0b1 | Hotfix: autoMinBoxSize >= 0 consistency | 0.25h | TV-22.0b |
+| ✅ DONE | TV-22.0c | Wire RenkoSettings to transform (dump().render.renko) | 1h | TV-22.0b |
+| ✅ DONE | TV-22.0d1 | Shared validation helper (normalizeRenkoSettings) | 0.75h | TV-22.0b1 |
+| ✅ DONE | TV-22.0d2 | Modal UX hardening (string-draft, inline errors, Reset) | 1h | TV-22.0d1 |
+
+**Total TV-22.0: 5h** ✅ **COMPLETE**
+
+**TV-22.0b DONE 2026-01-23:** Renko settings modal (central via ModalPortal):
+- RenkoSettingsModal.tsx with mode/boxSize/atrPeriod/rounding controls
+- Gear button in ChartTypeSelector when chartType=renko
+- Modal wiring in ChartsProTab via ModalPortal
+- 9 integration tests for modal behavior
+- Commit `dcb1ceb` | Gates: build ✅ | cp21 138/138 ✅ | tvParity 35/35 ✅
+
+**TV-22.0b1 DONE 2026-01-23:** Consistency hotfix:
+- loadRenkoSettings() accepts autoMinBoxSize >= 0 (was > 0)
+- New cp21 test for persist+reload of 0
+- Commit `70c5589` | Gates: build ✅ | cp21 141/141 ✅ | tvParity 35/35 ✅
+
+**TV-22.0d1 DONE 2026-01-24:** Shared validation helper:
+- normalizeRenkoSettings() + validateRenkoField() in runtime/renko.ts
+- DEFAULT_RENKO_SETTINGS moved to renko.ts (single source of truth)
+- loadRenkoSettings() uses shared helper
+- 19 unit tests for validation edge cases
+- Commit `45e84af` | Gates: build ✅ | vitest 19/19 ✅ | cp21 141/141 ✅ | tvParity 35/35 ✅
+
+**TV-22.0d2 DONE 2026-01-24:** Modal UX hardening:
+- String-draft inputs (allows empty/partial during typing)
+- Inline validation errors with aria-invalid
+- Save disabled when any field is invalid
+- Reset to defaults button
+- 6 new cp21 tests for UX behaviors
+- Commit `ba7818e` | Gates: build ✅ | cp21 159/159 ✅ | tvParity 35/35 ✅
+
+**Acceptance:** Renko settings modal is "world-class": draft inputs, inline validation, Save disabled when invalid, Reset to defaults, shared validation logic.
+
 **Future Epics (TV-22.x):** Kagi, Point & Figure, Line Break, Range charts, Orderflow (Footprint, TPO, Session Volume Profile) – separate backlog.
 
 ---

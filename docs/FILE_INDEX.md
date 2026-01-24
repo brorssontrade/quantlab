@@ -109,11 +109,13 @@
 | `features/chartsPro/components/DrawingLayer.tsx` | **TV-20.2/20.3: Drawing interactions (Rectangle, Text, Shift+H/L for hide/lock)** | DrawingLayer |
 | `features/chartsPro/components/AlertsPanel.tsx` | **Day 8: Alerts panel in ChartsPro sidebar** | AlertsPanel |
 | `features/chartsPro/runtime/heikinAshi.ts` | **TV-21.1: Heikin Ashi OHLC transform (pure util, unit-testable)** | transformOhlcToHeikinAshi, transformToHeikinAshi |
-| `features/chartsPro/runtime/renko.ts` | **TV-21.4: Renko brick generation (pure util, unit-testable)** | transformOhlcToRenko, renkoToLwCandlestick, calculateAtr, suggestBoxSize |
-| `features/chartsPro/components/TopBar/ChartTypeSelector.tsx` | **TV-10.1+TV-21: Chart type dropdown (candles/bars/hollowCandles/heikinAshi/renko/line/area)** | ChartTypeSelector |
+| `features/chartsPro/runtime/renko.ts` | **TV-21.4+TV-22.0d1: Renko brick generation + shared validation (pure util, unit-testable)** | transformOhlcToRenko, renkoToLwCandlestick, calculateAtr, suggestBoxSize, **normalizeRenkoSettings**, **validateRenkoField**, **DEFAULT_RENKO_SETTINGS** |
+| `features/chartsPro/runtime/renko.test.ts` | **TV-22.0d1: Unit tests for Renko validation (19 tests)** | - |
+| `features/chartsPro/components/Modal/RenkoSettingsModal.tsx` | **TV-22.0b+d2: Renko settings modal (string-draft, inline validation, Reset, Save disabled)** | RenkoSettingsModal |
+| `features/chartsPro/components/TopBar/ChartTypeSelector.tsx` | **TV-10.1+TV-21+TV-22.0b: Chart type dropdown + gear button for renko settings** | ChartTypeSelector, onRenkoSettingsClick |
 | `tests/chartsPro.cp18.spec.ts` | **TV-18.2: Indicators modal tests (4 cases: open, Esc, X, add indicator)** |
 | `tests/chartsPro.cp20.spec.ts` | **TV-20: Drawing tools tests (23+ cases: ToolGroups, Rectangle, Text, select/move/delete, hotkey guardrail)** |
-| `tests/chartsPro.cp21.spec.ts` | **TV-21: Chart types tests (20 cases: Heikin Ashi, Bars, Hollow Candles, Renko - unit+integration)** |
+| `tests/chartsPro.cp21.spec.ts` | **TV-21+TV-22.0b/d2: Chart types + Renko settings modal tests (53 cases: Heikin Ashi, Bars, Hollow Candles, Renko unit+integration, modal UX hardening)** |
 | `tests/chartsPro.tvUi.indicators.tab.spec.ts` | **TV-7/TV-18.2: Indicators tab tests (updated for modal, 12 cases)** |
 | `tests/chartsPro.tvUi.bottomBar.spec.ts` | **TV-9: BottomBar tests (13 cases, functional + responsive + deterministic, repeat-each=10, 130 runs, zero flakes)** |
 | `tests/chartsPro.tvUi.alerts.tab.spec.ts` | **TV-8: Alerts tab tests (12 cases, form/create/delete/sorting/determinism coverage)** |

@@ -1,3 +1,58 @@
+### 2026-01-24 (TV-22.0d2 Renko Modal UX Hardening)
+
+**Status:** ✅ **COMPLETE** ("world-class" Renko settings modal)
+
+**Task Description:** "Make Renko settings modal TradingView-class with string-draft inputs, inline validation, and Reset to defaults."
+
+**Root Cause / UX Risk:**
+- Original modal used number inputs which rejected partial values (can't type "." or clear field)
+- Validation was duplicated between loader and modal (risk of drift)
+- No way to restore defaults without remembering original values
+- Save button was always enabled even with invalid input
+
+**Implementation:**
+1. **TV-22.0d1 Shared Validation:** Created `normalizeRenkoSettings()` + `validateRenkoField()` in runtime/renko.ts
+2. **DEFAULT_RENKO_SETTINGS** moved to renko.ts (single source of truth)
+3. **String-draft inputs:** Modal uses `DraftStrings` state, validates on-the-fly via useMemo
+4. **Inline errors:** Error messages with `data-testid="renko-settings-error-*"` + aria-invalid
+5. **Save disabled:** `disabled={!validation.isValid}` when any field invalid
+6. **Reset button:** `data-testid="renko-settings-reset"` restores DEFAULT_RENKO_SETTINGS
+
+**Files Changed:**
+- `runtime/renko.ts` (+normalizeRenkoSettings, +validateRenkoField, +DEFAULT_RENKO_SETTINGS)
+- `ChartsProTab.tsx` (use shared helper, re-export types)
+- `RenkoSettingsModal.tsx` (complete rewrite: string-draft, inline validation, Reset)
+- `runtime/renko.test.ts` (NEW – 19 unit tests)
+- `chartsPro.cp21.spec.ts` (+6 UX hardening tests)
+
+**New Testids:**
+- `renko-settings-reset` (Reset button)
+- `renko-settings-error-fixed-box-size`, `renko-settings-error-atr-period`, `renko-settings-error-auto-min-box-size`
+
+**Test Results & Gates:**
+- npm build ✅
+- vitest renko.test.ts ✅ **19/19 passed**
+- cp21 --repeat-each=3 ✅ **159/159 passed**
+- tvParity ✅ **35/35 passed**
+
+**Acceptance Criteria:**
+- [x] String-draft for numeric inputs (allows empty/partial)
+- [x] Inline validation errors per field
+- [x] Save disabled when invalid
+- [x] Reset to defaults button
+- [x] Shared validation logic (no drift)
+- [x] Tests: invalid input blocks Save
+- [x] Tests: error visible when invalid
+- [x] Tests: Reset restores defaults
+- [x] Tests: Cancel reverts after invalid input
+- [x] Regression: autoMinBoxSize=0 saves
+
+**Commits:**
+- `45e84af` refactor(chartspro): TV-22.0d1 shared Renko settings validation
+- `ba7818e` feat(chartspro): TV-22.0d2 renko modal UX hardening
+
+---
+
 ### 2025-01-23 (TV-21.4a Type/Plumbing Hardening)
 
 **Status:** ✅ **COMPLETE** (single source of truth for ChartType)
