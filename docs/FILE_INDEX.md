@@ -43,6 +43,7 @@
 | `routers/system.py` | System health, meta | /health, /api/health |
 | `routers/fundamentals.py` | Fundamentals API | /api/fundamentals/* |
 | `routers/alerts.py` | Alerts CRUD | /api/alerts/* |
+| `routers/drawings.py` | **T-013: ChartsPro drawings CRUD** | /api/drawings/{symbol}/{tf} |
 
 ### `app/utils/` – Backend Utilities
 
@@ -92,11 +93,14 @@
 | `features/chartsPro/components/TopBar/` | **TV-1+: TopBar (symbol/timeframe/type), TV-10.2: Settings overlay, TV-12: Layout Manager** | TopBar.tsx, PrimaryControls.tsx, SettingsPanel.tsx, LayoutManager.tsx |
 | `features/chartsPro/components/TopBar/SettingsPanel.tsx` | **TV-10.2: Settings gear panel (appearance + scales, localStorage cp.settings.*)** | SettingsPanel, ChartSettings, DEFAULT_SETTINGS |
 | `features/chartsPro/components/TopBar/LayoutManager.tsx` | **TV-12.1-12.4: Layout save/load/delete manager (overlay panel, localStorage cp.layouts.*, JSON schema)** | LayoutManager, SavedLayout, LayoutManagerState |
-| `features/chartsPro/components/Modal/` | **TV-18.1+: Modal infrastructure (central portal for indicators, alerts, text edit)** | ModalPortal, IndicatorsModal, TextModal |
+| `features/chartsPro/components/Modal/` | **TV-18.1+: Modal infrastructure (central portal for indicators, alerts, text edit, settings)** | ModalPortal, IndicatorsModal, TextModal, SettingsDialog |
 | `features/chartsPro/components/Modal/ModalPortal.tsx` | **TV-18.1: Central modal component (portal, Esc + click-outside, focus trap, data-testid)** | ModalPortal |
 | `features/chartsPro/components/Modal/IndicatorsModal.tsx` | **TV-18.2: Indicators picker modal (search + add, TradingView-style)** | IndicatorsModal |
 | `features/chartsPro/components/Modal/TextModal.tsx` | **TV-20.3: Text annotation modal (edit content, Enter=save, data-testid)** | TextModal |
+| `features/chartsPro/components/Modal/SettingsDialog.tsx` | **TV-23.1: Chart settings dialog (tabs: Appearance/Layout/Advanced, pending changes, localStorage)** | SettingsDialog |
+| `features/chartsPro/state/settings.ts` | **TV-23.1: Settings Zustand store (ChartSettings, pendingSettings, localStorage cp.settings)** | useSettingsStore, DEFAULT_SETTINGS |
 | `features/chartsPro/components/LeftToolbar/` | **Day 7+: Left toolbar (7 tools, keyboard shortcuts, persistence, TV-3.9: responsive mobile pill)** | LeftToolbar.tsx, MobilePill.tsx, ToolButton.tsx |
+| `features/chartsPro/components/FloatingToolbar/` | **TV-30.1+30.2a: Floating quick-edit toolbar (appears when drawing selected, portal-based, stroke/fill opacity sliders)** | FloatingToolbar.tsx, index.ts |
 | `features/chartsPro/components/BottomBar/` | **TV-9: Bottom bar (quick ranges, scale toggles, UTC clock, persistence)** | BottomBar.tsx, useBottomBarState |
 | `features/chartsPro/components/RightPanel/TabsPanel.tsx` | **Day 8+: RightPanel tabs (Indicators/Objects/Alerts, persistence)** | TabsPanel |
 | `features/chartsPro/components/RightPanel/IndicatorsTab.tsx` | **TV-18.2: Simplified to list view only (installed indicators management), overlay removed** | IndicatorsTab |
@@ -106,16 +110,40 @@
 | `features/chartsPro/components/ChartViewport.tsx` | dump().ui includes `alerts` (count), `indicators` (count, names[], addOpen), **`settings` (ChartSettings | null)**, **`modal` (TV-18.1: { open, kind })** | ChartViewport |
 | `features/chartsPro/components/ChartViewport.tsx` | Main chart renderer (lightweight-charts) | ChartViewport |
 | `features/chartsPro/utils/applyChartSettings.ts` | **TV-10.3: Adapter mapping `ChartSettings` → lwcharts options; snapshot exposure** | applyChartLevelSettings, applySeriesSettings, createAppliedSnapshot |
-| `features/chartsPro/components/DrawingLayer.tsx` | **TV-20.2/20.3: Drawing interactions (Rectangle, Text, Shift+H/L for hide/lock)** | DrawingLayer |
+| `features/chartsPro/utils/rangePresets.ts` | **TV-37.1+37.2: Range preset utilities (calculateRangePreset, applyRangePreset, calculateBackfillNeeded, createDataBounds)** | RangePresetKey, calculateRangePreset, applyRangePreset, calculateBackfillNeeded |
+| `features/chartsPro/components/DrawingLayer.tsx` | **TV-20.2/20.3/24: Drawing interactions (Rectangle, Text, Ray, ExtendedLine, Shift+H/L for hide/lock)** | DrawingLayer |
+| `features/chartsPro/components/OverlayCanvas.tsx` | **TV-24.P0: Overlay canvas layer (ADR: no clearRect, render responsibility belongs to DrawingLayer)** | OverlayCanvasLayer |
 | `features/chartsPro/components/AlertsPanel.tsx` | **Day 8: Alerts panel in ChartsPro sidebar** | AlertsPanel |
+| `features/chartsPro/mocks/ohlcv.ts` | **TV-37.2D: Mock OHLCV data for tests (1m/5m/15m/1h/4h/D/1W configs, AAPL/META full coverage)** | getMockOhlcv, getMockOhlcvRaw, listMockKeys |
 | `features/chartsPro/runtime/heikinAshi.ts` | **TV-21.1: Heikin Ashi OHLC transform (pure util, unit-testable)** | transformOhlcToHeikinAshi, transformToHeikinAshi |
 | `features/chartsPro/runtime/renko.ts` | **TV-21.4+TV-22.0d1: Renko brick generation + shared validation (pure util, unit-testable)** | transformOhlcToRenko, renkoToLwCandlestick, calculateAtr, suggestBoxSize, **normalizeRenkoSettings**, **validateRenkoField**, **DEFAULT_RENKO_SETTINGS** |
 | `features/chartsPro/runtime/renko.test.ts` | **TV-22.0d1: Unit tests for Renko validation (19 tests)** | - |
+| `features/chartsPro/runtime/abcd.ts` | **TV-31: ABCD pattern utilities (solveD, solveKFromDraggedD, isOnABDirectionLine, computeABCDHandles)** | solveD, solveKFromDraggedD |
+| `features/chartsPro/runtime/headAndShoulders.ts` | **TV-32: H&S pattern utilities (isPatternInverse, computeHeadAndShouldersHandles)** | isPatternInverse, computeHeadAndShouldersHandles |
+| `features/chartsPro/runtime/elliottWave.ts` | **TV-33: Elliott Wave utilities (getImpulseDirection, computeElliottWaveHandles)** | getImpulseDirection, computeElliottWaveHandles |
 | `features/chartsPro/components/Modal/RenkoSettingsModal.tsx` | **TV-22.0b+d2: Renko settings modal (string-draft, inline validation, Reset, Save disabled)** | RenkoSettingsModal |
 | `features/chartsPro/components/TopBar/ChartTypeSelector.tsx` | **TV-10.1+TV-21+TV-22.0b: Chart type dropdown + gear button for renko settings** | ChartTypeSelector, onRenkoSettingsClick |
 | `tests/chartsPro.cp18.spec.ts` | **TV-18.2: Indicators modal tests (4 cases: open, Esc, X, add indicator)** |
-| `tests/chartsPro.cp20.spec.ts` | **TV-20: Drawing tools tests (23+ cases: ToolGroups, Rectangle, Text, select/move/delete, hotkey guardrail)** |
+| `tests/chartsPro.cp20.spec.ts` | **TV-20: Drawing tools tests (96 cases: ToolGroups, Rectangle, Text, select/move/delete, hotkey guardrail, TV-20.14: Drawing Controls)** |
 | `tests/chartsPro.cp21.spec.ts` | **TV-21+TV-22.0b/d2: Chart types + Renko settings modal tests (53 cases: Heikin Ashi, Bars, Hollow Candles, Renko unit+integration, modal UX hardening)** |
+| `tests/chartsPro.cp23.spec.ts` | **TV-23.1+23.2: Settings dialog tests (16 cases: open/close, tabs, cancel/save/reset, controls, appearance application)** |
+| `tests/chartsPro.cp24.spec.ts` | **TV-24: Ray + Extended Line drawing tools tests (10 cases: create, auto-select, multiple rays, delete, visibility, P0 regression)** |
+| `tests/chartsPro.cp25.spec.ts` | **TV-25: Circle + Ellipse + Triangle shape tests (22 cases: create via hotkey, auto-select, dump() contract, delete, P0 visibility, structure verification)** |
+| `tests/chartsPro.cp26.spec.ts` | **TV-26: Callout annotation tests (8 cases: create via K hotkey, QA API, dump() contract, delete, P0 visibility, anchor/box structure)** |
+| `tests/chartsPro.cp27.spec.ts` | **TV-27: Note annotation tests (8 cases: create via M hotkey, QA API, dump() contract, cancel removes, delete, P0 visibility, structure verification, multiple notes)** |
+| `tests/chartsPro.cp28.spec.ts` | **TV-28: Fibonacci Extension & Fan tests (16 cases: fibExtension 3-click, fibFan drag, levels/ratios, handlesPx, delete, hotkey integration)** |
+| `tests/chartsPro.cp29.spec.ts` | **TV-29: Channel tools tests (8 cases: channel, flatTopChannel, flatBottomChannel, handlesPx, delete, visibility)** |
+| `tests/chartsPro.cp30.spec.ts` | **TV-30.1+30.2a: Floating toolbar tests (29 cases: visibility, UI elements, lock/delete actions, dump contract, fill color shapes, stroke/fill opacity sliders, real mouse click regression)** |
+| `tests/chartsPro.cp31.spec.ts` | **TV-31: ABCD pattern tests (13 cases: hotkey, 3-click creation, handlesPx, drag A/B/C/D, k changes, delete, lock, hide, z-order)** |
+| `tests/chartsPro.cp32.spec.ts` | **TV-32: Head & Shoulders tests (14 cases: hotkey, 5-click creation, inverse detection, handlesPx, drag points, delete, lock, hide, z-order)** |
+| `tests/chartsPro.cp33.spec.ts` | **TV-33: Elliott Wave tests (13 cases: hotkey, 6-click creation, direction detection, handlesPx, drag points, delete, lock, hide, z-order)** |
+| `tests/chartsPro.cp34.spec.ts` | **TV-34: Scale interaction tests (23 cases, 3 skipped: chart zoom/pan, barSpacing, timeScale, priceScale, setScale QA API, wheel zoom)** |
+| `tests/chartsPro.cp36.visualQA.spec.ts` | **TV-36: Visual QA tests (11 cases: screenshot compare, layout validation, drawing visibility, annotation placement, crosshair styling)** |
+| `tests/chartsPro.cp013.spec.ts` | **T-013: Backend persistence tests (4 cases: hline, elliottWave, z-order, locked state reload)** |
+| `tests/chartsPro.cp37.rangePresets.spec.ts` | **TV-37.1: Range preset tests (15 cases: selection, validity, UI state, rapid clicks, dump contract)** |
+| `tests/chartsPro.cp37.scaleToggles.spec.ts` | **TV-37.2: Scale toggle tests (17 cases: auto, log/%, ADJ, dump contract, persistence, regression)** |
+| `tests/chartsPro.cp37.density.spec.ts` | **TV-37.2D: Data density tests (16 cases: ohlcv diagnostics, range widths, backfill, anchoring, timeframe density validation)** |
+| `tests/chartsPro.cp37.drift.spec.ts` | **TV-37: State drift tests (4 cases: autoScale/scaleMode survives chartType/symbol changes)** |
 | `tests/chartsPro.tvUi.indicators.tab.spec.ts` | **TV-7/TV-18.2: Indicators tab tests (updated for modal, 12 cases)** |
 | `tests/chartsPro.tvUi.bottomBar.spec.ts` | **TV-9: BottomBar tests (13 cases, functional + responsive + deterministic, repeat-each=10, 130 runs, zero flakes)** |
 | `tests/chartsPro.tvUi.alerts.tab.spec.ts` | **TV-8: Alerts tab tests (12 cases, form/create/delete/sorting/determinism coverage)** |
@@ -127,7 +155,9 @@
 | `features/chartsPro/components/Watermark.tsx` | **Day 10: Symbol watermark** | Watermark |
 | `features/chartsPro/hooks/` | Custom hooks | useOhlcv, useIndicators |
 | `features/chartsPro/state/` | State management | controls, drawings |
-| `features/chartsPro/types.ts` | **TV-7+TV-20: Type definitions, DrawingKind (hline, vline, trend, channel, pitchfork, rectangle, text, priceRange, dateRange, dateAndPriceRange, fibRetracement), IndicatorInstance** | DrawingKind, Drawing, Pitchfork, Channel, TextDrawing, IndicatorInstance |
+| `features/chartsPro/state/drawings.ts` | **T-013: Drawings state (Zustand, localStorage + backend sync, debounced autosave, hydration)** | useDrawings, hydrateFromBackend |
+| `features/chartsPro/api/drawingsApi.ts` | **T-013: Backend API client (CRUD, serialization, payloadToDrawing, drawingToPayload)** | fetchDrawings, saveDrawings, deleteDrawing |
+| `features/chartsPro/types.ts` | **TV-7+TV-20+TV-24: Type definitions, DrawingKind (hline, vline, trend, channel, pitchfork, rectangle, text, priceRange, dateRange, dateAndPriceRange, fibRetracement, ray, extendedLine), IndicatorInstance** | DrawingKind, Drawing, Pitchfork, Channel, TextDrawing, Ray, ExtendedLine, IndicatorInstance |
 | `features/chartsPro/indicators/` | Technical indicators | SMA, EMA |
 | `features/chartsPro/theme.ts` | Chart theming (TradingView-style colors Day 10) | - |
 | `features/fundamentals/` | Fundamentals tab | FundamentalsTab |

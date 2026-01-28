@@ -16,6 +16,19 @@ import { ChevronDown } from "lucide-react";
 const TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "1D", "1W"];
 const DEFAULT_TIMEFRAME = "1D";
 
+/**
+ * TV-37.3: Only these timeframes are production-ready.
+ * Others require real intraday data subscription or are not fully tested.
+ */
+const READY_TIMEFRAMES = new Set(["1h", "1D", "1W"]);
+
+function getTimeframeTooltip(tf: string): string {
+  if (READY_TIMEFRAMES.has(tf)) {
+    return `Timeframe: ${tf}`;
+  }
+  return `${tf}: Coming soon (requires intraday data)`;
+}
+
 interface TimeframeSelectorProps {
   timeframe: string;
   onChange: (timeframe: string) => void;
@@ -106,7 +119,7 @@ export function TimeframeSelector({
         onClick={() => setIsOpen(!isOpen)}
         className="px-3 py-2 rounded border border-[var(--cp-panel-border)] bg-[var(--cp-panel-bg)] text-[var(--cp-panel-text)] text-sm font-medium hover:bg-[var(--cp-panel-hover-bg)] flex items-center gap-1"
         data-testid="timeframe-button"
-        title={`Timeframe: ${timeframe}`}
+        title={getTimeframeTooltip(timeframe)}
       >
         <span>{timeframe}</span>
         <ChevronDown className="h-3.5 w-3.5 text-[var(--cp-panel-text-muted)]" />
@@ -119,26 +132,40 @@ export function TimeframeSelector({
           className="absolute top-full left-0 mt-1 z-50 w-40 rounded border border-[var(--cp-panel-border)] bg-[var(--cp-panel-bg)] shadow-lg p-1"
           data-testid="timeframe-dropdown"
         >
-          {TIMEFRAMES.map((tf) => (
-            <div
-              key={tf}
-              onClick={() => {
-                onChange(tf);
-                setIsOpen(false);
-              }}
-              onMouseEnter={() => setHighlighted(tf)}
-              className={`px-3 py-2 rounded text-sm cursor-pointer ${
-                tf === highlighted
-                  ? "bg-[var(--cp-panel-hover-bg)] text-[var(--cp-panel-text)]"
-                  : "text-[var(--cp-panel-text)] hover:bg-[var(--cp-panel-hover-bg)]"
-              }`}
-              data-testid={`timeframe-item-${tf}`}
-              aria-selected={tf === highlighted}
-              role="option"
-            >
-              {tf}
-            </div>
-          ))}
+          {TIMEFRAMES.map((tf) => {
+            const isReady = READY_TIMEFRAMES.has(tf);
+            const isHighlighted = tf === highlighted;
+            return (
+              <div
+                key={tf}
+                onClick={() => {
+                  if (!isReady) return; // Don't allow selection of non-ready timeframes
+                  onChange(tf);
+                  setIsOpen(false);
+                }}
+                onMouseEnter={() => setHighlighted(tf)}
+                className={`px-3 py-2 rounded text-sm ${
+                  !isReady
+                    ? "cursor-not-allowed opacity-50"
+                    : isHighlighted
+                      ? "bg-[var(--cp-panel-hover-bg)] text-[var(--cp-panel-text)] cursor-pointer"
+                      : "text-[var(--cp-panel-text)] hover:bg-[var(--cp-panel-hover-bg)] cursor-pointer"
+                }`}
+                data-testid={`timeframe-item-${tf}`}
+                aria-selected={isHighlighted}
+                aria-disabled={!isReady}
+                role="option"
+                title={getTimeframeTooltip(tf)}
+              >
+                <span className="flex items-center justify-between">
+                  <span>{tf}</span>
+                  {!isReady && (
+                    <span className="text-xs text-[var(--cp-text-muted)] ml-2">Soon</span>
+                  )}
+                </span>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
