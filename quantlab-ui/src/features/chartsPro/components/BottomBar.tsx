@@ -495,15 +495,17 @@ export function BottomBar({
       className="tv-bottombar flex items-center justify-between text-sm" 
       data-testid="bottombar"
       style={{
-        // Use CSS token variables for theme parity with RightPanel
-        backgroundColor: "var(--cp-panel, var(--cp-panel-bg, rgb(15, 23, 42)))",
-        color: "var(--cp-text-secondary, rgb(148, 163, 184))",
-        borderTop: "1px solid var(--cp-overlay-toolbar-border, var(--cp-border, rgb(30, 41, 59)))",
-        gap: "var(--cp-space-md, var(--cp-gap, 8px))",
-        padding: "var(--cp-space-xs, 4px) var(--cp-space-md, 8px)",
+        // PRIO 3: TV-tight bottom bar using CSS tokens
+        backgroundColor: "var(--tv-panel, #1e222d)",
+        color: "var(--tv-text-muted, #787b86)",
+        borderTop: "1px solid var(--tv-border, #363a45)",
+        gap: "8px",
+        padding: "0 8px",
+        height: "100%",
+        minWidth: 0, // Prevent overflow from grid children
       }}
     >
-      {/* Left: Range quick-select (TV-37.1) */}
+      {/* Left: Range quick-select (TV-37.1) - TV-style text+underline */}
       <div className="flex items-center" style={{ gap: "var(--cp-space-xs, 4px)" }}>
         {RANGE_KEYS.map((range) => {
           const isSelected = selectedRange === range;
@@ -519,20 +521,23 @@ export function BottomBar({
               disabled={!canSelect}
               className={`cp-icon-btn ${isSelected ? "is-active" : ""}`}
               style={{
-                padding: "var(--cp-space-xs, 2px) var(--cp-space-sm, 6px)",
-                fontSize: "var(--cp-font-size-xs, 11px)",
+                padding: "2px 8px",
+                fontSize: "11px",
                 fontWeight: isSelected ? 600 : 500,
-                backgroundColor: isSelected 
-                  ? "var(--cp-overlay-selection, rgb(59, 130, 246))" 
-                  : "rgba(71, 85, 105, 0.4)",
+                // TV-style: transparent bg, text + bottom border underline
+                backgroundColor: "transparent",
                 color: isSelected 
-                  ? "white" 
+                  ? "#d1d4dc"
                   : !isValid 
-                    ? "rgba(148, 163, 184, 0.5)"
-                    : "rgba(226, 232, 240, 0.9)",
-                border: isSelected 
-                  ? "1px solid transparent" 
-                  : "1px solid rgba(100, 116, 139, 0.5)",
+                    ? "rgba(120, 123, 134, 0.6)"
+                    : "#787b86",
+                // Underline for active, transparent border for inactive
+                borderTop: "none",
+                borderLeft: "none",
+                borderRight: "none",
+                borderBottom: isSelected 
+                  ? "2px solid #2962ff" 
+                  : "2px solid transparent",
                 opacity: !canSelect ? 0.4 : 1,
                 transition: "all 0.15s ease",
               }}
@@ -549,14 +554,14 @@ export function BottomBar({
         })}
       </div>
 
-      {/* Middle: Scale toggles (TV-37.2) */}
+      {/* Middle: Scale toggles (TV-37.2) - TV-style text+underline */}
       <div style={{
         display: "flex",
         alignItems: "center",
-        gap: "var(--cp-space-xs, 4px)",
-        padding: "0 var(--cp-space-md, 8px)",
-        borderLeft: "1px solid var(--cp-overlay-toolbar-border, rgba(71, 85, 105, 0.5))",
-        borderRight: "1px solid var(--cp-overlay-toolbar-border, rgba(71, 85, 105, 0.5))",
+        gap: "4px",
+        padding: "0 8px",
+        borderLeft: "1px solid var(--tv-border, #363a45)",
+        borderRight: "1px solid var(--tv-border, #363a45)",
       }}>
         {/* Auto toggle (independent of mode) */}
         <button
@@ -564,18 +569,16 @@ export function BottomBar({
           onClick={handleAutoToggle}
           className={`cp-icon-btn ${localAutoScale ? "is-active" : ""}`}
           style={{
-            padding: "var(--cp-space-xs, 2px) var(--cp-space-sm, 6px)",
-            fontSize: "var(--cp-font-size-xs, 11px)",
+            padding: "2px 8px",
+            fontSize: "11px",
             fontWeight: localAutoScale ? 600 : 500,
-            backgroundColor: localAutoScale 
-              ? "var(--cp-overlay-selection, rgb(59, 130, 246))" 
-              : "rgba(71, 85, 105, 0.4)",
-            color: localAutoScale 
-              ? "white" 
-              : "rgba(226, 232, 240, 0.9)",
-            border: localAutoScale 
-              ? "1px solid transparent" 
-              : "1px solid rgba(100, 116, 139, 0.5)",
+            // TV-style: transparent bg, text + underline
+            backgroundColor: "transparent",
+            color: localAutoScale ? "var(--tv-text, #d1d4dc)" : "var(--tv-text-muted, #787b86)",
+            border: "none",
+            borderBottom: localAutoScale 
+              ? "2px solid var(--tv-blue, #2962ff)" 
+              : "2px solid transparent",
             transition: "all 0.15s ease",
           }}
           title={localAutoScale ? "Auto-scale enabled (click to disable)" : "Auto-scale disabled (click to enable)"}
@@ -587,7 +590,7 @@ export function BottomBar({
         <div style={{
           width: 1,
           height: 16,
-          backgroundColor: "var(--cp-overlay-toolbar-border, rgba(71, 85, 105, 0.5))",
+          backgroundColor: "var(--tv-border, #363a45)",
           margin: "0 2px",
         }} />
         
@@ -613,25 +616,24 @@ export function BottomBar({
               disabled={isDisabled}
               className={`cp-icon-btn ${isSelected ? "is-active" : ""}`}
               style={{
-                padding: "var(--cp-space-xs, 2px) var(--cp-space-sm, 6px)",
-                fontSize: "var(--cp-font-size-xs, 11px)",
+                padding: "2px 8px",
+                fontSize: "11px",
                 fontWeight: isSelected ? 600 : 500,
-                backgroundColor: isDisabled 
-                  ? "transparent" 
-                  : isSelected 
-                    ? "var(--cp-overlay-selection, rgb(59, 130, 246))" 
-                    : "rgba(71, 85, 105, 0.4)",
+                // TV-style: transparent bg, text + underline
+                backgroundColor: "transparent",
                 color: isDisabled 
-                  ? "rgba(148, 163, 184, 0.4)" 
+                  ? "var(--tv-text-dim, rgba(120, 123, 134, 0.5))" 
                   : isSelected 
-                    ? "white" 
-                    : "rgba(226, 232, 240, 0.9)",
-                border: isDisabled 
-                  ? "1px solid rgba(100, 116, 139, 0.3)" 
+                    ? "var(--tv-text, #d1d4dc)" 
+                    : "var(--tv-text-muted, #787b86)",
+                border: "none",
+                borderBottom: isDisabled 
+                  ? "2px solid transparent" 
                   : isSelected 
-                    ? "1px solid transparent" 
-                    : "1px solid rgba(100, 116, 139, 0.5)",
-                opacity: isDisabled ? 0.5 : 1,
+                    ? "2px solid var(--tv-blue, #2962ff)" 
+                    : "2px solid transparent",
+                opacity: isDisabled ? 0.6 : 1,
+                cursor: isDisabled ? "not-allowed" : "pointer",
                 transition: "all 0.15s ease",
               }}
               title={
@@ -648,100 +650,107 @@ export function BottomBar({
         })}
       </div>
 
-      {/* Right: Market session + Clock + Timezone selector */}
-      <div className="flex items-center gap-3 ml-auto">
-        {/* Market session status (based on exchange hours) */}
+      {/* Right: Market session + Clock + Timezone selector - TV-style compact */}
+      <div className="flex items-center gap-1.5 ml-auto" style={{ minWidth: 0 }}>
+        {/* Market session status (based on exchange hours) - TV compact */}
         <span 
           data-testid="bottombar-market-session"
-          className="text-xs font-medium px-2 py-0.5 rounded"
+          className="text-[10px] font-medium px-1 py-px rounded-sm"
           style={{
             backgroundColor: marketSession === "OPEN" 
-              ? "rgba(34, 197, 94, 0.2)" 
+              ? "rgba(38, 166, 154, 0.15)" 
               : marketSession === "PRE" || marketSession === "POST"
-                ? "rgba(234, 179, 8, 0.2)" 
+                ? "rgba(255, 193, 7, 0.15)" 
                 : marketSession === "CLOSED"
-                  ? "rgba(239, 68, 68, 0.2)"
-                  : "rgba(100, 116, 139, 0.2)",
+                  ? "rgba(239, 83, 80, 0.15)"
+                  : "var(--tv-bg-secondary, rgba(42, 46, 57, 0.5))",
             color: marketSession === "OPEN" 
-              ? "rgb(74, 222, 128)" 
+              ? "var(--tv-green, #26a69a)" 
               : marketSession === "PRE" || marketSession === "POST"
-                ? "rgb(250, 204, 21)" 
+                ? "var(--tv-yellow, #ffc107)" 
                 : marketSession === "CLOSED"
-                  ? "rgb(248, 113, 113)"
-                  : "rgb(148, 163, 184)",
+                  ? "var(--tv-red, #ef5350)"
+                  : "var(--tv-text-muted, #787b86)",
           }}
         >
-          {marketSession === "OPEN" ? "● OPEN" : marketSession === "PRE" ? "◐ PRE" : marketSession === "POST" ? "◑ POST" : marketSession === "CLOSED" ? "○ CLOSED" : "—"}
+          {marketSession === "OPEN" ? "●" : marketSession === "PRE" ? "◐" : marketSession === "POST" ? "◑" : marketSession === "CLOSED" ? "○" : "—"}
         </span>
 
-        {/* Data status indicator (LIVE/DEMO/etc) */}
+        {/* Data status indicator (LIVE/DEMO/etc) - TV compact */}
         <span 
           data-testid="bottombar-market-status"
-          className="text-xs font-medium px-2 py-0.5 rounded"
+          className="text-[10px] font-medium px-1 py-px rounded-sm"
           style={{
             backgroundColor: marketStatus === "LIVE" 
-              ? "rgba(34, 197, 94, 0.2)" 
+              ? "rgba(38, 166, 154, 0.15)" 
               : marketStatus === "DEMO" 
-                ? "rgba(234, 179, 8, 0.2)" 
+                ? "rgba(255, 193, 7, 0.15)" 
                 : marketStatus === "LOADING"
-                  ? "rgba(59, 130, 246, 0.2)"
-                  : "rgba(239, 68, 68, 0.2)",
+                  ? "rgba(66, 165, 245, 0.15)"
+                  : "rgba(239, 83, 80, 0.15)",
             color: marketStatus === "LIVE" 
-              ? "rgb(74, 222, 128)" 
+              ? "var(--tv-green, #26a69a)" 
               : marketStatus === "DEMO" 
-                ? "rgb(250, 204, 21)" 
+                ? "var(--tv-yellow, #ffc107)" 
                 : marketStatus === "LOADING"
-                  ? "rgb(96, 165, 250)"
-                  : "rgb(248, 113, 113)",
+                  ? "var(--tv-blue, #2962ff)"
+                  : "var(--tv-red, #ef5350)",
           }}
         >
-          {marketStatus === "LIVE" ? "● LIVE" : marketStatus === "DEMO" ? "◐ DEMO" : marketStatus === "LOADING" ? "◌ LOADING" : "○ OFFLINE"}
+          {marketStatus === "LIVE" ? "LIVE" : marketStatus === "DEMO" ? "DEMO" : marketStatus === "LOADING" ? "..." : "OFF"}
         </span>
 
-        {/* Clock */}
+        {/* Clock - TV mono style */}
         <span 
           data-testid="bottombar-clock"
-          className="font-mono text-xs" 
-          style={{ color: "var(--cp-text-primary, rgb(226, 232, 240))" }}
+          className="font-mono text-[11px] tabular-nums" 
+          style={{ color: "var(--tv-text-muted, #787b86)" }}
         >
           {clockText || "--:--:--"}
         </span>
 
-        {/* Timezone dropdown selector */}
+        {/* Timezone dropdown selector - TV style */}
         <div ref={tzDropdownRef} className="relative">
           <button
             data-testid="bottombar-tz-toggle"
             onClick={() => setTzDropdownOpen(!tzDropdownOpen)}
-            className="text-xs px-2 py-0.5 rounded transition-colors hover:bg-slate-700/50 flex items-center gap-1"
+            className="text-[10px] px-1.5 py-0.5 rounded-sm transition-colors flex items-center gap-0.5"
             style={{ 
-              color: "var(--cp-text-secondary, rgb(148, 163, 184))",
-              border: "1px solid var(--cp-border, rgb(51, 65, 85))",
+              color: "var(--tv-text-muted, #787b86)",
+              backgroundColor: tzDropdownOpen ? "var(--tv-bg-secondary, #2a2e39)" : "transparent",
             }}
             title="Select timezone"
           >
             {TIMEZONE_LABELS[timezoneId]}
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-2.5 h-2.5 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
           </button>
           
-          {/* Dropdown menu */}
+          {/* Dropdown menu - TV dark panel */}
           {tzDropdownOpen && (
             <div 
               data-testid="bottombar-tz-dropdown"
-              className="absolute bottom-full mb-1 right-0 bg-slate-800 border border-slate-700 rounded shadow-lg z-50"
-              style={{ minWidth: "120px" }}
+              className="absolute bottom-full mb-1 right-0 rounded shadow-lg z-50"
+              style={{ 
+                minWidth: "100px",
+                backgroundColor: "var(--tv-panel, #1e222d)",
+                border: "1px solid var(--tv-border, #363a45)",
+              }}
             >
               {TIMEZONE_OPTIONS.map((tz) => (
                 <button
                   key={tz}
                   data-testid={`bottombar-tz-option-${tz.replace("/", "-")}`}
                   onClick={() => handleTimezoneSelect(tz)}
-                  className="w-full text-left px-3 py-1.5 text-xs hover:bg-slate-700 transition-colors"
+                  className="w-full text-left px-2 py-1 text-[10px] transition-colors"
                   style={{
-                    color: tz === timezoneId ? "var(--cp-accent-primary, rgb(168, 85, 247))" : "var(--cp-text-secondary, rgb(148, 163, 184))",
-                    fontWeight: tz === timezoneId ? 600 : 400,
+                    color: tz === timezoneId ? "var(--tv-blue, #2962ff)" : "var(--tv-text-muted, #787b86)",
+                    fontWeight: tz === timezoneId ? 500 : 400,
+                    backgroundColor: "transparent",
                   }}
+                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "var(--tv-bg-secondary, #2a2e39)"}
+                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
                 >
                   {TIMEZONE_LABELS[tz]}
                 </button>

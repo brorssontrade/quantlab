@@ -8,8 +8,8 @@ export interface WatermarkProps {
 }
 
 /**
- * Faint watermark showing symbol in chart background.
- * TradingView-style large centered symbol text.
+ * TV-35.3: Faint watermark showing symbol in chart background.
+ * TradingView-style large centered symbol text using theme watermark tokens.
  */
 export const Watermark = memo(function Watermark({
   symbol,
@@ -32,12 +32,11 @@ export const Watermark = memo(function Watermark({
         top: "50%",
         left: "50%",
         transform: "translate(-50%, -50%)",
-        fontSize: "clamp(48px, 8vw, 120px)",
-        fontWeight: 700,
-        fontFamily: theme.fontFamily,
-        color: theme.name === "dark" 
-          ? "rgba(255, 255, 255, 0.03)" 
-          : "rgba(0, 0, 0, 0.03)",
+        fontSize: `clamp(${theme.watermark.fontSize}px, 8vw, 120px)`,
+        fontWeight: theme.watermark.fontWeight,
+        fontFamily: theme.typography.fontFamily.primary,
+        color: theme.watermark.color,
+        opacity: theme.watermark.opacity,
         pointerEvents: "none",
         userSelect: "none",
         whiteSpace: "nowrap",

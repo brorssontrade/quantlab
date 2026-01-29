@@ -1,21 +1,146 @@
 /**
- * TV-10.3: Apply Settings to Chart Rendering
+ * TV-10.3 + TV-23.2 + TV-35.2: Apply Settings to Chart Rendering
  * 
- * Maps ChartSettings interface to lightweight-charts API options.
+ * Maps AppearanceSettings (Zustand store) to lightweight-charts API options.
  * Ensures idempotent application (can be called repeatedly with same settings).
+ * 
+ * TV-23.2: Added full appearance settings support (grid style/color, crosshair mode/color, background)
+ * TV-35.2: Enhanced typography with theme tokens (font family, sizes, weights)
  */
 
 import type { IChartApi, ISeriesApi, DeepPartial, ChartOptions, SeriesOptionsCommon } from "@/lib/lightweightCharts";
-import type { ChartSettings } from "../components/TopBar/SettingsPanel";
+import type { ChartSettings as LegacyChartSettings } from "../components/TopBar/SettingsPanel";
+import type { AppearanceSettings, GridStyle, CrosshairMode } from "../state/settings";
 import type { ChartType } from "../types";
-import { ColorType, LineStyle } from "@/lib/lightweightCharts";
+import type { ChartsTheme } from "../theme";
+import { ColorType, LineStyle, CrosshairMode as LwCrosshairMode } from "@/lib/lightweightCharts";
 
 /**
+ * Map GridStyle to lwcharts LineStyle
+ */
+function mapGridStyle(style: GridStyle): LineStyle {
+  switch (style) {
+    case "solid": return LineStyle.Solid;
+    case "dashed": return LineStyle.Dashed;
+    case "hidden": return LineStyle.Dotted; // Hidden handled via visible=false
+    default: return LineStyle.Solid;
+  }
+}
+
+/**
+ * Map CrosshairMode to lwcharts CrosshairMode
+ */
+function mapCrosshairMode(mode: CrosshairMode): LwCrosshairMode {
+  switch (mode) {
+    case "normal": return LwCrosshairMode.Normal;
+    case "magnet": return LwCrosshairMode.Magnet;
+    case "hidden": return LwCrosshairMode.Hidden;
+    default: return LwCrosshairMode.Normal;
+  }
+}
+
+/**
+ * TV-23.2 + TV-35.2: Apply chart-level settings (background, grid, crosshair) from AppearanceSettings
+ * Enhanced with typography tokens for TradingView-level text rendering
+ */
+export function applyAppearanceToChart(
+  chart: IChartApi,
+  appearance: AppearanceSettings,
+  theme: ChartsTheme
+): DeepPartial<ChartOptions> {
+  const gridVisible = appearance.showGrid && appearance.gridStyle !== "hidden";
+  const gridStyle = mapGridStyle(appearance.gridStyle);
+  const crosshairMode = mapCrosshairMode(appearance.crosshairMode);
+
+  const options: DeepPartial<ChartOptions> = {
+    layout: {
+      background: { type: ColorType.Solid, color: appearance.backgroundColor },
+      textColor: theme.text.axis,
+      fontFamily: theme.typography.fontFamily.axis,
+      fontSize: theme.typography.fontSize.sm, // 10px for axis labels
+      attributionLogo: false as any,
+    },
+    grid: {
+      horzLines: {
+        color: appearance.gridColor,
+        style: gridStyle,
+        visible: gridVisible,
+      },
+      vertLines: {
+        color: appearance.gridColor,
+        style: gridStyle,
+        visible: gridVisible,
+      },
+    },
+    crosshair: {
+      mode: crosshairMode,
+      vertLine: {
+        color: appearance.crosshairColor,
+        width: theme.crosshairTokens.width as 1 | 2 | 3 | 4,
+        style: LineStyle.Dashed,
+        labelVisible: true,
+        labelBackgroundColor: theme.crosshairTokens.labelBackground,
+      },
+      horzLine: {
+        color: appearance.crosshairColor,
+        labelVisible: true,
+        labelBackgroundColor: theme.crosshairTokens.labelBackground,
+      },
+    },
+    rightPriceScale: {
+      borderColor: theme.canvas.grid,
+    },
+    timeScale: {
+      borderColor: theme.canvas.grid,
+    },
+  };
+
+  chart.applyOptions(options);
+  return options;
+}
+
+/**
+ * TV-23.2: Apply series-level appearance settings (candle colors)
+ */
+export function applyAppearanceToSeries(
+  series: ISeriesApi<any>,
+  chartType: ChartType,
+  appearance: AppearanceSettings
+): void {
+  if (chartType === "candles" || chartType === "bars") {
+    series.applyOptions({
+      upColor: appearance.upColor,
+      downColor: appearance.downColor,
+      borderUpColor: appearance.upColor,
+      borderDownColor: appearance.downColor,
+      wickUpColor: appearance.wickUpColor,
+      wickDownColor: appearance.wickDownColor,
+      wickVisible: true,
+      borderVisible: true,
+    } as DeepPartial<SeriesOptionsCommon>);
+  } else if (chartType === "line") {
+    series.applyOptions({
+      color: appearance.upColor,
+    } as DeepPartial<SeriesOptionsCommon>);
+  } else if (chartType === "area") {
+    series.applyOptions({
+      topColor: appearance.upColor,
+      bottomColor: appearance.downColor,
+      lineColor: appearance.upColor,
+    } as DeepPartial<SeriesOptionsCommon>);
+  }
+}
+
+// ─── Legacy Support ───────────────────────────────────────────────────────────
+// Keep old functions for backward compatibility until full migration
+
+/**
+ * @deprecated Use applyAppearanceToChart instead
  * Apply chart-level settings (background, grid, crosshair)
  */
 export function applyChartLevelSettings(
   chart: IChartApi,
-  settings: ChartSettings,
+  settings: LegacyChartSettings,
   theme: { background: string; grid: string; crosshair: string; crosshairLabelBg: string; axisText: string; fontFamily: string }
 ): void {
   // Use dark background if toggled on, otherwise use theme default
@@ -58,6 +183,7 @@ export function applyChartLevelSettings(
 }
 
 /**
+ * @deprecated Use applyAppearanceToSeries instead
  * Apply series-level settings (colors, borders, wicks) based on chartType.
  * 
  * GUARANTEE: Settings are applied AFTER theme defaults in ChartViewport.useEffect,
@@ -68,7 +194,7 @@ export function applyChartLevelSettings(
 export function applySeriesSettings(
   series: ISeriesApi<any>,
   chartType: ChartType,
-  settings: ChartSettings,
+  settings: LegacyChartSettings,
   theme: {
     candleUp: string;
     candleDown: string;
@@ -111,7 +237,58 @@ export function applySeriesSettings(
   }
 }
 
+// ─── Snapshots for Testing ────────────────────────────────────────────────────
+
 /**
+ * TV-23.2: Applied appearance snapshot for QA/testing
+ * Exposes the actual options applied to the chart (not just stored settings)
+ */
+export interface AppliedAppearanceSnapshot {
+  chartOptions: {
+    backgroundColor: string;
+    gridVisible: boolean;
+    gridStyle: string;
+    gridColor: string;
+    crosshairMode: string;
+    crosshairColor: string;
+  };
+  seriesOptions: {
+    upColor: string;
+    downColor: string;
+    wickUpColor: string;
+    wickDownColor: string;
+  } | null;
+  appliedAt: number;
+}
+
+/**
+ * TV-23.2: Create snapshot of applied appearance settings for dump().render
+ */
+export function createAppearanceSnapshot(
+  appearance: AppearanceSettings,
+  chartType: ChartType
+): AppliedAppearanceSnapshot {
+  return {
+    chartOptions: {
+      backgroundColor: appearance.backgroundColor,
+      gridVisible: appearance.showGrid && appearance.gridStyle !== "hidden",
+      gridStyle: appearance.gridStyle,
+      gridColor: appearance.gridColor,
+      crosshairMode: appearance.crosshairMode,
+      crosshairColor: appearance.crosshairColor,
+    },
+    seriesOptions: (chartType === "candles" || chartType === "bars") ? {
+      upColor: appearance.upColor,
+      downColor: appearance.downColor,
+      wickUpColor: appearance.wickUpColor,
+      wickDownColor: appearance.wickDownColor,
+    } : null,
+    appliedAt: Date.now(),
+  };
+}
+
+/**
+ * @deprecated Use createAppearanceSnapshot instead
  * Complete settings snapshot for QA/testing
  */
 export interface AppliedSettingsSnapshot {
@@ -131,10 +308,11 @@ export interface AppliedSettingsSnapshot {
 }
 
 /**
+ * @deprecated Use createAppearanceSnapshot instead
  * Create a snapshot of currently applied settings for dump() exposure
  */
 export function createAppliedSnapshot(
-  settings: ChartSettings,
+  settings: LegacyChartSettings,
   chartType: ChartType
 ): AppliedSettingsSnapshot {
   return {

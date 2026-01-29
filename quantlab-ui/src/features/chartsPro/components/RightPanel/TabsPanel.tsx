@@ -105,37 +105,32 @@ export function TabsPanel({
       className="flex flex-col min-h-0 border-l"
       style={{
         ...widthStyle,
-        backgroundColor: "var(--cp-panel-bg)",
-        borderLeftColor: "var(--cp-panel-border)",
+        backgroundColor: "var(--tv-panel, #1e222d)",
+        borderLeftColor: "var(--tv-border, #363a45)",
       }}
       data-testid="rightpanel-root"
     >
+      {/* Header - Tighter TV styling */}
       <div
         className="flex items-center justify-between border-b"
         style={{
-          padding: "var(--cp-pad-sm) var(--cp-pad)",
-          backgroundColor: "var(--cp-panel-header-bg)",
-          borderColor: "var(--cp-panel-border)",
-          color: "var(--cp-panel-text)",
+          padding: "6px 8px",
+          backgroundColor: "var(--tv-panel, #1e222d)",
+          borderColor: "var(--tv-border, #363a45)",
+          color: "var(--tv-text, #d1d4dc)",
         }}
       >
-        <span className="text-xs font-medium">Panels</span>
+        <span className="text-[11px] font-medium" style={{ color: "var(--tv-text-muted, #787b86)" }}>Panels</span>
         {onToggleCollapsed ? (
           <button
             type="button"
             onClick={onToggleCollapsed}
-            className="px-2 py-1 text-xs rounded transition"
+            className="px-1.5 py-0.5 text-[11px] rounded-sm transition"
             style={{
-              color: "var(--cp-panel-text)",
+              color: "var(--tv-text-muted, #787b86)",
             }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.backgroundColor =
-                "var(--cp-panel-hover-bg)";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.backgroundColor =
-                "transparent";
-            }}
+            onMouseEnter={(e) => { (e.target as HTMLElement).style.backgroundColor = "var(--tv-panel-hover, #2a2e39)"; }}
+            onMouseLeave={(e) => { (e.target as HTMLElement).style.backgroundColor = "transparent"; }}
             title="Collapse panels"
             data-testid="rightpanel-collapse-btn"
           >
@@ -143,13 +138,14 @@ export function TabsPanel({
           </button>
         ) : null}
       </div>
+      {/* Tab bar - Tighter TV styling with underline indicator */}
       <div
         className="flex items-center border-b"
         style={{
-          gap: "var(--cp-gap-xs)",
-          padding: "var(--cp-pad-sm)",
-          backgroundColor: "var(--cp-panel-header-bg)",
-          borderColor: "var(--cp-panel-border)",
+          gap: "2px",
+          padding: "4px 6px",
+          backgroundColor: "var(--tv-panel, #1e222d)",
+          borderColor: "var(--tv-border, #363a45)",
         }}
         data-testid="rightpanel-tabs"
       >
@@ -158,22 +154,13 @@ export function TabsPanel({
             key={tab}
             type="button"
             onClick={() => handleTabClick(tab)}
-            className="px-3 py-1 text-xs rounded transition"
+            className={`px-2 py-1 text-[11px] font-medium rounded-sm transition border-b-2 ${
+              currentTab === tab 
+                ? "border-[#2962ff] bg-transparent" 
+                : "border-transparent hover:bg-[#2a2e39]/40"
+            }`}
             style={{
-              color: currentTab === tab ? "var(--cp-panel-text)" : "var(--cp-panel-text-muted)",
-              backgroundColor: currentTab === tab ? "var(--cp-panel-hover-bg)" : "transparent",
-            }}
-            onMouseEnter={(e) => {
-              if (currentTab !== tab) {
-                (e.currentTarget as HTMLButtonElement).style.backgroundColor =
-                  "var(--cp-panel-hover-bg)";
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (currentTab !== tab) {
-                (e.currentTarget as HTMLButtonElement).style.backgroundColor =
-                  "transparent";
-              }
+              color: currentTab === tab ? "var(--tv-blue, #2962ff)" : "var(--tv-text-muted, #787b86)",
             }}
             aria-pressed={currentTab === tab}
             data-testid={`rightpanel-tab-${tab}`}
@@ -182,12 +169,13 @@ export function TabsPanel({
           </button>
         ))}
       </div>
+      {/* Content area - Tighter padding */}
       <div
         className="flex flex-col flex-1 min-h-0 overflow-y-auto"
         style={{
-          color: "var(--cp-panel-text)",
-          padding: "var(--cp-pad-sm) var(--cp-pad)",
-          gap: "var(--cp-gap-sm)",
+          color: "var(--tv-text, #d1d4dc)",
+          padding: "6px 8px",
+          gap: "4px",
         }}
         data-testid="rightpanel-content"
       >

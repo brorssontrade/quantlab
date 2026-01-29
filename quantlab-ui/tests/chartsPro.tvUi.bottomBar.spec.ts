@@ -239,17 +239,23 @@ test.describe("TV-9: Deterministic (--repeat-each=10)", () => {
     }
   });
 
-  test("TV-9.D2: Scale toggle is idempotent", async ({ page }) => {
+  test("TV-9.D2: Scale toggle behavior is consistent", async ({ page }) => {
     await gotoChartsPro(page);
     await page.waitForTimeout(500);
 
+    // TV-37.2: Log/% toggles are now true toggles - clicking toggles on/off
+    // Start from linear (default), clicking % enables it
+    let expected = "percent";
     for (let i = 0; i < 5; i++) {
       await page.locator('[data-testid="bottombar-toggle-percent"]').click();
       await page.waitForTimeout(50);
 
-      // Verify percent is stored in localStorage
+      // Verify correct mode based on toggle behavior
       const stored = await page.evaluate(() => window.localStorage.getItem("cp.bottomBar.scaleMode"));
-      expect(stored).toBe("percent");
+      expect(stored).toBe(expected);
+      
+      // Toggle expectation for next iteration
+      expected = expected === "percent" ? "linear" : "percent";
     }
   });
 });

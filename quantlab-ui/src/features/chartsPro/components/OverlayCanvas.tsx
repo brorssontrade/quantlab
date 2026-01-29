@@ -3,6 +3,26 @@ import type { MutableRefObject, PointerEventHandler, PropsWithChildren, RefObjec
 
 import { OverlayCanvasContext, type OverlayCanvasHandle } from "./overlayCanvasContext";
 
+/**
+ * OverlayCanvasLayer
+ * 
+ * Provides an overlay canvas for drawings rendered by DrawingLayer.
+ * 
+ * IMPORTANT ARCHITECTURAL NOTE (P0 fix 2026-01-24):
+ * -------------------------------------------------
+ * This component MUST NOT clear the canvas except when dimensions actually change.
+ * Setting canvas.width/height automatically clears the buffer (browser behavior).
+ * 
+ * DrawingLayer is the sole owner of overlay content and manages its own render cycle.
+ * If resizeCanvas() clears unconditionally, drawings disappear between renders
+ * (e.g., when mouse leaves chart and crosshair hides).
+ * 
+ * The render responsibility chain:
+ * 1. OverlayCanvasLayer: provides canvas + context, handles resize
+ * 2. DrawingLayer: owns render() callback, draws all drawings
+ * 3. DrawingLayer subscribes to timeScale changes and triggers re-render when needed
+ */
+
 type ElementRef<T extends HTMLElement> = RefObject<T | null> | MutableRefObject<T | null>;
 
 interface OverlayCanvasProps extends PropsWithChildren {
@@ -110,14 +130,22 @@ function resizeCanvas(
   const cssHeight = rect.height;
   const pixelWidth = Math.max(1, Math.floor(cssWidth * ratio));
   const pixelHeight = Math.max(1, Math.floor(cssHeight * ratio));
+  
+  // Update CSS dimensions (does not clear canvas)
   if (canvas.style.width !== `${cssWidth}px`) canvas.style.width = `${cssWidth}px`;
   if (canvas.style.height !== `${cssHeight}px`) canvas.style.height = `${cssHeight}px`;
+  
+  // Update pixel buffer dimensions - this AUTOMATICALLY clears the canvas buffer (browser behavior)
+  // We intentionally do NOT call clearRect() here to avoid erasing drawings between renders.
+  // DrawingLayer manages its own render cycle and clears before drawing.
+  // See architectural note at top of file (P0 fix 2026-01-24).
   if (canvas.width !== pixelWidth) canvas.width = pixelWidth;
   if (canvas.height !== pixelHeight) canvas.height = pixelHeight;
+  
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
   ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-  ctx.clearRect(0, 0, cssWidth, cssHeight);
+  
   handleRef.current.ctx = ctx;
   handleRef.current.width = cssWidth;
   handleRef.current.height = cssHeight;

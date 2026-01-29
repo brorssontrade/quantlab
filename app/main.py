@@ -45,7 +45,7 @@ from .fundamentals_tasks import (
 
 from .config import get_settings
 from .db import create_db_and_tables, get_session
-from .models import Alert, AlertDirection, AlertLog, AlertType, LiveJob, Run, RunStatus, Strategy, Trade
+from .models import Alert, AlertDirection, AlertLog, AlertType, ChartDrawing, LiveJob, Run, RunStatus, Strategy, Trade
 from .scheduler import (
     preview_schedule,
     remove_live_job,
@@ -100,12 +100,13 @@ app.add_middleware(
 # ============================================================================
 
 # Router imports (PR2: Backend Routes Extraction)
-from .routers import system, fundamentals, alerts
+from .routers import system, fundamentals, alerts, drawings
 
 # Include routers
 app.include_router(system.router)
 app.include_router(fundamentals.router)
 app.include_router(alerts.router)
+app.include_router(drawings.router)
 app.include_router(assistant_router)
 
 # ============================================================================
@@ -1276,11 +1277,26 @@ def _parse_chart_ts(value: str | None) -> pd.Timestamp | None:
     return ts
 
 
-def _downsample_candles(df: pd.DataFrame, limit: int) -> pd.DataFrame:
+def _downsample_candles(df: pd.DataFrame, limit: int, has_window: bool = False) -> pd.DataFrame:
+    """
+    Reduce a candle DataFrame to at most `limit` rows.
+    
+    Strategy:
+    - If `has_window=False` (no start/end provided): return TAIL (most recent data)
+      This preserves granularity for the most relevant time period.
+    - If `has_window=True` (start/end provided): bucket/aggregate if needed
+      This is acceptable because user explicitly requested a large range.
+    """
     if len(df) <= limit:
         return df
     if limit <= 0:
         raise ValueError("limit must be positive")
+    
+    # TV-37.2: When no window specified, return tail (most recent) instead of bucketing
+    if not has_window:
+        return df.tail(limit).reset_index(drop=True)
+    
+    # When window specified and exceeds limit, bucket/aggregate
     bucket = math.ceil(len(df) / limit)
     records: list[dict[str, object]] = []
     for start in range(0, len(df), bucket):
@@ -1649,7 +1665,9 @@ def chart_ohlcv(
 
         df = df.sort_values("Ts").reset_index(drop=True)
         df = df[["Ts", "Open", "High", "Low", "Close", "Volume"]]
-        df = _downsample_candles(df, capped_limit)
+        # TV-37.2: Pass has_window=True only when start/end were provided
+        has_window = start_ts is not None or end_ts is not None
+        df = _downsample_candles(df, capped_limit, has_window=has_window)
         if df.empty:
             raise HTTPException(status_code=404, detail="No candles available for the requested range")
 

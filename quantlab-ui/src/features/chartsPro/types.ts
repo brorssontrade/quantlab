@@ -45,12 +45,17 @@ export interface OhlcvResponse {
   meta?: Record<string, unknown>;
 }
 
-export type DrawingKind = "hline" | "vline" | "trend" | "channel" | "rectangle" | "text" | "priceRange" | "dateRange" | "dateAndPriceRange" | "fibRetracement" | "pitchfork" | "flatTopChannel" | "flatBottomChannel" | "regressionTrend" | "longPosition" | "shortPosition";
+export type DrawingKind = "hline" | "vline" | "trend" | "ray" | "extendedLine" | "channel" | "rectangle" | "circle" | "ellipse" | "triangle" | "callout" | "note" | "text" | "priceRange" | "dateRange" | "dateAndPriceRange" | "fibRetracement" | "fibExtension" | "fibFan" | "pitchfork" | "schiffPitchfork" | "modifiedSchiffPitchfork" | "flatTopChannel" | "flatBottomChannel" | "regressionTrend" | "longPosition" | "shortPosition" | "abcd" | "headAndShoulders" | "elliottWave";
+
+/** Line extension mode for trend-like drawings */
+export type LineMode = "segment" | "ray" | "extended";
 
 export interface DrawingStyle {
   color: string;
   width: number;
   dash?: number[] | null;
+  /** TV-30.2a: Stroke opacity 0-1, default 1 (fully opaque) */
+  opacity?: number;
 }
 
 export interface DrawingBase {
@@ -84,6 +89,24 @@ export interface TrendPoint {
 
 export interface Trend extends DrawingBase {
   kind: "trend";
+  p1: TrendPoint;
+  p2: TrendPoint;
+  showSlope?: boolean;
+  /** TV-24: Line extension mode - "segment" (default), "ray" (p1→∞), "extended" (∞←p1-p2→∞) */
+  lineMode?: LineMode;
+}
+
+/** Ray - line extending from p1 through p2 to infinity (TV-24) */
+export interface Ray extends DrawingBase {
+  kind: "ray";
+  p1: TrendPoint;
+  p2: TrendPoint;
+  showSlope?: boolean;
+}
+
+/** Extended Line - line extending infinitely in both directions through p1 and p2 (TV-24) */
+export interface ExtendedLine extends DrawingBase {
+  kind: "extendedLine";
   p1: TrendPoint;
   p2: TrendPoint;
   showSlope?: boolean;
@@ -147,12 +170,49 @@ export interface FibRetracement extends DrawingBase {
 /** Standard Fibonacci ratios for retracement levels */
 export const FIB_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.272, 1.618] as const;
 
+/** Standard Fibonacci Extension ratios (projected from p3 based on p1→p2 delta) */
+export const FIB_EXTENSION_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.272, 1.618, 2, 2.618, 3.618, 4.236] as const;
+
+/** Standard Fibonacci Fan ratios (rays from anchor through ratio-scaled points) */
+export const FIB_FAN_RATIOS = [0.236, 0.382, 0.5, 0.618, 0.786] as const;
+
+/** Fibonacci Extension - 3 points: p1→p2 defines impulse, p3 is retracement anchor for projection */
+export interface FibExtension extends DrawingBase {
+  kind: "fibExtension";
+  p1: TrendPoint; // Start of impulse move (e.g., swing low)
+  p2: TrendPoint; // End of impulse move (e.g., swing high)
+  p3: TrendPoint; // Retracement anchor (starting point for extension projection)
+}
+
+/** Fibonacci Fan - 2 points: rays emanate from p1 through ratio-scaled positions at p2.time */
+export interface FibFan extends DrawingBase {
+  kind: "fibFan";
+  p1: TrendPoint; // Fan anchor (all rays originate here)
+  p2: TrendPoint; // End point (defines the time and base price delta for ratio calculations)
+}
+
 /** Andrew's Pitchfork - 3-point tool with median line and parallel tines */
 export interface Pitchfork extends DrawingBase {
   kind: "pitchfork";
   p1: TrendPoint; // Pivot point (origin of median line)
   p2: TrendPoint; // Left tine anchor (forms one side of the base)
   p3: TrendPoint; // Right tine anchor (forms other side of the base)
+}
+
+/** Schiff Pitchfork - median line starts from midpoint between p1 and base midpoint */
+export interface SchiffPitchfork extends DrawingBase {
+  kind: "schiffPitchfork";
+  p1: TrendPoint; // Original pivot point (used to compute Schiff-shifted anchor)
+  p2: TrendPoint; // Left tine anchor
+  p3: TrendPoint; // Right tine anchor
+}
+
+/** Modified Schiff Pitchfork - median line starts at midpoint X, original p1 Y */
+export interface ModifiedSchiffPitchfork extends DrawingBase {
+  kind: "modifiedSchiffPitchfork";
+  p1: TrendPoint; // Original pivot point (Y used, X shifted to midpoint)
+  p2: TrendPoint; // Left tine anchor
+  p3: TrendPoint; // Right tine anchor
 }
 
 /** Flat Top Channel - 3-point: p1→p2 trend baseline, p3 defines horizontal top */
@@ -200,7 +260,130 @@ export interface ShortPosition extends DrawingBase {
   p3: TrendPoint; // Take Profit (below entry for short)
 }
 
-export type Drawing = HLine | VLine | Trend | Channel | Rectangle | TextDrawing | PriceRange | DateRange | DateAndPriceRange | FibRetracement | Pitchfork | FlatTopChannel | FlatBottomChannel | RegressionTrend | LongPosition | ShortPosition;
+/** ABCD Pattern - 4-point harmonic pattern (TV-31)
+ * 3-click workflow: A → B → C, then D is computed as AB projection from C
+ * The "AB=CD" relationship: distance A→B equals distance C→D
+ * p1 = A (first swing point)
+ * p2 = B (second swing point - retracement of A)
+ * p3 = C (third swing point - retracement of B)
+ * p4 = D (computed: C + (B - A) for bullish, C - (A - B) for bearish)
+ * Pattern is bullish if A < B (zigzag up), bearish if A > B (zigzag down)
+ */
+export interface ABCDPattern extends DrawingBase {
+  kind: "abcd";
+  p1: TrendPoint; // Point A - first swing
+  p2: TrendPoint; // Point B - second swing
+  p3: TrendPoint; // Point C - third swing (user-placed)
+  p4: TrendPoint; // Point D - fourth swing (computed from AB=CD)
+}
+
+/** Head and Shoulders Pattern - 5-point reversal pattern (TV-32)
+ * 5-click workflow: LS → Head → RS → NL1 → NL2
+ * Classic reversal pattern with three peaks and neckline
+ * p1 = Left Shoulder peak
+ * p2 = Head peak (highest point)
+ * p3 = Right Shoulder peak
+ * p4 = Neckline point 1 (typically at left trough)
+ * p5 = Neckline point 2 (typically at right trough)
+ * Pattern is bearish (top) if Head > LS/RS, bullish (bottom/inverse) if Head < LS/RS
+ */
+export interface HeadAndShouldersPattern extends DrawingBase {
+  kind: "headAndShoulders";
+  p1: TrendPoint; // Left Shoulder (LS)
+  p2: TrendPoint; // Head (H)
+  p3: TrendPoint; // Right Shoulder (RS)
+  p4: TrendPoint; // Neckline point 1 (NL1)
+  p5: TrendPoint; // Neckline point 2 (NL2)
+  /** Whether this is an inverse (bottom) pattern - computed from geometry */
+  inverse?: boolean;
+}
+
+/** Elliott Wave Impulse Pattern - 6-point impulse wave structure (TV-33)
+ * 6-click workflow: 0 → 1 → 2 → 3 → 4 → 5
+ * Impulse wave follows Elliott Wave theory:
+ * - Wave 1: Initial trend move (0→1)
+ * - Wave 2: Retracement, cannot retrace below wave 0 (1→2)
+ * - Wave 3: Strongest, longest wave (2→3), cannot be shortest
+ * - Wave 4: Retracement, cannot overlap wave 1 territory (3→4)
+ * - Wave 5: Final push in trend direction (4→5)
+ * 
+ * Pattern is bullish if p1 > p0 (upward impulse)
+ * Pattern is bearish if p1 < p0 (downward impulse)
+ */
+export interface ElliottWaveImpulsePattern extends DrawingBase {
+  kind: "elliottWave";
+  p0: TrendPoint; // Wave 0 - origin point
+  p1: TrendPoint; // Wave 1 - end of impulse wave 1
+  p2: TrendPoint; // Wave 2 - end of corrective wave 2
+  p3: TrendPoint; // Wave 3 - end of impulse wave 3
+  p4: TrendPoint; // Wave 4 - end of corrective wave 4
+  p5: TrendPoint; // Wave 5 - end of impulse wave 5
+  /** Computed: direction of the impulse (bullish = up, bearish = down) */
+  direction?: "bullish" | "bearish";
+}
+
+/** Circle shape - center point and radius point define the circle
+ * p1 = center, p2 = edge point (radius = distance from p1 to p2) */
+export interface Circle extends DrawingBase {
+  kind: "circle";
+  p1: TrendPoint; // Center point
+  p2: TrendPoint; // Edge point (defines radius)
+  fillColor?: string;
+  fillOpacity?: number; // 0-1, default 0.1
+}
+
+/** Ellipse shape - center point and two radius points (horizontal and vertical)
+ * p1 = center, p2 = edge point (bounding box corner) */
+export interface Ellipse extends DrawingBase {
+  kind: "ellipse";
+  p1: TrendPoint; // Center point
+  p2: TrendPoint; // Bounding box corner (defines radiusX and radiusY)
+  fillColor?: string;
+  fillOpacity?: number; // 0-1, default 0.1
+}
+
+/** Triangle shape - 3 vertices define the triangle (TV-25.3)
+ * p1, p2, p3 are the three corner points
+ * 3-click workflow: click p1 → click p2 → click p3 → commit */
+export interface Triangle extends DrawingBase {
+  kind: "triangle";
+  p1: TrendPoint; // First vertex
+  p2: TrendPoint; // Second vertex
+  p3: TrendPoint; // Third vertex
+  fillColor?: string;
+  fillOpacity?: number; // 0-1, default 0.1
+}
+
+/** Callout annotation - anchor point with leader line to text box (TV-26)
+ * anchor = point on chart being annotated
+ * box = position of text box (determines leader line endpoint)
+ * 2-click workflow: click anchor → click box → text modal opens */
+export interface Callout extends DrawingBase {
+  kind: "callout";
+  anchor: TrendPoint; // Point being annotated (leader line starts here)
+  box: TrendPoint; // Text box position (leader line ends here)
+  text: string; // The annotation text content
+  fontSize?: number; // Default 12
+  fontColor?: string; // Default theme text color
+  backgroundColor?: string; // Box background color
+  borderColor?: string; // Box border color
+}
+
+/** Note annotation - sticky note without leader line (TV-27)
+ * anchor = position of note on chart
+ * 1-click workflow: click anchor → text modal opens
+ * Simpler than Callout: no leader line, just a positioned note */
+export interface Note extends DrawingBase {
+  kind: "note";
+  anchor: TrendPoint; // Position of the note
+  text: string; // The note text content
+  fontSize?: number; // Default 12
+  fontColor?: string; // Default theme text color
+  backgroundColor?: string; // Note background color (default: yellow sticky note)
+  borderColor?: string; // Note border color
+}
+
+export type Drawing = HLine | VLine | Trend | Ray | ExtendedLine | Channel | Rectangle | Circle | Ellipse | Triangle | Callout | Note | TextDrawing | PriceRange | DateRange | DateAndPriceRange | FibRetracement | FibExtension | FibFan | Pitchfork | SchiffPitchfork | ModifiedSchiffPitchfork | FlatTopChannel | FlatBottomChannel | RegressionTrend | LongPosition | ShortPosition | ABCDPattern | HeadAndShouldersPattern | ElliottWaveImpulsePattern;
 
 export interface CompareSeriesConfig {
   id: string;

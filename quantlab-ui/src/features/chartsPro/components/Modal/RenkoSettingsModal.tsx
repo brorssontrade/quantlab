@@ -24,10 +24,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { RenkoSettings } from "../../ChartsProTab";
 import {
   DEFAULT_RENKO_SETTINGS,
   normalizeRenkoSettings,
+  type RenkoSettingsInput as RenkoSettings,
 } from "../../runtime/renko";
 
 interface RenkoSettingsModalProps {

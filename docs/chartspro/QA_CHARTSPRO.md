@@ -340,18 +340,103 @@ dump().ui: {
 // Drawing objects array - each object has:
 dump().objects: Array<{
   id: string;                             // Unique drawing ID
-  type: string;                           // "hline", "vline", "trend", "channel"
+  type: string;                           // "hline", "vline", "trend", "channel", "callout", etc.
   symbol: string;                         // Symbol drawing belongs to
   locked: boolean;                        // Drawing is locked (cannot move)
   hidden: boolean;                        // Drawing is hidden
   selected: boolean;                      // Drawing is selected
   label: string | null;                   // User-assigned label
-  points: Array<{                         // Geometry points
+  z: number;                              // Z-order value (higher = on top)
+  points: Array<{                         // Geometry points (all have timeMs + price)
+    label?: string;                       // Point label (e.g., "anchor", "box", "p1", "p2")
     timeMs?: number;                      // Time in milliseconds (for trend/vline)
     price?: number;                       // Price level (for hline/trend)
   }>;
+  // Type-specific fields:
+  p1?: { timeMs, price };                 // For shapes: center/first vertex
+  p2?: { timeMs, price };                 // For shapes: edge/second vertex
+  p3?: { timeMs, price };                 // For triangle: third vertex
+  anchor?: { timeMs, price };             // For callout: leader line start
+  box?: { timeMs, price };                // For callout: text box position
+  text?: string;                          // For text/callout: content
+  content?: string;                       // For text: content (alias)
 }>;
+
+// Example: Callout object in dump().objects
+{
+  id: "drawing-123",
+  type: "callout",
+  selected: true,
+  z: 1,
+  anchor: { timeMs: 1700000000000, price: 150.00 },
+  box: { timeMs: 1700100000000, price: 155.00 },
+  text: "Important level",
+  points: [
+    { label: "anchor", timeMs: 1700000000000, price: 150.00 },
+    { label: "box", timeMs: 1700100000000, price: 155.00 }
+  ]
+}
+
+// Example: ABCD Pattern object in dump().objects
+{
+  id: "drawing-456",
+  type: "abcd",
+  selected: false,
+  locked: false,
+  hidden: false,
+  z: 2,
+  k: 1.0,                                // Scale factor: D = C + k*(B-A)
+  p1: { timeMs: 1700000000000, price: 100.00 },  // Point A
+  p2: { timeMs: 1700100000000, price: 120.00 },  // Point B
+  p3: { timeMs: 1700200000000, price: 110.00 },  // Point C
+  p4: { timeMs: 1700300000000, price: 130.00 },  // Point D (computed)
+  handlesPx: {
+    A: { x: 100, y: 200 },               // Screen coords for point A
+    B: { x: 200, y: 100 },               // Screen coords for point B
+    C: { x: 300, y: 150 },               // Screen coords for point C
+    D: { x: 400, y: 50 }                 // Screen coords for point D
+  },
+  points: [
+    { label: "A", timeMs: 1700000000000, price: 100.00 },
+    { label: "B", timeMs: 1700100000000, price: 120.00 },
+    { label: "C", timeMs: 1700200000000, price: 110.00 },
+    { label: "D", timeMs: 1700300000000, price: 130.00 }
+  ]
+}
 ```
+
+### ABCD Pattern Contract (TV-31)
+
+**Status**: ✅ COMPLETE — 3-click pattern with computed D point
+
+**Hotkey**: `W` — Activates ABCD pattern tool
+
+**Creation Flow**:
+1. Click 1: Place point A (anchor)
+2. Click 2: Place point B (defines AB vector)
+3. Click 3: Place point C (D auto-computed as C + 1.0*(B-A))
+4. Drawing auto-selected after creation, tool resets to "select"
+
+**Formula**: `D = C + k * (B - A)` where k defaults to 1.0
+
+**handlesPx Labels**: A, B, C, D (screen pixel coordinates for each point)
+
+**Drag Behavior**:
+| Dragged Handle | Effect |
+|----------------|--------|
+| A, B, or C | D recomputes maintaining same k value |
+| D | k value changes, D stays on AB direction line |
+| Body (any segment) | Entire pattern translates |
+
+**ABCD Invariants**:
+1. **AB-CD Parallelity**: Vector CD is always parallel to vector AB
+2. **k Preservation**: Dragging A/B/C preserves k; dragging D changes k
+3. **D Constraint**: D always lies on the line through C parallel to AB
+4. **Migration Safety**: Older storage without `k` field defaults to k=1.0
+
+**Geometry Cache**: ABCD signature includes `p1:p2:p3:p4:k:base` for proper cache invalidation
+
+**Test Coverage**: 13 Playwright tests in `chartsPro.cp31.spec.ts`, 21 unit tests for ABCD math
 
 ### dump().alerts Contract (v3)
 
@@ -1565,6 +1650,321 @@ await page.waitForFunction(() => __lwcharts.dump().timeframe === "4h");
 typeof __lwcharts.set === "function";
 typeof __lwcharts.dump === "function";
 typeof __lwcharts._applyPatch === "function"; // after Charts tab mounted
+```
+
+### Drawing Selection via QA API (TV-30.1)
+
+**Status**: ✅ COMPLETE — Deterministic drawing selection for tests
+
+**Problem**: Canvas-based click selection is unreliable in tests (coordinate-dependent, timing-sensitive).
+
+**Solution**: Use `__lwcharts.set({ selectedId })` to programmatically select drawings by ID.
+
+```js
+// Select a drawing deterministically
+await __lwcharts.set({ selectedId: "drawing-abc123" });
+await page.waitForFunction(() => __lwcharts.dump().ui?.selectedObjectId === "drawing-abc123");
+
+// Deselect (clear selection)
+await __lwcharts.set({ selectedId: null });
+await page.waitForFunction(() => __lwcharts.dump().ui?.selectedObjectId === null);
+```
+
+**Test Pattern** (recommended):
+
+```typescript
+// Create drawing and get its ID
+const drawingId = await createTrendLine(page);
+
+// Select via QA API (not canvas click)
+await page.evaluate((id) => {
+  window.__lwcharts?.set({ selectedId: id });
+}, drawingId);
+
+// Wait for selection to propagate
+await expect.poll(async () => {
+  const d = await dump(page);
+  return d?.ui?.selectedObjectId;
+}, { timeout: 3000 }).toBe(drawingId);
+
+// Now FloatingToolbar is visible and can be interacted with
+```
+
+**Why this is better than canvas clicks**:
+- Deterministic: No coordinate guessing
+- State-driven: Uses same selection mechanism as UI
+- Reliable: Works regardless of chart zoom/pan/position
+- Fast: No waitForTimeout needed
+
+**Dump contract**:
+- `dump().ui.selectedObjectId` — ID of currently selected drawing (or null)
+- `dump().ui.floatingToolbar.drawingId` — ID of drawing the toolbar is showing for
+- `dump().ui.objectSettingsDialog.isOpen` — boolean, true when Object Settings modal is open
+- `dump().ui.objectSettingsDialog.drawingId` — ID of drawing being edited (or null)
+
+### Object Settings Modal (TV-30.3)
+
+**Status**: ✅ COMPLETE — Gear button in FloatingToolbar opens modal for precise editing
+
+**Features**:
+- Edit exact coordinates (p1, p2, p3 time/price)
+- Change style (color, width, dash, opacity)
+- Change fill (fillColor, fillOpacity for shapes)
+- Lock/Unlock and Delete buttons
+
+**Test Pattern**:
+
+```typescript
+// Select drawing and open settings
+await page.evaluate((id) => window.__lwcharts?.set({ selectedId: id }), drawingId);
+await page.getByTestId("floating-toolbar-settings").click();
+
+// Verify modal open via dump
+const d = await dump(page);
+expect(d?.ui?.objectSettingsDialog?.isOpen).toBe(true);
+expect(d?.ui?.objectSettingsDialog?.drawingId).toBe(drawingId);
+
+// Edit p1 price and save
+await page.getByTestId("object-settings-p1-price").fill("150.00");
+await page.getByTestId("object-settings-save").click();
+
+// Verify change
+const updated = await dump(page);
+expect(updated?.objects?.find(o => o.id === drawingId)?.p1?.price).toBe(150);
+```
+
+**Test IDs**:
+- `floating-toolbar-settings` — Gear button in FloatingToolbar
+- `object-settings-modal` — The modal container
+- `object-settings-p1-time`, `object-settings-p1-price` — Point 1 inputs
+- `object-settings-p2-time`, `object-settings-p2-price` — Point 2 inputs
+- `object-settings-color-{hex}` — Stroke color buttons (e.g., `object-settings-color-ef4444`)
+- `object-settings-width` — Stroke width slider
+- `object-settings-stroke-opacity` — Stroke opacity slider
+- `object-settings-fill-color-{hex}` — Fill color buttons (shapes only)
+- `object-settings-fill-opacity` — Fill opacity slider (shapes only)
+- `object-settings-dash-solid|dashed|dotted` — Line style buttons
+- `object-settings-lock` — Lock/Unlock button
+- `object-settings-delete` — Delete button
+- `object-settings-cancel` — Cancel button
+- `object-settings-save` — Save button
+
+### Alert Button (TV-30.4)
+
+**Status**: ✅ COMPLETE — Bell button in FloatingToolbar creates alerts linked to drawings
+
+**Supported Drawing Kinds**: `hline`, `trend`, `ray`, `extendedLine`
+- For shapes/text: Shows "Not supported" message in modal
+
+**Features**:
+- Quick alert creation from selected drawing
+- Label input, direction selector (cross_up/down/any), one-shot checkbox
+- Posts to `/alerts` API endpoint with drawing geometry
+
+**Dump Contract**:
+- `dump().ui.createAlertDialog.isOpen` — boolean, true when Create Alert modal is open
+- `dump().ui.createAlertDialog.drawingId` — ID of drawing being alerted (or null)
+
+**Test Pattern**:
+
+```typescript
+// Select line drawing and open alert modal
+const drawingId = await createHorizontalLine(page);
+await page.evaluate((id) => window.__lwcharts?.set({ selectedId: id }), drawingId);
+await page.getByTestId("floating-toolbar-alert").click();
+
+// Verify modal open via dump
+const d = await dump(page);
+expect(d?.ui?.createAlertDialog?.isOpen).toBe(true);
+expect(d?.ui?.createAlertDialog?.drawingId).toBe(drawingId);
+```
+
+**Test IDs**:
+- `floating-toolbar-alert` — Bell button in FloatingToolbar (line-based drawings only)
+- `create-alert-modal` — The modal container
+- `create-alert-label` — Alert label input
+- `create-alert-direction` — Direction selector (cross_up/cross_down/any)
+- `create-alert-oneshot` — One-shot checkbox
+- `create-alert-cancel` — Cancel button
+- `create-alert-submit` — Create button
+- `create-alert-not-supported` — "Not supported" message for shapes/text
+
+### Per-Object Hide (TV-30.5)
+
+**Status**: ✅ COMPLETE — Eye button in FloatingToolbar toggles drawing visibility
+
+**Features**:
+- Hide/Show individual drawings without deleting
+- Visual feedback: Eye icon when visible, EyeOff icon when hidden
+- Hidden drawings are not rendered but remain in dump().objects with `hidden: true`
+
+**Dump Contract**:
+- `dump().objects[n].hidden` — boolean, true when drawing is hidden
+
+**Test Pattern**:
+
+```typescript
+// Select drawing and toggle hide
+const drawingId = await createTrendLine(page);
+await page.evaluate((id) => window.__lwcharts?.set({ selectedId: id }), drawingId);
+
+// Check initial state
+let d = await dump(page);
+expect(d?.objects?.find(o => o.id === drawingId)?.hidden).toBe(false);
+
+// Click hide button
+await page.getByTestId("floating-toolbar-hide").click();
+
+// Verify hidden
+d = await dump(page);
+expect(d?.objects?.find(o => o.id === drawingId)?.hidden).toBe(true);
+
+// Toggle again to show
+await page.getByTestId("floating-toolbar-hide").click();
+d = await dump(page);
+expect(d?.objects?.find(o => o.id === drawingId)?.hidden).toBe(false);
+```
+
+**Test IDs**:
+- `floating-toolbar-hide` — Eye/EyeOff button in FloatingToolbar
+
+### Style Presets / Templates (TV-30.6)
+
+**Status**: ✅ COMPLETE — Bookmark button in FloatingToolbar for style presets
+
+**Features**:
+- Save current drawing style as named preset
+- Apply saved preset to any drawing of same kind
+- Set default preset per tool kind (applied to new drawings)
+- Delete presets
+- Persisted to localStorage (`cp.toolPresets`)
+
+**Dump Contract**:
+- `dump().ui.presets.presets` — Record of preset arrays per DrawingKind
+- `dump().ui.presets.defaults` — Record of default preset IDs per DrawingKind
+
+**Test Pattern**:
+
+```typescript
+// Save preset
+await page.getByTestId("floating-toolbar-preset").click();
+await page.getByTestId("preset-save-current").click();
+await page.getByTestId("preset-save-name").fill("My Style");
+await page.getByTestId("preset-save-confirm").click();
+
+// Get preset ID from dump
+const d = await dump(page);
+const presetId = d?.ui?.presets?.presets?.hline?.[0]?.id;
+
+// Apply preset
+await page.getByTestId(`preset-apply-${presetId}`).click();
+
+// Set as default
+await page.getByTestId(`preset-default-${presetId}`).click();
+```
+
+**Test IDs**:
+- `floating-toolbar-preset` — Bookmark button in FloatingToolbar
+- `preset-menu` — Dropdown menu container
+- `preset-save-current` — "Save current style as preset" button
+- `preset-save-name` — Preset name input
+- `preset-save-confirm` — Confirm save button
+- `preset-save-cancel` — Cancel save button
+- `preset-item-{id}` — Preset row container
+- `preset-apply-{id}` — Apply preset button
+- `preset-default-{id}` — Toggle default star button
+- `preset-delete-{id}` — Delete preset button
+
+### Drawing Labels (TV-30.7)
+
+**Status**: ✅ COMPLETE — Type (T) button in FloatingToolbar for adding text labels to drawings
+
+**Features**:
+- Attach text labels to any drawing type
+- Labels rendered at appropriate anchor points per drawing geometry
+- Edit labels via FloatingToolbar button or ObjectSettingsModal
+- Labels persist after page reload
+- Active state on button when drawing has label
+
+**Dump Contract**:
+- `dump().objects[n].label` — string | null, user-assigned label text
+- `dump().ui.labelModal.isOpen` — boolean, label modal open state
+- `dump().ui.labelModal.drawingId` — string | null, drawing being edited
+
+**Test Pattern**:
+
+```typescript
+// Create drawing and open label modal
+const drawingId = await createHorizontalLine(page);
+await page.getByTestId("floating-toolbar-label").click();
+
+// Verify modal opened
+let d = await dump(page);
+expect(d?.ui?.labelModal?.isOpen).toBe(true);
+
+// Enter label and save
+await page.getByTestId("label-modal-input").fill("Support level");
+await page.getByTestId("label-modal-save").click();
+
+// Verify label saved
+d = await dump(page);
+expect(d?.objects?.find(o => o.id === drawingId)?.label).toBe("Support level");
+```
+
+**Test IDs**:
+- `floating-toolbar-label` — Type (T) button in FloatingToolbar
+- `label-modal` — Label modal container
+- `label-modal-input` — Label text input
+- `label-modal-save` — Save button
+- `label-modal-cancel` — Cancel button
+
+### Z-order / Layers (TV-30.8)
+
+**Status**: ✅ COMPLETE — Bring to Front / Send to Back buttons in FloatingToolbar
+
+**Features**:
+- Control stacking order of overlapping drawings
+- Bring to Front: sets z = max(all z values) + 1
+- Send to Back: sets z = min(all z values) - 1
+- Z values exposed in dump() for testing
+
+**Dump Contract**:
+- `dump().objects[n].z` — number, z-order value (higher = on top)
+
+**Test Pattern**:
+
+```typescript
+// Create two drawings
+await setTool(page, "hline");
+await page.mouse.click(centerX, centerY * 0.4); // First at 40%
+await page.keyboard.press("Escape");
+await setTool(page, "hline");
+await page.mouse.click(centerX, centerY * 0.6); // Second at 60%
+
+// Get z values - second should be higher
+let d = await dump(page);
+const firstId = d?.objects?.[0]?.id;
+const secondId = d?.objects?.[1]?.id;
+expect(d?.objects?.[1]?.z).toBeGreaterThan(d?.objects?.[0]?.z);
+
+// Send second to back (it's auto-selected)
+await page.getByTestId("floating-toolbar-send-to-back").click();
+d = await dump(page);
+expect(d?.objects?.find(o => o.id === secondId)?.z)
+  .toBeLessThan(d?.objects?.find(o => o.id === firstId)?.z);
+
+// Bring it back to front
+await page.getByTestId("floating-toolbar-bring-to-front").click();
+d = await dump(page);
+expect(d?.objects?.find(o => o.id === secondId)?.z)
+  .toBeGreaterThan(d?.objects?.find(o => o.id === firstId)?.z);
+```
+
+**Test IDs**:
+- `floating-toolbar-bring-to-front` — ArrowUpToLine button
+- `floating-toolbar-send-to-back` — ArrowDownToLine button
+
+---
 
 - `dump().ui.inspectorOpen` — boolean flag reflecting whether the Inspector sidebar is open.
 - `dump().ui.inspectorTab` — one of `"objects"` or `"data"` describing the selected tab.
@@ -2300,6 +2700,172 @@ dump().render.seriesStyles[]: {
   scale: "left" | "right";
   scaleSide: "left" | "right";
 }
+```
+
+---
+
+## TV-23.1: Settings Dialog
+
+### Overview
+
+The Settings Dialog provides a centralized UI for configuring chart appearance, layout, and advanced settings. Opened via the gear button in TopBar.
+
+### dump().ui.settingsDialog
+
+```typescript
+dump().ui.settingsDialog: {
+  isOpen: boolean;      // Whether dialog is currently open
+  activeTab: string;    // Current tab: "appearance" | "layout" | "advanced"
+}
+```
+
+### localStorage
+
+Settings are persisted to `cp.settings` as JSON:
+
+```typescript
+localStorage.getItem("cp.settings");
+// Returns: { appearance: {...}, layout: {...}, advanced: {...} }
+```
+
+### Test Patterns
+
+```typescript
+// Open settings dialog
+await page.getByTestId("settings-button").click();
+await expect(page.getByTestId("settings-dialog")).toBeVisible();
+
+// Verify dialog state in dump()
+await expect.poll(async () => {
+  const dump = await page.evaluate(() => __lwcharts.dump());
+  return dump.ui.settingsDialog.isOpen;
+}).toBe(true);
+
+// Navigate tabs
+await page.getByTestId("settings-tab-layout").click();
+await expect(page.getByTestId("settings-panel-layout")).toBeVisible();
+
+// Close via Escape
+await page.keyboard.press("Escape");
+await expect(page.getByTestId("settings-dialog")).not.toBeVisible();
+```
+
+### Test IDs
+
+| Element | data-testid |
+|---------|-------------|
+| Settings button (TopBar) | `settings-button` |
+| Dialog container | `settings-dialog` |
+| Close button | `settings-close` |
+| Tab buttons | `settings-tab-{appearance\|layout\|advanced}` |
+| Tab panels | `settings-panel-{appearance\|layout\|advanced}` |
+| Save button | `settings-save` |
+| Cancel button | `settings-cancel` |
+| Reset button | `settings-reset` |
+| Individual controls | `settings-{fieldName}` (e.g., `settings-showGrid`, `settings-upColor`) |
+
+---
+
+## TV-23.2: Apply Appearance Settings to Chart
+
+### Overview
+
+TV-23.2 wires the Settings Dialog's Appearance tab to actual lwcharts rendering. When appearance settings are changed and saved, the chart visually updates.
+
+### dump().render.appliedAppearance
+
+```typescript
+dump().render.appliedAppearance: {
+  chartOptions: {
+    backgroundColor: string;     // e.g., "#1e1e2e"
+    gridVisible: boolean;        // true if showGrid=true AND gridStyle!="hidden"
+    gridStyle: string;           // "solid" | "dashed" | "hidden"
+    gridColor: string;           // e.g., "rgba(42, 46, 57, 0.5)"
+    crosshairMode: string;       // "normal" | "magnet" | "hidden"
+    crosshairColor: string;      // e.g., "rgba(255, 255, 255, 0.5)"
+  };
+  seriesOptions: {              // Only for candles/bars chartType
+    upColor: string;            // e.g., "#22c55e"
+    downColor: string;          // e.g., "#ef4444"
+    wickUpColor: string;        // e.g., "#22c55e"
+    wickDownColor: string;      // e.g., "#ef4444"
+  } | null;                     // null for line/area chart types
+  appliedAt: number;            // Unix timestamp of last application
+}
+```
+
+### Settings Mapping to lwcharts
+
+| Zustand Setting | lwcharts Option |
+|-----------------|-----------------|
+| `backgroundColor` | `layout.background.color` |
+| `showGrid` + `gridStyle` | `grid.horzLines/vertLines.visible` |
+| `gridStyle` | `grid.horzLines/vertLines.style` (Solid/Dashed/Dotted) |
+| `gridColor` | `grid.horzLines/vertLines.color` |
+| `crosshairMode` | `crosshair.mode` (Normal/Magnet/Hidden) |
+| `crosshairColor` | `crosshair.vertLine/horzLine.color` |
+| `upColor` | series `upColor` |
+| `downColor` | series `downColor` |
+| `wickUpColor` | series `wickUpColor` |
+| `wickDownColor` | series `wickDownColor` |
+
+### Programmatic Testing via window.__cpSettingsStore
+
+For tests that need to change settings programmatically (without UI interaction):
+
+```typescript
+// Change backgroundColor directly
+await page.evaluate(() => {
+  const store = (window as any).__cpSettingsStore;
+  store.getState().updateSettings({
+    appearance: { backgroundColor: "#ff0000" }
+  });
+});
+
+// Wait for change to apply
+await page.waitForTimeout(100);
+
+// Verify via dump()
+const appearance = await page.evaluate(() => {
+  return window.__lwcharts.dump().render.appliedAppearance;
+});
+expect(appearance.chartOptions.backgroundColor).toBe("#ff0000");
+```
+
+### Test Patterns
+
+```typescript
+// Test backgroundColor change
+await page.evaluate(() => {
+  window.__cpSettingsStore.getState().updateSettings({
+    appearance: { backgroundColor: "#ff0000" }
+  });
+});
+await page.waitForTimeout(100);
+const dump = await page.evaluate(() => window.__lwcharts.dump());
+expect(dump.render.appliedAppearance.chartOptions.backgroundColor).toBe("#ff0000");
+
+// Test grid visibility toggle
+await page.evaluate(() => {
+  window.__cpSettingsStore.getState().updateSettings({
+    appearance: { showGrid: false }
+  });
+});
+await page.waitForTimeout(100);
+const gridState = await page.evaluate(() => {
+  return window.__lwcharts.dump().render.appliedAppearance.chartOptions.gridVisible;
+});
+expect(gridState).toBe(false);
+
+// Test via dialog save
+await page.getByTestId("settings-button").click();
+await page.getByTestId("settings-backgroundColor").fill("#123456");
+await page.getByTestId("settings-save").click();
+await page.waitForTimeout(100);
+const bgColor = await page.evaluate(() => {
+  return window.__lwcharts.dump().render.appliedAppearance.chartOptions.backgroundColor;
+});
+expect(bgColor).toBe("#123456");
 ```
 
 ---

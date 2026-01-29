@@ -1,0 +1,132 @@
+/**
+ * TradingView Design Tokens
+ * 
+ * Single source of truth for all TV-parity colors, borders, and dimensions.
+ * Import this file in ChartsPro components or apply via CSS custom properties.
+ */
+
+:root {
+  /* ========== COLORS ========== */
+  /* Background hierarchy (dark theme) */
+  --tv-bg: #131722;           /* Main background (chart area) */
+  --tv-panel: #1e222d;        /* Panels, headers, toolbars */
+  --tv-panel-hover: #2a2e39;  /* Panel hover state */
+  
+  /* Borders */
+  --tv-border: #363a45;       /* Primary border color */
+  --tv-border-subtle: #2a2e39; /* Subtle/secondary borders */
+  
+  /* Text */
+  --tv-text: #d1d4dc;         /* Primary text */
+  --tv-text-muted: #787b86;   /* Muted/inactive text */
+  --tv-text-dim: #5d606b;     /* Very dim text */
+  
+  /* Accent colors */
+  --tv-blue: #2962ff;         /* Primary accent (active, links, selection) */
+  --tv-blue-hover: #1e53e5;   /* Blue hover state */
+  --tv-blue-subtle: rgba(41, 98, 255, 0.12); /* Blue background (subtle) */
+  
+  /* Status colors */
+  --tv-green: #089981;        /* Up/positive/success */
+  --tv-red: #f23645;          /* Down/negative/error */
+  --tv-yellow: #f7a600;       /* Warning */
+  
+  /* Chart colors */
+  --tv-candle-up: #089981;
+  --tv-candle-down: #f23645;
+  --tv-grid: #1e222d;         /* Grid lines (very subtle) */
+  --tv-crosshair: #758696;    /* Crosshair lines */
+  
+  /* ========== DIMENSIONS ========== */
+  /* Layout regions */
+  --tv-header-h: 50px;
+  --tv-header-h-min: 48px;
+  --tv-header-h-max: 52px;
+  
+  --tv-left-w: 48px;
+  --tv-left-w-min: 45px;
+  --tv-left-w-max: 50px;
+  
+  --tv-rail-w: 44px;
+  --tv-rail-w-min: 40px;
+  --tv-rail-w-max: 44px;
+  
+  --tv-panel-w: 280px;
+  --tv-panel-w-min: 280px;
+  --tv-panel-w-max: 360px;
+  
+  --tv-bottom-h: 40px;
+  --tv-bottom-h-min: 38px;
+  --tv-bottom-h-max: 42px;
+  
+  /* Component dimensions */
+  --tv-button-h: 26px;        /* Compact button height */
+  --tv-icon-size: 16px;       /* Icon size in buttons */
+  --tv-icon-size-lg: 20px;    /* Larger icons (toolbar) */
+  
+  /* Typography */
+  --tv-font-xs: 11px;         /* Controls, labels */
+  --tv-font-sm: 12px;         /* Symbol text */
+  --tv-font-base: 13px;       /* Body text */
+  
+  /* Spacing */
+  --tv-gap-xs: 2px;
+  --tv-gap-sm: 4px;
+  --tv-gap-md: 6px;
+  --tv-gap-lg: 8px;
+  --tv-gap-xl: 12px;
+  
+  /* Radius */
+  --tv-radius-sm: 2px;
+  --tv-radius-md: 4px;
+  
+  /* Z-index layers */
+  --tv-z-dropdown: 3000;      /* Dropdowns, popovers */
+  --tv-z-modal: 4000;         /* Modals */
+  --tv-z-toast: 5000;         /* Toast notifications */
+  
+  /* ========== SHADOWS ========== */
+  --tv-shadow-dropdown: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --tv-shadow-modal: 0 4px 24px rgba(0, 0, 0, 0.5);
+}
+
+/* ========== UTILITY CLASSES ========== */
+.tv-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: var(--tv-bg);
+  overflow: hidden; /* PRIO 2: Prevent horizontal scroll */
+}
+
+/* PRIO 2: Ensure html/body don't scroll when in fullscreen mode */
+html:has(.tv-fullscreen),
+body:has(.tv-fullscreen) {
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+}
+
+.tv-text-inactive {
+  color: var(--tv-text-muted);
+}
+
+.tv-text-active {
+  color: var(--tv-text);
+}
+
+.tv-text-accent {
+  color: var(--tv-blue);
+}
+
+.tv-border {
+  border-color: var(--tv-border);
+}
+
+.tv-bg-panel {
+  background-color: var(--tv-panel);
+}
+
+.tv-bg-main {
+  background-color: var(--tv-bg);
+}

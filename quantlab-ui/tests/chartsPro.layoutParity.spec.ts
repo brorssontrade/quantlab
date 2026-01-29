@@ -159,4 +159,21 @@ test.describe('TV-4 Shell Layout Parity', () => {
       expect(aspectRatio).toBeLessThan(5);
     }
   });
+
+  test('should not have horizontal overflow (no horizontal scrollbar)', async ({ page }) => {
+    // TV-39: Verify no horizontal scroll is needed
+    // This ensures 100vw calculations and layout are correct
+    
+    const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+    const clientWidth = await page.evaluate(() => document.documentElement.clientWidth);
+    
+    // scrollWidth should not exceed clientWidth (no horizontal overflow)
+    // Allow 1px tolerance for subpixel rendering
+    expect(scrollWidth).toBeLessThanOrEqual(clientWidth + 1);
+    
+    // Also check body
+    const bodyScrollWidth = await page.evaluate(() => document.body.scrollWidth);
+    const bodyClientWidth = await page.evaluate(() => document.body.clientWidth);
+    expect(bodyScrollWidth).toBeLessThanOrEqual(bodyClientWidth + 1);
+  });
 });

@@ -10,13 +10,14 @@ SQLModel tables (table=True):
 - Trade: Trade execution records
 - Strategy: Strategy definitions
 - LiveJob: Live trading job status
+- ChartDrawing: ChartsPro drawings persistence (T-013)
 
 Pydantic enums (shared):
 - AlertDirection: cross_any, cross_up, cross_down, long, short, both
 - AlertType: price, indicator, trendline
 - RunStatus: pending, running, completed, failed
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional, Any
 from sqlmodel import SQLModel, Field, Column
@@ -190,4 +191,29 @@ class LiveJob(SQLModel, table=True):
             "status": self.status,
             "created_at": self.created_at,
         }
+
+
+class ChartDrawing(SQLModel, table=True):
+    """SQLModel table for ChartsPro drawings persistence (T-013).
+    
+    Each drawing is uniquely identified by (symbol, tf, drawing_id).
+    The `data` field stores type-specific fields as JSON (p1, p2, etc.).
+    """
+    __tablename__ = "chart_drawings"
+    
+    id: Optional[int] = Field(default=None, primary_key=True)
+    drawing_id: str = Field(index=True)  # Frontend-generated UUID
+    symbol: str = Field(index=True)
+    tf: str = Field(index=True)  # Timeframe: 1m, 5m, 15m, 1h, 4h, 1D, 1W
+    kind: str  # Drawing type: hline, vline, trend, elliottWave, etc.
+    z: int = Field(default=0)  # Z-order (higher = on top)
+    created_at_ms: int = Field(default=0)  # Client timestamp in ms
+    updated_at_ms: int = Field(default=0)  # Client timestamp in ms
+    locked: bool = Field(default=False)
+    hidden: bool = Field(default=False)
+    label: Optional[str] = None
+    style: Optional[dict] = Field(default=None, sa_column=Column(JSON))  # {color, width, opacity, dash}
+    data: Optional[dict] = Field(default=None, sa_column=Column(JSON))  # Type-specific: {p1, p2, ...}
+    schema_version: str = Field(default="v1")  # For future migrations
+
 

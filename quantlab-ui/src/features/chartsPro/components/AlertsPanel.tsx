@@ -208,7 +208,7 @@ export function AlertsPanel({
         cooldown_min: 0,
       };
       const url = `${apiBaseClean}/alerts`;
-      console.log("[AlertsPanel] POST", url, payload);
+      if (import.meta.env.DEV) console.log("[AlertsPanel] POST", url, payload);
       const res = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -219,7 +219,7 @@ export function AlertsPanel({
         console.error("[AlertsPanel] POST failed:", res.status, errorText);
         throw new Error(errorText || `HTTP ${res.status}`);
       }
-      console.log("[AlertsPanel] Alert created successfully");
+      if (import.meta.env.DEV) console.log("[AlertsPanel] Alert created successfully");
       await fetchAlerts();
       toast.success("Alert created");
       setShowForm(false);

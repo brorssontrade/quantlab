@@ -38,7 +38,13 @@ export interface FetchOhlcvOptions {
   symbol: string;
   timeframe: string;
   limit?: number;
+  /** ISO start timestamp for windowed fetch (e.g., '2026-01-01T00:00:00Z') */
+  start?: string;
+  /** ISO end timestamp for windowed fetch */
+  end?: string;
   mock?: boolean;
+  /** AbortSignal for cancellation */
+  signal?: AbortSignal;
 }
 
 export function useOhlcvQuery({
@@ -156,7 +162,10 @@ export async function fetchOhlcvSeries({
   symbol,
   timeframe,
   limit = MAX_POINT_COUNT,
+  start,
+  end,
   mock = false,
+  signal,
 }: FetchOhlcvOptions): Promise<NormalizedBar[]> {
   const normalizedSymbol = symbol.trim().toUpperCase();
   if (!normalizedSymbol) return [];
@@ -168,7 +177,11 @@ export async function fetchOhlcvSeries({
   url.searchParams.set("symbol", normalizedSymbol);
   url.searchParams.set("bar", timeframe);
   url.searchParams.set("limit", String(limit));
-  const res = await fetch(url.toString());
+  // TV-37.2: Add windowed fetch support for range presets
+  if (start) url.searchParams.set("start", start);
+  if (end) url.searchParams.set("end", end);
+  
+  const res = await fetch(url.toString(), { signal });
   if (!res.ok) {
     const message = await res.text();
     throw new Error(message || `Failed to load ${normalizedSymbol}`);

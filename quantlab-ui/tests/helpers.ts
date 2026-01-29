@@ -60,3 +60,38 @@ export async function gotoChartsPro(page: Page, testInfo: TestInfo, opts: GotoOp
     `Check screenshot at ${screenshotPath} and DOM dump above.`
   );
 }
+/**
+ * Get the ChartsPro container element that receives mouse events.
+ * This is the correct element to use for handlesPx coordinate translation.
+ * handlesPx coordinates are relative to this container, so to convert to screen:
+ *   absX = containerRect.left + handlesPx.x
+ *   absY = containerRect.top + handlesPx.y
+ */
+export async function getChartsProContainer(page: Page) {
+  const container = page.locator(".chartspro-surface").first();
+  await expect(container).toBeVisible();
+  return container;
+}
+
+/**
+ * Convert handlesPx coordinates to absolute screen coordinates for mouse operations.
+ * @param page - Playwright page
+ * @param handlesPx - The handlesPx object from dump() (relative to chartspro-surface container)
+ * @param handleName - The handle to get coordinates for (e.g., "p1", "p2", "center")
+ * @returns Absolute screen coordinates { x, y } for page.mouse operations
+ */
+export async function handleToScreenCoords(
+  page: Page,
+  handlesPx: Record<string, { x: number; y: number }>,
+  handleName: string
+): Promise<{ x: number; y: number }> {
+  const container = await getChartsProContainer(page);
+  const box = await container.boundingBox();
+  if (!box) throw new Error("Could not get container bounding box");
+  if (!handlesPx[handleName]) throw new Error(`Handle '${handleName}' not found in handlesPx`);
+  
+  return {
+    x: box.x + handlesPx[handleName].x,
+    y: box.y + handlesPx[handleName].y,
+  };
+}

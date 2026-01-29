@@ -1,6 +1,5 @@
 import { useMemo, useState, type DragEvent, type MouseEvent } from "react";
 import { GripVertical, Eye, EyeOff, Lock, Unlock, Trash2, Edit3 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -90,41 +89,41 @@ export function ObjectTree({
   };
 
   return (
-    <Card className="h-full flex flex-col" data-testid="objecttree-card">
-      <CardHeader>
-        <CardTitle>Objects</CardTitle>
-      </CardHeader>
-      <CardContent className="flex-1 flex flex-col space-y-2 overflow-hidden">
+    <div className="h-full flex flex-col" data-testid="objecttree-card" style={{ backgroundColor: "var(--tv-panel, #1e222d)" }}>
+      <div className="px-2 py-1.5 border-b" style={{ borderColor: "var(--tv-border, #363a45)" }}>
+        <h3 className="text-[11px] font-medium" style={{ color: "var(--tv-text-muted, #787b86)" }}>Objects</h3>
+      </div>
+      <div className="flex-1 flex flex-col overflow-hidden">
         <div
-          className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 px-3 py-1.5 text-xs font-medium border-b sticky top-0"
+          className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-1.5 px-2 py-1 text-[10px] font-medium border-b sticky top-0"
           style={{
-            color: "var(--cp-panel-text-muted)",
-            backgroundColor: "var(--cp-panel-header-bg)",
-            borderColor: "var(--cp-panel-border)",
+            color: "var(--tv-text-muted, #787b86)",
+            backgroundColor: "var(--tv-panel, #1e222d)",
+            borderColor: "var(--tv-border, #363a45)",
           }}
           data-testid="objecttree-header-row"
         >
           <div data-testid="objecttree-header-name">Name</div>
-          <div className="w-7 text-center" title="Visible" data-testid="objecttree-header-visible">
-            <Eye className="h-3.5 w-3.5 mx-auto" />
+          <div className="w-6 text-center" title="Visible" data-testid="objecttree-header-visible">
+            <Eye className="h-3 w-3 mx-auto" />
           </div>
-          <div className="w-7 text-center" title="Locked" data-testid="objecttree-header-locked">
-            <Lock className="h-3.5 w-3.5 mx-auto" />
+          <div className="w-6 text-center" title="Locked" data-testid="objecttree-header-locked">
+            <Lock className="h-3 w-3 mx-auto" />
           </div>
-          <div className="w-7 text-center" title="Reorder" data-testid="objecttree-header-reorder">
-            <GripVertical className="h-3.5 w-3.5 mx-auto" />
+          <div className="w-6 text-center" title="Reorder" data-testid="objecttree-header-reorder">
+            <GripVertical className="h-3 w-3 mx-auto" />
           </div>
-          <div className="w-7 text-center" title="Delete" data-testid="objecttree-header-delete">
-            <Trash2 className="h-3.5 w-3.5 mx-auto" />
+          <div className="w-6 text-center" title="Delete" data-testid="objecttree-header-delete">
+            <Trash2 className="h-3 w-3 mx-auto" />
           </div>
         </div>
 
         {sorted.length === 0 ? (
-          <div className="px-3 py-2" data-testid="objecttree-empty">
-            <p className="text-sm text-slate-500">Inga ritobjekt ännu.</p>
+          <div className="px-2 py-2" data-testid="objecttree-empty">
+            <p className="text-[11px]" style={{ color: "var(--tv-text-muted, #787b86)" }}>No objects yet.</p>
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto space-y-2" data-testid="objecttree-rows">
+          <div className="flex-1 overflow-y-auto space-y-1 p-1.5" data-testid="objecttree-rows">
             {sorted.map((drawing) => {
               const isSelected = drawing.id === selectedId;
               const isEditing = editingId === drawing.id;
@@ -152,13 +151,17 @@ export function ObjectTree({
                         }
                       }}
                       className={cn(
-                        "chartspro-object-row rounded border px-3 py-2 text-sm transition",
-                        "grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 items-center",
-                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
-                        isSelected ? "border-blue-500 bg-blue-500/5" : "border-slate-200",
+                        "chartspro-object-row rounded-sm border px-2 py-1 text-[11px] transition",
+                        "grid grid-cols-[1fr_auto_auto_auto_auto] gap-1.5 items-center",
+                        "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#2962ff]",
                         isDragging && "opacity-70",
-                        isDragOver && "ring-2 ring-blue-400"
+                        isDragOver && "ring-1 ring-[#2962ff]"
                       )}
+                      style={{
+                        backgroundColor: isSelected ? "var(--tv-bg-secondary, #2a2e39)" : "transparent",
+                        borderColor: isSelected ? "var(--tv-blue, #2962ff)" : "var(--tv-border, #363a45)",
+                        color: "var(--tv-text, #d1d4dc)",
+                      }}
                       data-testid={`objecttree-row-${drawing.id}`}
                     >
                       <div className="truncate" title={drawing.label || formatKind(drawing.kind)}>
@@ -175,23 +178,22 @@ export function ObjectTree({
                             }}
                             onBlur={commitRename}
                             autoFocus
+                            className="h-5 text-[10px]"
+                            style={{ backgroundColor: "var(--tv-bg, #131722)", borderColor: "var(--tv-border, #363a45)", color: "var(--tv-text, #d1d4dc)" }}
                             data-testid="objecttree-rename-input"
                           />
                         ) : (
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5">
                             <span>{drawing.label || formatKind(drawing.kind)}</span>
-                            {summary && <span className="text-xs text-slate-500">{summary}</span>}
+                            {summary && <span className="text-[9px]" style={{ color: "var(--tv-text-muted, #787b86)" }}>{summary}</span>}
                           </div>
                         )}
                       </div>
                       <Button
                         size="icon"
                         variant="ghost"
-                        className={cn(
-                          "h-8 w-8",
-                          drawing.hidden ? "text-slate-400" : "text-slate-700",
-                          "hover:text-slate-900"
-                        )}
+                        className="h-5 w-5 rounded-sm"
+                        style={{ color: drawing.hidden ? "var(--tv-text-muted, #787b86)" : "var(--tv-text, #d1d4dc)" }}
                         onClick={(event: MouseEvent) => {
                           event.stopPropagation();
                           onToggleHide(drawing.id);
@@ -199,16 +201,13 @@ export function ObjectTree({
                         title={drawing.hidden ? "Show" : "Hide"}
                         data-testid={`objecttree-hide-${drawing.id}`}
                       >
-                        {drawing.hidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        {drawing.hidden ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
                       </Button>
                       <Button
                         size="icon"
                         variant="ghost"
-                        className={cn(
-                          "h-8 w-8",
-                          drawing.locked ? "text-slate-400" : "text-slate-700",
-                          "hover:text-slate-900"
-                        )}
+                        className="h-5 w-5 rounded-sm"
+                        style={{ color: drawing.locked ? "var(--tv-text-muted, #787b86)" : "var(--tv-text, #d1d4dc)" }}
                         onClick={(event: MouseEvent) => {
                           event.stopPropagation();
                           onToggleLock(drawing.id);
@@ -216,7 +215,7 @@ export function ObjectTree({
                         title={drawing.locked ? "Unlock" : "Lock"}
                         data-testid={`objecttree-lock-${drawing.id}`}
                       >
-                        {drawing.locked ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+                        {drawing.locked ? <Unlock className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
                       </Button>
                       <div
                         className="flex items-center justify-center"
@@ -227,12 +226,13 @@ export function ObjectTree({
                         onDrop={(event) => handleDrop(event, null)}
                         data-testid={`objecttree-drag-${drawing.id}`}
                       >
-                        <GripVertical className={cn("h-4 w-4 text-slate-400", isDragging && "opacity-50")} />
+                        <GripVertical className={cn("h-3 w-3", isDragging && "opacity-50")} style={{ color: "var(--tv-text-muted, #787b86)" }} />
                       </div>
                       <Button
                         size="icon"
                         variant="ghost"
-                        className="h-8 w-8 text-slate-700 hover:text-red-600"
+                        className="h-5 w-5 rounded-sm"
+                        style={{ color: "var(--tv-text-muted, #787b86)" }}
                         onClick={(event: MouseEvent) => {
                           event.stopPropagation();
                           onDelete(drawing.id);
@@ -240,26 +240,26 @@ export function ObjectTree({
                         title="Delete"
                         data-testid={`objecttree-delete-${drawing.id}`}
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-3 w-3" />
                       </Button>
                     </div>
                   </ContextMenu.Trigger>
                   <ContextMenu.Portal>
                     <ContextMenu.Content
-                      className="min-w-[200px] rounded-md shadow-lg border p-1 z-50"
+                      className="min-w-[160px] rounded-sm shadow-lg border p-1 z-50"
                       style={{
-                        backgroundColor: "var(--cp-menu-bg)",
-                        borderColor: "var(--cp-panel-border)",
+                        backgroundColor: "var(--tv-panel, #1e222d)",
+                        borderColor: "var(--tv-border, #363a45)",
                       }}
                       sideOffset={5}
                     >
                       <ContextMenu.Item
-                        className="flex items-center gap-2 px-3 py-2 text-sm outline-none cursor-pointer rounded"
+                        className="flex items-center gap-1.5 px-2 py-1 text-[11px] outline-none cursor-pointer rounded-sm"
                         style={{
-                          color: "var(--cp-panel-text)",
+                          color: "var(--tv-text, #d1d4dc)",
                         }}
                         onMouseEnter={(e) => {
-                          (e.currentTarget as HTMLElement).style.backgroundColor = "var(--cp-menu-hover-bg)";
+                          (e.currentTarget as HTMLElement).style.backgroundColor = "var(--tv-bg-secondary, #2a2e39)";
                         }}
                         onMouseLeave={(e) => {
                           (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
@@ -267,16 +267,16 @@ export function ObjectTree({
                         onSelect={() => beginRename(drawing)}
                         data-testid={`objecttree-ctx-rename-${drawing.id}`}
                       >
-                        <Edit3 className="h-4 w-4" />
+                        <Edit3 className="h-3 w-3" />
                         <span>Edit/Rename</span>
                       </ContextMenu.Item>
                       <ContextMenu.Item
-                        className="flex items-center gap-2 px-3 py-2 text-sm outline-none cursor-pointer rounded"
+                        className="flex items-center gap-1.5 px-2 py-1 text-[11px] outline-none cursor-pointer rounded-sm"
                         style={{
-                          color: "var(--cp-panel-text)",
+                          color: "var(--tv-text, #d1d4dc)",
                         }}
                         onMouseEnter={(e) => {
-                          (e.currentTarget as HTMLElement).style.backgroundColor = "var(--cp-menu-hover-bg)";
+                          (e.currentTarget as HTMLElement).style.backgroundColor = "var(--tv-bg-secondary, #2a2e39)";
                         }}
                         onMouseLeave={(e) => {
                           (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
@@ -286,23 +286,23 @@ export function ObjectTree({
                       >
                         {drawing.locked ? (
                           <>
-                            <Unlock className="h-4 w-4" />
+                            <Unlock className="h-3 w-3" />
                             <span>Unlock</span>
                           </>
                         ) : (
                           <>
-                            <Lock className="h-4 w-4" />
+                            <Lock className="h-3 w-3" />
                             <span>Lock</span>
                           </>
                         )}
                       </ContextMenu.Item>
                       <ContextMenu.Item
-                        className="flex items-center gap-2 px-3 py-2 text-sm outline-none cursor-pointer rounded"
+                        className="flex items-center gap-1.5 px-2 py-1 text-[11px] outline-none cursor-pointer rounded-sm"
                         style={{
-                          color: "var(--cp-panel-text)",
+                          color: "var(--tv-text, #d1d4dc)",
                         }}
                         onMouseEnter={(e) => {
-                          (e.currentTarget as HTMLElement).style.backgroundColor = "var(--cp-menu-hover-bg)";
+                          (e.currentTarget as HTMLElement).style.backgroundColor = "var(--tv-bg-secondary, #2a2e39)";
                         }}
                         onMouseLeave={(e) => {
                           (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
@@ -312,27 +312,27 @@ export function ObjectTree({
                       >
                         {drawing.hidden ? (
                           <>
-                            <Eye className="h-4 w-4" />
+                            <Eye className="h-3 w-3" />
                             <span>Show</span>
                           </>
                         ) : (
                           <>
-                            <EyeOff className="h-4 w-4" />
+                            <EyeOff className="h-3 w-3" />
                             <span>Hide</span>
                           </>
                         )}
                       </ContextMenu.Item>
                       <ContextMenu.Separator
                         className="h-px my-1"
-                        style={{ backgroundColor: "var(--cp-panel-border)" }}
+                        style={{ backgroundColor: "var(--tv-border, #363a45)" }}
                       />
                       <ContextMenu.Item
-                        className="flex items-center gap-2 px-3 py-2 text-sm outline-none cursor-pointer rounded text-red-600"
+                        className="flex items-center gap-1.5 px-2 py-1 text-[11px] outline-none cursor-pointer rounded-sm"
                         style={{
-                          color: "rgba(220, 38, 38, 1)",
+                          color: "var(--tv-red, #ef5350)",
                         }}
                         onMouseEnter={(e) => {
-                          (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(220, 38, 38, 0.1)";
+                          (e.currentTarget as HTMLElement).style.backgroundColor = "rgba(239, 83, 80, 0.1)";
                         }}
                         onMouseLeave={(e) => {
                           (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
@@ -340,7 +340,7 @@ export function ObjectTree({
                         onSelect={() => onDelete(drawing.id)}
                         data-testid={`objecttree-ctx-delete-${drawing.id}`}
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-3 w-3" />
                         <span>Delete</span>
                       </ContextMenu.Item>
                     </ContextMenu.Content>
@@ -349,7 +349,7 @@ export function ObjectTree({
               );
             })}
             <div
-              className="h-2"
+              className="h-1.5"
               onDragOver={(event) => {
                 if (!draggingId) return;
                 event.preventDefault();
@@ -359,8 +359,8 @@ export function ObjectTree({
             />
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 

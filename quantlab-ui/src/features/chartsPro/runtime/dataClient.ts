@@ -368,6 +368,12 @@ export function stopHealthCheckPoll(): void {
 export interface FetchOhlcvOptions {
   limit?: number;
   source?: 'yahoo' | 'polygon' | 'mock';
+  /** ISO start timestamp for windowed fetch (e.g., '2026-01-01T00:00:00Z') */
+  start?: string;
+  /** ISO end timestamp for windowed fetch */
+  end?: string;
+  /** AbortSignal for cancellation */
+  signal?: AbortSignal;
 }
 
 /**
@@ -381,16 +387,19 @@ export async function fetchOhlcv(
   setDataStatus('loading');
 
   try {
-    const { limit = 500, source = 'yahoo' } = options;
+    const { limit = 500, source = 'yahoo', start, end, signal } = options;
 
     // Note: Backend endpoint is /chart/ohlcv (no /api prefix)
     const url = new URL(`${currentConfig.baseUrl}/chart/ohlcv`);
     url.searchParams.set('symbol', symbol);
     url.searchParams.set('bar', timeframe); // Backend uses 'bar' not 'timeframe'
     url.searchParams.set('limit', String(limit));
+    // TV-37.2: Add windowed fetch support
+    if (start) url.searchParams.set('start', start);
+    if (end) url.searchParams.set('end', end);
 
     const response = await fetchWithRetry(() =>
-      fetchWithTimeout(url.toString(), { method: 'GET' })
+      fetchWithTimeout(url.toString(), { method: 'GET', signal })
     );
 
     if (!response.ok) {

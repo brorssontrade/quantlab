@@ -20,12 +20,13 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { Undo2, Trash2, Maximize2, ChevronUp, ChevronDown, Clock, Star } from "lucide-react";
+import { Undo2, Trash2, Maximize2, ChevronUp, ChevronDown, Clock, Star, Lock, Unlock, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { Tool } from "../../state/controls";
 import { TOOL_GROUPS, isToolEnabled, getEnabledTools } from "./toolRegistry";
 import { ToolFlyout } from "./ToolFlyout";
 import type { ToolGroup, ToolDefinition } from "./toolRegistry";
+import { cn } from "@/lib/utils";
 
 interface LeftToolbarProps {
   activeTool: Tool;
@@ -36,6 +37,16 @@ interface LeftToolbarProps {
   recents?: string[];
   /** TV-20.13: Callback to toggle favorite */
   onToggleFavorite?: (toolId: string) => void;
+  /** TV-20.14: All drawings locked state */
+  drawingsLocked?: boolean;
+  /** TV-20.14: All drawings hidden state */
+  drawingsHidden?: boolean;
+  /** TV-20.14: Toggle all drawings locked */
+  onToggleDrawingsLocked?: () => void;
+  /** TV-20.14: Toggle all drawings hidden */
+  onToggleDrawingsHidden?: () => void;
+  /** TV-20.14: Remove all drawings */
+  onRemoveAllDrawings?: () => void;
 }
 
 /**
@@ -66,7 +77,19 @@ function getToolById(toolId: string): ToolDefinition | undefined {
 }
 
 /** Desktop: Vertical toolbar with flyout support */
-function DesktopToolbar({ activeTool, onSelectTool, favorites = [], recents = [], onToggleFavorite }: LeftToolbarProps) {
+function DesktopToolbar({ 
+  activeTool, 
+  onSelectTool, 
+  favorites = [], 
+  recents = [], 
+  onToggleFavorite,
+  // TV-20.14 guardrails: default no-ops prevent undefined onClick crashes
+  drawingsLocked = false,
+  drawingsHidden = false,
+  onToggleDrawingsLocked = () => {},
+  onToggleDrawingsHidden = () => {},
+  onRemoveAllDrawings = () => {},
+}: LeftToolbarProps) {
   const [openGroupId, setOpenGroupId] = useState<string | null>(null);
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
   const buttonRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
@@ -268,6 +291,52 @@ function DesktopToolbar({ activeTool, onSelectTool, favorites = [], recents = []
         <Maximize2 className="h-4 w-4" />
       </Button>
 
+      {/* TV-20.14: Drawing Controls (Lock/Hide/Remove) */}
+      <div className="my-1 w-6 border-t border-slate-700/60" />
+
+      <Button
+        variant="ghost"
+        size="icon"
+        title={drawingsLocked ? "Unlock all drawings" : "Lock all drawings"}
+        data-testid="drawings-lock-toggle"
+        className={cn(
+          "h-9 w-9",
+          drawingsLocked 
+            ? "text-amber-400 hover:text-amber-300" 
+            : "text-slate-400 hover:text-slate-200"
+        )}
+        onClick={onToggleDrawingsLocked}
+      >
+        {drawingsLocked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
+      </Button>
+
+      <Button
+        variant="ghost"
+        size="icon"
+        title={drawingsHidden ? "Show all drawings" : "Hide all drawings"}
+        data-testid="drawings-hide-toggle"
+        className={cn(
+          "h-9 w-9",
+          drawingsHidden 
+            ? "text-amber-400 hover:text-amber-300" 
+            : "text-slate-400 hover:text-slate-200"
+        )}
+        onClick={onToggleDrawingsHidden}
+      >
+        {drawingsHidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+      </Button>
+
+      <Button
+        variant="ghost"
+        size="icon"
+        title="Remove all drawings"
+        data-testid="drawings-remove-all"
+        className="h-9 w-9 text-slate-400 hover:text-red-400"
+        onClick={onRemoveAllDrawings}
+      >
+        <Trash2 className="h-4 w-4" />
+      </Button>
+
       {/* Flyout Portal */}
       {openGroup && anchorRect && (
         <ToolFlyout
@@ -284,12 +353,13 @@ function DesktopToolbar({ activeTool, onSelectTool, favorites = [], recents = []
       {/* 
         Backwards-compat layer for tests: hidden buttons with old testids 
         ONLY rendered in test mode (mock=1 URL param) to avoid production interference
+        IMPORTANT: Both container and buttons have pointer-events-none to prevent click interception
       */}
       {isTestMode && (
         <div 
           className="fixed top-0 left-0 flex opacity-0 pointer-events-none" 
           aria-hidden="true"
-          style={{ zIndex: 9999 }}
+          style={{ zIndex: -1, visibility: "hidden" }}
         >
           {TOOL_GROUPS.flatMap(g => g.tools)
             .filter(t => isToolEnabled(t.id))
@@ -299,7 +369,7 @@ function DesktopToolbar({ activeTool, onSelectTool, favorites = [], recents = []
                 data-testid={`tool-${tool.id}`}
                 onClick={() => handleToolSelect(tool.id)}
                 tabIndex={-1}
-                className="w-1 h-1 pointer-events-auto"
+                className="w-1 h-1 pointer-events-none"
               >
                 {tool.label}
               </button>
@@ -432,7 +502,18 @@ function MobilePill({ activeTool, onSelectTool }: LeftToolbarProps) {
 }
 
 
-export function LeftToolbar({ activeTool, onSelectTool, favorites, recents, onToggleFavorite }: LeftToolbarProps) {
+export function LeftToolbar({ 
+  activeTool, 
+  onSelectTool, 
+  favorites, 
+  recents, 
+  onToggleFavorite,
+  drawingsLocked,
+  drawingsHidden,
+  onToggleDrawingsLocked,
+  onToggleDrawingsHidden,
+  onRemoveAllDrawings,
+}: LeftToolbarProps) {
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
@@ -453,6 +534,11 @@ export function LeftToolbar({ activeTool, onSelectTool, favorites, recents, onTo
           favorites={favorites}
           recents={recents}
           onToggleFavorite={onToggleFavorite}
+          drawingsLocked={drawingsLocked}
+          drawingsHidden={drawingsHidden}
+          onToggleDrawingsLocked={onToggleDrawingsLocked}
+          onToggleDrawingsHidden={onToggleDrawingsHidden}
+          onRemoveAllDrawings={onRemoveAllDrawings}
         />
       )}
 

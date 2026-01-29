@@ -78,18 +78,30 @@ export function ContextMenu({
 
   if (!open) return null;
 
+  // TV-35.4: Use structured theme tokens for consistent styling
+  const menuStyle = {
+    left: `${x}px`,
+    top: `${y}px`,
+    backgroundColor: theme.overlay.modalBg,
+    borderColor: theme.overlay.modalBorder,
+    color: theme.text.primary,
+    fontFamily: theme.typography.fontFamily.primary,
+    fontSize: `${theme.typography.fontSize.sm}px`,
+    borderRadius: `${theme.spacing.xs}px`,
+    boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3)",
+    border: "1px solid",
+    padding: `${theme.spacing.xs}px 0`,
+    minWidth: "180px",
+    zIndex: 9999,
+  };
+
   return (
     <div
       ref={menuRef}
       data-testid="chartspro-context-menu"
+      data-overlay-ui="true"
       className="chartspro-context-menu"
-      style={{
-        left: `${x}px`,
-        top: `${y}px`,
-        backgroundColor: theme.panel,
-        borderColor: theme.grid,
-        color: theme.axisText,
-      }}
+      style={menuStyle}
       role="menu"
     >
       {actions.map((action) => {
@@ -98,7 +110,11 @@ export function ContextMenu({
             <div
               key={action.id}
               className="chartspro-context-menu__separator"
-              style={{ backgroundColor: theme.grid }}
+              style={{ 
+                backgroundColor: theme.overlay.modalBorder, 
+                height: "1px",
+                margin: `${theme.spacing.xs}px 0`,
+              }}
             />
           );
         }
@@ -112,13 +128,41 @@ export function ContextMenu({
             className={`chartspro-context-menu__item ${action.disabled ? "is-disabled" : ""}`}
             onClick={() => !action.disabled && handleAction(action.id)}
             disabled={action.disabled}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              width: "100%",
+              padding: `${theme.spacing.sm}px ${theme.spacing.md}px`,
+              background: "transparent",
+              border: "none",
+              color: action.disabled ? theme.text.muted : theme.text.primary,
+              cursor: action.disabled ? "not-allowed" : "pointer",
+              fontFamily: theme.typography.fontFamily.primary,
+              fontSize: `${theme.typography.fontSize.sm}px`,
+              textAlign: "left",
+              transition: "background-color 0.1s ease",
+            }}
+            onMouseEnter={(e) => {
+              if (!action.disabled) {
+                e.currentTarget.style.backgroundColor = theme.overlay.chipBg;
+              }
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = "transparent";
+            }}
           >
             {action.icon && (
-              <span className="chartspro-context-menu__icon">{action.icon}</span>
+              <span style={{ marginRight: `${theme.spacing.sm}px`, display: "flex" }}>
+                {action.icon}
+              </span>
             )}
-            <span className="chartspro-context-menu__label">{action.label}</span>
+            <span style={{ flex: 1 }}>{action.label}</span>
             {action.shortcut && (
-              <span className="chartspro-context-menu__shortcut" style={{ color: theme.crosshair }}>
+              <span style={{ 
+                color: theme.text.muted,
+                fontSize: `${theme.typography.fontSize.xs}px`,
+                marginLeft: `${theme.spacing.md}px`,
+              }}>
                 {action.shortcut}
               </span>
             )}

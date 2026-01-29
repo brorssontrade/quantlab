@@ -14,7 +14,14 @@ if (typeof window !== "undefined") {
     };
   };
   const installStub = () => {
+    const isDev = import.meta.env.DEV;
     const setter = (patch: Record<string, unknown>) => {
+      const hasActiveTool = "activeTool" in (patch || {});
+      if (isDev && hasActiveTool) {
+        console.log("[main.tsx:set] ACTIVETOOL PATCH!", JSON.stringify(patch), "trace:", new Error().stack?.split("\n").slice(1, 6).join(" | "));
+      } else if (isDev) {
+        console.log("[main.tsx:set] called with patch keys:", Object.keys(patch || {}));
+      }
       const target = { ...(w.__lwcharts ?? {}) } as Record<string, unknown>;
       if (patch) {
         Object.entries(patch).forEach(([key, value]) => {

@@ -427,10 +427,10 @@ test.describe("TV-19: BottomBar Functions", () => {
         return dump?.render?.scale?.priceScaleMode;
       }, { timeout: 3000 }).toBe("Logarithmic");
 
-      // Wait for BottomBar dump state to propagate
+      // TV-37.2: Use new scale.mode instead of legacy scaleMode
       await expect.poll(async () => {
         const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
-        return dump?.ui?.bottomBar?.scaleMode;
+        return dump?.ui?.bottomBar?.scale?.mode;
       }, { timeout: 3000 }).toBe("log");
     });
 
@@ -445,10 +445,10 @@ test.describe("TV-19: BottomBar Functions", () => {
         return dump?.render?.scale?.priceScaleMode;
       }, { timeout: 3000 }).toBe("Percentage");
 
-      // Wait for BottomBar dump state to propagate
+      // TV-37.2: Use new scale.mode instead of legacy scaleMode
       await expect.poll(async () => {
         const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
-        return dump?.ui?.bottomBar?.scaleMode;
+        return dump?.ui?.bottomBar?.scale?.mode;
       }, { timeout: 3000 }).toBe("percent");
     });
 
@@ -457,22 +457,37 @@ test.describe("TV-19: BottomBar Functions", () => {
       const logBtn = page.locator('[data-testid="bottombar-toggle-log"]');
       await logBtn.click();
       await page.waitForTimeout(200);
-
-      // Then click Auto
+      
+      // TV-37.2: First disable auto, then re-enable it
+      // Auto toggle is now independent of mode
       const autoBtn = page.locator('[data-testid="bottombar-toggle-auto"]');
+      // Click to disable auto (initial state is auto=true)
+      await autoBtn.click();
+      await page.waitForTimeout(100);
+      // Click to re-enable auto
       await autoBtn.click();
 
-      // Verify dump shows Normal
+      // Verify priceScaleMode is back to Normal when using auto (since mode was still log)
+      // Actually, clicking auto doesn't change mode - it only toggles autoScale
+      // To reset to Normal, we need to click Log again to toggle it off
+      await logBtn.click();
+      await page.waitForTimeout(100);
+
       await expect.poll(async () => {
         const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
         return dump?.render?.scale?.priceScaleMode;
       }, { timeout: 3000 }).toBe("Normal");
 
-      // Wait for BottomBar dump state to propagate
+      // TV-37.2: Verify auto is enabled and mode is linear
       await expect.poll(async () => {
         const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
-        return dump?.ui?.bottomBar?.scaleMode;
-      }, { timeout: 3000 }).toBe("auto");
+        return dump?.ui?.bottomBar?.scale?.auto;
+      }, { timeout: 3000 }).toBe(true);
+      
+      await expect.poll(async () => {
+        const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+        return dump?.ui?.bottomBar?.scale?.mode;
+      }, { timeout: 3000 }).toBe("linear");
     });
 
     test("scale mode persists to localStorage", async ({ page }) => {

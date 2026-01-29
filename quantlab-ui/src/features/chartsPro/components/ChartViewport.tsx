@@ -5,6 +5,7 @@ import {
   LineStyle,
   PriceScaleMode,
   createChart,
+  type SeriesType,
   type CandlestickData,
   type HistogramData,
   type IChartApi,
@@ -18,6 +19,7 @@ import {
 import { createBaseSeries, type ChartType, type UIChartType, type BaseSeriesApi } from "../runtime/seriesFactory";
 import { transformOhlcToHeikinAshi } from "../runtime/heikinAshi";
 import { transformOhlcToRenkoWithSettings, renkoToLwCandlestick, type RenkoTransformResult } from "../runtime/renko";
+import { useScaleInteractions, type ScaleInteractionMetrics } from "../hooks/useScaleInteractions";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
 import { toast } from "sonner";
@@ -26,8 +28,8 @@ import type { ChartMeta, Drawing, IndicatorInstance, NormalizedBar, RawOhlcvRow,
 import { indicatorDisplayName, indicatorParamsSummary, normalizeRows } from "../types";
 import { useChartControls, TIMEFRAME_OPTIONS } from "../state/controls";
 import type { ChartSettings } from "./TopBar/SettingsPanel";
-import type { RenkoSettings } from "../ChartsProTab";
-import { applyChartLevelSettings, applySeriesSettings, createAppliedSnapshot, type AppliedSettingsSnapshot } from "../utils/applyChartSettings";
+import type { RenkoSettingsInput as RenkoSettings } from "../runtime/renko";
+import { applyChartLevelSettings, applySeriesSettings, createAppliedSnapshot, applyAppearanceToChart, applyAppearanceToSeries, createAppearanceSnapshot, type AppliedSettingsSnapshot, type AppliedAppearanceSnapshot } from "../utils/applyChartSettings";
 import {
   colorFor,
   compareCache,
@@ -51,15 +53,26 @@ import {
 import { OverlayCanvasLayer } from "./OverlayCanvas";
 import { DrawingLayer } from "./DrawingLayer";
 import { AlertMarkersLayer } from "./AlertMarkersLayer";
+import { FloatingToolbar } from "./FloatingToolbar";
+import { ObjectSettingsModal } from "./Modal/ObjectSettingsModal";
+import { CreateAlertModal } from "./Modal/CreateAlertModal";
+import { LabelModal } from "./Modal/LabelModal";
 import { CompareToolbar } from "./CompareToolbar";
 import { InspectorSidebar, type InspectorObject } from "./InspectorSidebar";
 import { OhlcStrip } from "./OhlcStrip";
 import { ContextMenu, DEFAULT_CHART_ACTIONS, type ContextMenuState } from "./ContextMenu";
-import { CrosshairOverlay, type CrosshairPosition } from "./CrosshairOverlay";
+import { CrosshairOverlayLayer, getCrosshairPerfMetrics, resetCrosshairPerfMetrics } from "./CrosshairOverlayLayer";
 import { Watermark } from "./Watermark";
 import { LastPriceLine } from "./LastPriceLine";
-import type { ChartsTheme } from "../theme";
+import { type ChartsTheme, getThemeCssVars } from "../theme";
 import type { IndicatorWorkerResponse } from "../indicators/registry";
+import { useSettingsStore } from "../state/settings";
+import {
+  applyPresetToDrawing,
+  getAllPresets,
+  getDefaultStyleForKind,
+  type Preset,
+} from "../presetStore";
 import {
   alignAndTransform,
   buildEmaSeries,
@@ -111,6 +124,9 @@ function getBarDurationSeconds(tf: Tf): number {
   };
   return map[tf] ?? 60;
 }
+
+// TV-38.1: Date formatters and PerfMetrics moved to CrosshairOverlayLayer
+// to isolate crosshair logic from ChartViewport
 
 const TIMEFRAME_VALUE_SET = new Set<Tf>(TIMEFRAME_OPTIONS.map((option) => option.value));
 const MAX_COMPARE_COUNT = 4;
@@ -216,6 +232,270 @@ const shouldExposeQaDebug = () => {
   return false;
 };
 
+/**
+ * TV-28.0: Compute pixel coordinates for all handles of a selected drawing.
+ * This enables deterministic drag tests in Playwright by providing exact click targets.
+ * Returns an object with labeled handle positions, or null if coordinates can't be computed.
+ */
+type HandlesPx = Record<string, { x: number; y: number }>;
+function computeHandlesPx(
+  drawing: Drawing,
+  chart: IChartApi | null,
+  series: ISeriesApi<SeriesType> | null,
+  containerWidth: number,
+  containerHeight: number,
+): HandlesPx | null {
+  if (!chart || !series || containerWidth <= 0 || containerHeight <= 0) return null;
+
+  // Helper: convert time/price to pixel coordinates
+  const toPixel = (timeMs: number, price: number): { x: number; y: number } | null => {
+    const timeSec = Math.floor(timeMs / 1000);
+    const x = chart.timeScale().timeToCoordinate(timeSec as unknown as Time);
+    const y = series.priceToCoordinate(price);
+    if (x == null || y == null) return null;
+    return { x, y };
+  };
+
+  const handles: HandlesPx = {};
+
+  switch (drawing.kind) {
+    case "hline": {
+      // Horizontal line: center handle at mid-width
+      const y = series.priceToCoordinate(drawing.price);
+      if (y == null) return null;
+      handles.center = { x: containerWidth / 2, y };
+      break;
+    }
+    case "vline": {
+      // Vertical line: center handle at mid-height
+      const timeSec = Math.floor(drawing.timeMs / 1000);
+      const x = chart.timeScale().timeToCoordinate(timeSec as unknown as Time);
+      if (x == null) return null;
+      handles.center = { x, y: containerHeight / 2 };
+      break;
+    }
+    case "trend":
+    case "ray":
+    case "extendedLine": {
+      const p1 = toPixel(drawing.p1.timeMs, drawing.p1.price);
+      const p2 = toPixel(drawing.p2.timeMs, drawing.p2.price);
+      if (!p1 || !p2) return null;
+      handles.p1 = p1;
+      handles.p2 = p2;
+      handles.center = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+      break;
+    }
+    case "rectangle": {
+      const p1 = toPixel(drawing.p1.timeMs, drawing.p1.price);
+      const p2 = toPixel(drawing.p2.timeMs, drawing.p2.price);
+      if (!p1 || !p2) return null;
+      const minX = Math.min(p1.x, p2.x);
+      const maxX = Math.max(p1.x, p2.x);
+      const minY = Math.min(p1.y, p2.y);
+      const maxY = Math.max(p1.y, p2.y);
+      handles.topLeft = { x: minX, y: minY };
+      handles.topRight = { x: maxX, y: minY };
+      handles.bottomLeft = { x: minX, y: maxY };
+      handles.bottomRight = { x: maxX, y: maxY };
+      handles.center = { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
+      break;
+    }
+    case "circle":
+    case "ellipse": {
+      const p1 = toPixel(drawing.p1.timeMs, drawing.p1.price);
+      const p2 = toPixel(drawing.p2.timeMs, drawing.p2.price);
+      if (!p1 || !p2) return null;
+      const cx = p1.x;
+      const cy = p1.y;
+      const radiusX = Math.abs(p2.x - p1.x);
+      const radiusY = Math.abs(p2.y - p1.y);
+      handles.center = { x: cx, y: cy };
+      handles.top = { x: cx, y: cy - radiusY };
+      handles.right = { x: cx + radiusX, y: cy };
+      handles.bottom = { x: cx, y: cy + radiusY };
+      handles.left = { x: cx - radiusX, y: cy };
+      break;
+    }
+    case "triangle": {
+      const p1 = toPixel(drawing.p1.timeMs, drawing.p1.price);
+      const p2 = toPixel(drawing.p2.timeMs, drawing.p2.price);
+      const p3 = toPixel(drawing.p3.timeMs, drawing.p3.price);
+      if (!p1 || !p2 || !p3) return null;
+      handles.p1 = p1;
+      handles.p2 = p2;
+      handles.p3 = p3;
+      handles.center = { x: (p1.x + p2.x + p3.x) / 3, y: (p1.y + p2.y + p3.y) / 3 };
+      break;
+    }
+    case "channel":
+    case "pitchfork":
+    case "schiffPitchfork":
+    case "modifiedSchiffPitchfork":
+    case "flatTopChannel":
+    case "flatBottomChannel": {
+      const p1 = toPixel(drawing.p1.timeMs, drawing.p1.price);
+      const p2 = toPixel(drawing.p2.timeMs, drawing.p2.price);
+      const p3 = toPixel(drawing.p3.timeMs, drawing.p3.price);
+      if (!p1 || !p2 || !p3) return null;
+      handles.p1 = p1;
+      handles.p2 = p2;
+      handles.p3 = p3;
+      handles.center = { x: (p1.x + p2.x + p3.x) / 3, y: (p1.y + p2.y + p3.y) / 3 };
+      break;
+    }
+    case "callout": {
+      const anchor = toPixel(drawing.anchor.timeMs, drawing.anchor.price);
+      const box = toPixel(drawing.box.timeMs, drawing.box.price);
+      if (!anchor || !box) return null;
+      handles.anchor = anchor;
+      handles.box = box;
+      break;
+    }
+    case "note": {
+      const anchor = toPixel(drawing.anchor.timeMs, drawing.anchor.price);
+      if (!anchor) return null;
+      handles.anchor = anchor;
+      break;
+    }
+    case "text": {
+      const anchor = toPixel(drawing.anchor.timeMs, drawing.anchor.price);
+      if (!anchor) return null;
+      handles.anchor = anchor;
+      break;
+    }
+    case "priceRange":
+    case "dateRange":
+    case "dateAndPriceRange": {
+      const p1 = toPixel(drawing.p1.timeMs, drawing.p1.price);
+      const p2 = toPixel(drawing.p2.timeMs, drawing.p2.price);
+      if (!p1 || !p2) return null;
+      handles.p1 = p1;
+      handles.p2 = p2;
+      handles.center = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+      break;
+    }
+    case "fibRetracement": {
+      const p1 = toPixel(drawing.p1.timeMs, drawing.p1.price);
+      const p2 = toPixel(drawing.p2.timeMs, drawing.p2.price);
+      if (!p1 || !p2) return null;
+      handles.p1 = p1;
+      handles.p2 = p2;
+      break;
+    }
+    case "regressionTrend": {
+      const p1 = toPixel(drawing.p1.timeMs, drawing.p1.price);
+      const p2 = toPixel(drawing.p2.timeMs, drawing.p2.price);
+      if (!p1 || !p2) return null;
+      handles.p1 = p1;
+      handles.p2 = p2;
+      handles.center = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+      break;
+    }
+    case "longPosition":
+    case "shortPosition": {
+      const p1 = toPixel(drawing.p1.timeMs, drawing.p1.price);
+      const p2 = toPixel(drawing.p2.timeMs, drawing.p2.price);
+      const p3 = toPixel(drawing.p3.timeMs, drawing.p3.price);
+      if (!p1 || !p2 || !p3) return null;
+      handles.entry = p1;
+      handles.stop = p2;
+      handles.target = p3;
+      break;
+    }
+    case "fibExtension": {
+      const p1 = toPixel(drawing.p1.timeMs, drawing.p1.price);
+      const p2 = toPixel(drawing.p2.timeMs, drawing.p2.price);
+      const p3 = toPixel(drawing.p3.timeMs, drawing.p3.price);
+      if (!p1 || !p2 || !p3) return null;
+      handles.p1 = p1;
+      handles.p2 = p2;
+      handles.p3 = p3;
+      break;
+    }
+    case "fibFan": {
+      const p1 = toPixel(drawing.p1.timeMs, drawing.p1.price);
+      const p2 = toPixel(drawing.p2.timeMs, drawing.p2.price);
+      if (!p1 || !p2) return null;
+      handles.p1 = p1;
+      handles.p2 = p2;
+      break;
+    }
+    case "abcd": {
+      const pA = toPixel(drawing.p1.timeMs, drawing.p1.price);
+      const pB = toPixel(drawing.p2.timeMs, drawing.p2.price);
+      const pC = toPixel(drawing.p3.timeMs, drawing.p3.price);
+      const pD = toPixel(drawing.p4.timeMs, drawing.p4.price);
+      if (!pA || !pB || !pC || !pD) return null;
+      handles.A = pA;
+      handles.B = pB;
+      handles.C = pC;
+      handles.D = pD;
+      break;
+    }
+    case "headAndShoulders": {
+      const pLS = toPixel(drawing.p1.timeMs, drawing.p1.price);
+      const pHead = toPixel(drawing.p2.timeMs, drawing.p2.price);
+      const pRS = toPixel(drawing.p3.timeMs, drawing.p3.price);
+      const pNL1 = toPixel(drawing.p4.timeMs, drawing.p4.price);
+      const pNL2 = toPixel(drawing.p5.timeMs, drawing.p5.price);
+      if (!pLS || !pHead || !pRS || !pNL1 || !pNL2) return null;
+      handles.LS = pLS;
+      handles.Head = pHead;
+      handles.RS = pRS;
+      handles.NL1 = pNL1;
+      handles.NL2 = pNL2;
+      break;
+    }
+    case "elliottWave": {
+      const p0 = toPixel(drawing.p0.timeMs, drawing.p0.price);
+      const p1 = toPixel(drawing.p1.timeMs, drawing.p1.price);
+      const p2 = toPixel(drawing.p2.timeMs, drawing.p2.price);
+      const p3 = toPixel(drawing.p3.timeMs, drawing.p3.price);
+      const p4 = toPixel(drawing.p4.timeMs, drawing.p4.price);
+      const p5 = toPixel(drawing.p5.timeMs, drawing.p5.price);
+      if (!p0 || !p1 || !p2 || !p3 || !p4 || !p5) return null;
+      handles.p0 = p0;
+      handles.p1 = p1;
+      handles.p2 = p2;
+      handles.p3 = p3;
+      handles.p4 = p4;
+      handles.p5 = p5;
+      break;
+    }
+    default:
+      return null;
+  }
+
+  return Object.keys(handles).length > 0 ? handles : null;
+}
+
+/**
+ * TV-30.1: Compute bounding box from handlesPx coordinates
+ * Returns { x, y, width, height } where x,y is top-left corner
+ */
+function computeSelectionBounds(handlesPx: HandlesPx | null): { x: number; y: number; width: number; height: number } | null {
+  if (!handlesPx) return null;
+  const points = Object.values(handlesPx);
+  if (points.length === 0) return null;
+
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const pt of points) {
+    if (pt.x < minX) minX = pt.x;
+    if (pt.x > maxX) maxX = pt.x;
+    if (pt.y < minY) minY = pt.y;
+    if (pt.y > maxY) maxY = pt.y;
+  }
+
+  // Add some padding for handle size
+  const padding = 8;
+  return {
+    x: minX - padding,
+    y: minY - padding,
+    width: Math.max(maxX - minX + padding * 2, 20),
+    height: Math.max(maxY - minY + padding * 2, 20),
+  };
+}
+
 const installLwChartsStub = () => {
   if (typeof window === "undefined") return;
   const w = window as typeof window;
@@ -256,6 +536,10 @@ const installLwChartsStub = () => {
     legend: null,
     last: null,
     styles: { theme: "dark", compareColors: [] },
+    // TV-37.1: UI namespace for BottomBar and other UI components
+    ui: {
+      bottomBar: null,
+    },
   });
   const ensureSet = (target: Partial<LwChartsApi>): LwChartsApi["set"] => {
     const setter = (patch: Partial<LwChartsApi>) => {
@@ -363,15 +647,21 @@ interface ChartViewportProps {
   chartSettings?: ChartSettings;
   /** TV-22.0a: Renko settings (mode, boxSize, atrPeriod, etc.) */
   renkoSettings?: RenkoSettings;
-  /** TV-19.4: Price scale mode controlled by BottomBar (auto/log/percent) */
-  priceScaleMode?: "auto" | "log" | "percent";
+  /** TV-37.2: Price scale mode (linear/log/percent) */
+  priceScaleMode?: "linear" | "log" | "percent";
+  /** TV-37.2: Price scale auto-scale (independent toggle) */
+  priceScaleAutoScale?: boolean;
+  /** TV-37.2: Callback when autoScale is changed by context action or QA API (to sync UI) */
+  onAutoScaleChange?: (enabled: boolean) => void;
+  /** TV-37.4: Callback when timeframe is changed via QA API (to sync UI) */
+  onTimeframeChange?: (timeframe: Tf) => void;
   drawings: Drawing[];
   selectedId: string | null;
   indicators: IndicatorInstance[];
   magnetEnabled: boolean;
   snapToClose: boolean;
   onSelectDrawing: (id: string | null) => void;
-  onUpsertDrawing: (drawing: Drawing) => void;
+  onUpsertDrawing: (drawing: Drawing, options?: { transient?: boolean; select?: boolean }) => void;
   onRemoveDrawing: (id: string) => void;
   duplicateDrawing: (id: string) => Drawing | null;
   onToggleLock: (id: string) => void;
@@ -394,6 +684,9 @@ interface ChartViewportProps {
   modalKind?: string | null;
   // TV-20.13: LeftToolbar favorites + recents for dump()
   leftToolbarState?: { favorites: string[]; recents: string[] };
+  // TV-20.14: Global drawing controls for dump() and DrawingLayer
+  drawingsHidden?: boolean;
+  drawingsLocked?: boolean;
 }
 
 type CandlestickSeries = ISeriesApi<"Candlestick">;
@@ -423,7 +716,8 @@ export function ChartViewport({
   chartType = "candles",
   chartSettings,
   renkoSettings,
-  priceScaleMode = "auto",
+  priceScaleMode = "linear",
+  priceScaleAutoScale = true,
   drawings,
   selectedId,
   indicators,
@@ -451,6 +745,13 @@ export function ChartViewport({
   modalKind = null,
   // TV-20.13: LeftToolbar state
   leftToolbarState,
+  // TV-20.14: Global drawing controls
+  drawingsHidden = false,
+  drawingsLocked = false,
+  // TV-37.2: Callback when autoScale changes (context action or QA API)
+  onAutoScaleChange,
+  // TV-37.4: Callback when timeframe changes via QA API
+  onTimeframeChange,
 }: ChartViewportProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -506,6 +807,17 @@ export function ChartViewport({
   const lastSnapshotRef = useRef<LastValueSnapshot>({ base: null, compares: {} });
   const updateLastValueLabelsRef = useRef<() => void>(() => {});
   const exportHandlersLocalRef = useRef<ExportHandlers>({});
+  // TV-30.8: Ref for stable access to onSelectDrawing in QA API
+  const onSelectDrawingRef = useRef(onSelectDrawing);
+  onSelectDrawingRef.current = onSelectDrawing;
+  
+  // TV-37.2: Ref for stable access to onAutoScaleChange in QA API (avoids stale closure)
+  const onAutoScaleChangeRef = useRef(onAutoScaleChange);
+  onAutoScaleChangeRef.current = onAutoScaleChange;
+  
+  // TV-37.4: Ref for stable access to onTimeframeChange in QA API (avoids stale closure)
+  const onTimeframeChangeRef = useRef(onTimeframeChange);
+  onTimeframeChangeRef.current = onTimeframeChange;
   
   // Workspace layout refs (updated on every render to ensure dump() sees current values)
   const workspaceModeRef = useRef(workspaceMode);
@@ -520,8 +832,20 @@ export function ChartViewport({
   const renkoSettingsRef = useRef<RenkoSettings | undefined>(renkoSettings);
   // TV-20.13: LeftToolbar state ref for dump()
   const leftToolbarStateRef = useRef(leftToolbarState);
+  // TV-20.14: Drawing controls refs for dump()
+  const drawingsHiddenRef = useRef(drawingsHidden);
+  const drawingsLockedRef = useRef(drawingsLocked);
+  // TV-30.3: Object settings modal ref for dump() - initialize with false to avoid TDZ
+  // The actual state sync happens later via objectSettingsOpenRef.current = objectSettingsOpen
+  const objectSettingsOpenRef = useRef<boolean>(false);
   const appliedSettingsRef = useRef<AppliedSettingsSnapshot | null>(null); // TV-10.3: Track applied settings
+  const appliedAppearanceRef = useRef<AppliedAppearanceSnapshot | null>(null); // TV-23.2: Track applied appearance for dump()
   const timeframeRef = useRef<string>(timeframe); // TV-11: Track current timeframe for dump()
+  
+  // TV-38.1: Crosshair throttling refs REMOVED - now managed by CrosshairOverlayLayer
+  // This eliminates ChartViewport re-renders on crosshair movement
+  
+  // TV-23.1: Settings dialog state for dump() - use getState() directly in dump() to avoid render loop
   workspaceModeRef.current = workspaceMode;
   sidebarCollapsedRef.current = sidebarCollapsed;
   sidebarWidthRef.current = sidebarWidth;
@@ -532,6 +856,9 @@ export function ChartViewport({
   chartSettingsRef.current = chartSettings; // Sync settings for dump()
   renkoSettingsRef.current = renkoSettings; // TV-22.0a: Sync renko settings for dump()
   leftToolbarStateRef.current = leftToolbarState; // TV-20.13: Sync leftToolbar state for dump()
+  drawingsHiddenRef.current = drawingsHidden; // TV-20.14: Sync drawingsHidden for dump()
+  drawingsLockedRef.current = drawingsLocked; // TV-20.14: Sync drawingsLocked for dump()
+  // NOTE: objectSettingsOpenRef.current sync moved to after objectSettingsOpen state declaration to avoid TDZ
   timeframeRef.current = timeframe; // Sync timeframe for dump()
   // TV-22.0c: Track last Renko transform result for dump().render.renko
   const lastRenkoResultRef = useRef<RenkoTransformResult | null>(null);
@@ -545,6 +872,7 @@ export function ChartViewport({
   const baseScaleModeRef = useRef<PriceScaleMode>(PriceScaleMode.Normal);
   const barSpacingGuardRef = useRef<number | null>(null);
   const barSpacingRef = useRef<number | null>(null);
+  const barSpacingLockedRef = useRef<boolean>(false); // TV-34: Lock to prevent guard override
   const baseFetchAbortRef = useRef<AbortController | null>(null);
   const baseLoadSeqRef = useRef(0);
   const indicatorWorkerRef = useRef<Worker | null>(null);
@@ -615,17 +943,29 @@ export function ChartViewport({
   // Crosshair visibility state (affects both overlay and chart crosshair)
   const [showCrosshair, setShowCrosshair] = useState<boolean>(true);
 
-  // Crosshair position state for overlay
-  const [crosshairPosition, setCrosshairPosition] = useState<CrosshairPosition>({
-    x: 0,
-    y: 0,
-    price: null,
-    time: null,
-    visible: false,
-  });
+  // TV-38.1: crosshairPosition state REMOVED - now managed by CrosshairOverlayLayer
+  // This isolates crosshair updates from ChartViewport render cycle
 
   // Last price line state
   const [lastPriceY, setLastPriceY] = useState<number | null>(null);
+
+  // TV-30.1: Selection bounds for FloatingToolbar
+  const [selectionBounds, setSelectionBounds] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+
+  // TV-30.3: Object settings modal open state
+  const [objectSettingsOpen, setObjectSettingsOpen] = useState<boolean>(false);
+  // TV-30.3: Sync objectSettingsOpen to ref for dump() (must be after state declaration to avoid TDZ)
+  objectSettingsOpenRef.current = objectSettingsOpen;
+
+  // TV-30.4: Create alert modal open state
+  const [createAlertOpen, setCreateAlertOpen] = useState<boolean>(false);
+  const createAlertOpenRef = useRef<boolean>(false);
+  createAlertOpenRef.current = createAlertOpen;
+
+  // TV-30.7: Label modal open state
+  const [labelModalOpen, setLabelModalOpen] = useState<boolean>(false);
+  const labelModalOpenRef = useRef<boolean>(false);
+  labelModalOpenRef.current = labelModalOpen;
 
   const setInspectorTabSafe = useCallback((value: unknown) => {
     const normalized = normalizeInspectorTab(value);
@@ -652,6 +992,13 @@ export function ChartViewport({
     });
     return map;
   }, [indicatorResults, indicators]);
+
+  // TV-30.3: Memoize selected drawing for ObjectSettingsModal and FloatingToolbar
+  const selectedDrawing = useMemo(() => {
+    if (!selectedId) return null;
+    return drawings.find((d) => d.id === selectedId) ?? null;
+  }, [selectedId, drawings]);
+
   const [compareItems, setCompareItems] = useState<CompareItemState[]>(() =>
     loadPersisted()
       .slice(0, MAX_COMPARE_COUNT)
@@ -786,6 +1133,23 @@ export function ChartViewport({
     return () => clearInterval(interval);
   }, [fetchAlerts]);
 
+  // TV-34.1/34.2/34.3: Scale interactions (axis drag, auto-fit, wheel zoom pivot)
+  const scaleInteractionsRef = useRef<ReturnType<typeof useScaleInteractions> | null>(null);
+  const scaleInteractions = useScaleInteractions({
+    chartRef: chartRef,
+    seriesRef: candleSeriesRef,
+    containerRef: chartRootRef,
+    enabled: chartReady,
+    onScaleChange: () => {
+      // Trigger redraw when scale changes
+      const chart = chartRef.current;
+      if (chart) {
+        barSpacingRef.current = chart.timeScale().options().barSpacing;
+      }
+    },
+  });
+  scaleInteractionsRef.current = scaleInteractions;
+
 const overlayWrapperClassName = "chartspro-overlay absolute inset-0 pointer-events-none";
 const overlayCanvasClassName = "chartspro-overlay__canvas absolute inset-0";
   const creationThemeRef = useRef(theme);
@@ -797,9 +1161,10 @@ const overlayCanvasClassName = "chartspro-overlay__canvas absolute inset-0";
       // Ignore if event is a repeat (holding down key)
       if (event.repeat) return;
 
-      // Ignore if modifier keys are pressed (metaKey, ctrlKey, altKey)
+      // Ignore if modifier keys are pressed (metaKey, ctrlKey, altKey, shiftKey)
       // These are for OS/browser shortcuts, not our app
-      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      // TV-32: Shift+L = toggle lock, Shift+H = toggle hide (handled by DrawingLayer)
+      if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
 
       // Ignore if focus is in input-like element
       const target = event.target as HTMLElement;
@@ -828,11 +1193,26 @@ const overlayCanvasClassName = "chartspro-overlay__canvas absolute inset-0";
         case "t":
           nextTool = "trendline";
           break;
+        case "a":
+          nextTool = "ray";
+          break;
+        case "e":
+          nextTool = "extendedLine";
+          break;
         case "c":
           nextTool = "channel";
           break;
         case "r":
           nextTool = "rectangle";
+          break;
+        case "o":
+          nextTool = "circle";
+          break;
+        case "i":
+          nextTool = "ellipse";
+          break;
+        case "y":
+          nextTool = "triangle";
           break;
         case "n":
           nextTool = "text";
@@ -854,6 +1234,33 @@ const overlayCanvasClassName = "chartspro-overlay__canvas absolute inset-0";
           break;
         case "s":
           nextTool = "shortPosition";
+          break;
+        case "k":
+          nextTool = "callout";
+          break;
+        case "m":
+          nextTool = "note";
+          break;
+        case "x":
+          nextTool = "fibExtension";
+          break;
+        case "u":
+          nextTool = "fibFan";
+          break;
+        case "j":
+          nextTool = "schiffPitchfork";
+          break;
+        case "d":
+          nextTool = "modifiedSchiffPitchfork";
+          break;
+        case "w":
+          nextTool = "abcd";
+          break;
+        case "q":
+          nextTool = "headAndShoulders";
+          break;
+        case "z":
+          nextTool = "elliottWave";
           break;
         default:
           return;
@@ -919,6 +1326,9 @@ const overlayCanvasClassName = "chartspro-overlay__canvas absolute inset-0";
 
   const updateBarSpacingGuard = useCallback(
     (range?: LogicalRange | null) => {
+      // TV-34: Skip if barSpacing is locked (programmatic control)
+      if (barSpacingLockedRef.current) return;
+      
       const chart = chartRef.current;
       if (!chart) return;
       const targetRange = range ?? chart.timeScale().getVisibleLogicalRange();
@@ -1005,9 +1415,11 @@ const fitToContent = useCallback(() => {
         break;
       case "reset-scale":
         chartRef.current?.priceScale("right").applyOptions({ autoScale: true });
+        onAutoScaleChangeRef.current?.(true); // TV-37.2: Sync UI state via ref
         break;
       case "auto-scale":
         chartRef.current?.priceScale("right").applyOptions({ autoScale: true });
+        onAutoScaleChangeRef.current?.(true); // TV-37.2: Sync UI state via ref
         break;
       case "fit-content":
         fitToContent();
@@ -1067,7 +1479,7 @@ const fitToContent = useCallback(() => {
       default:
         break;
     }
-  }, [fitToContent]);
+  }, [fitToContent, onAutoScaleChange]);
 
   currentSymbolRef.current = symbol;
   timeframeRef.current = timeframe;
@@ -2093,6 +2505,17 @@ const fitToContent = useCallback(() => {
           Object.values(compareStatusBySymbol).every((entry) => entry.status === "ready" || entry.status === "error");
         const baseReady = data.length > 0;
         const overallStatus: DataStatus = isLoading ? "loading" : baseReady ? "ready" : "idle";
+        // TV-37.2: Enhanced data diagnostics for range preset debugging
+        const ohlcvRows = lastLoadedBaseRowsRef.current;
+        const ohlcvDiagnostics = ohlcvRows.length > 0 ? {
+          rowCount: ohlcvRows.length,
+          firstTs: Number(ohlcvRows[0].time),
+          lastTs: Number(ohlcvRows[ohlcvRows.length - 1].time),
+          bar: timeframeRef.current,
+          // Human-readable timestamps
+          firstIso: new Date(Number(ohlcvRows[0].time) * 1000).toISOString(),
+          lastIso: new Date(Number(ohlcvRows[ohlcvRows.length - 1].time) * 1000).toISOString(),
+        } : null;
         return {
           symbol: currentSymbolRef.current,
           timeframe: timeframeRef.current,
@@ -2105,6 +2528,15 @@ const fitToContent = useCallback(() => {
             baseReady,
             comparesReady,
             compareStatusBySymbol,
+            // TV-37.2: OHLCV diagnostics for range preset debugging
+            ohlcv: ohlcvDiagnostics,
+            // TV-37.2: Meta diagnostics (source, fallback, etc.)
+            meta: meta ? {
+              source: meta.source ?? null,
+              fallback: meta.fallback ?? null,
+              tz: meta.tz ?? null,
+              cache: meta.cache ?? null,
+            } : null,
           },
           dataBounds: (() => {
             const rows = lastLoadedBaseRowsRef.current;
@@ -2118,6 +2550,7 @@ const fitToContent = useCallback(() => {
           render: {
             ...describeRenderSnapshot(),
                         appliedSettings: appliedSettingsRef.current, // TV-10.3: Expose applied settings for tests
+            appliedAppearance: appliedAppearanceRef.current, // TV-23.2: Expose applied appearance for tests
             objects,
             // TV-22.0c: Renko transform metadata for testing
             renko: lastRenkoResultRef.current ? {
@@ -2145,7 +2578,15 @@ const fitToContent = useCallback(() => {
               };
             })(),
             scale: {
-              barSpacing: barSpacingRef.current,
+              barSpacing: (() => {
+                // Prefer cached value, but fall back to chart's actual barSpacing
+                if (barSpacingRef.current != null) return barSpacingRef.current;
+                try {
+                  return chartRef.current?.timeScale().options().barSpacing ?? null;
+                } catch {
+                  return null;
+                }
+              })(),
               rightOffset: chartRef.current?.timeScale().scrollPosition() ?? 0,
               priceScaleMode: describePriceScaleMode(baseScaleModeRef.current),
               visibleTimeRange: (() => {
@@ -2160,7 +2601,36 @@ const fitToContent = useCallback(() => {
                 }
                 return null;
               })(),
+              visibleLogicalRange: (() => {
+                try {
+                  const timeScale = chartRef.current?.timeScale();
+                  const range = timeScale?.getVisibleLogicalRange?.();
+                  if (range && range.from != null && range.to != null) {
+                    return { from: Number(range.from), to: Number(range.to) };
+                  }
+                } catch {
+                  // ignore
+                }
+                return null;
+              })(),
+              // TV-34.1: Price scale visible range
+              priceRange: (() => {
+                try {
+                  const priceScale = chartRef.current?.priceScale("right");
+                  const range = priceScale?.getVisibleRange?.();
+                  if (range && range.from != null && range.to != null) {
+                    return { from: Number(range.from), to: Number(range.to) };
+                  }
+                } catch {
+                  // ignore
+                }
+                return null;
+              })(),
+              // TV-34.2: Auto-scale state
+              autoScale: scaleInteractionsRef.current?.getMetrics?.()?.autoScale ?? true,
             },
+            // TV-34.1/34.2/34.3: Scale interaction metrics
+            scaleInteraction: scaleInteractionsRef.current?.getMetrics?.() ?? null,
           },
           percent: percentBlock,
           compares: { ...seriesPointCountsRef.current.compares },
@@ -2211,22 +2681,78 @@ const fitToContent = useCallback(() => {
             hidden: Boolean(meta.hidden),
             addMode: (meta as any).addMode ?? (meta.mode === "price" ? "newPriceScale" : "samePercent"),
           })),
+          // TV-35.5 + TV-36.4: Enhanced styles/theme state for visual QA
           styles: {
             theme: creationThemeRef.current.name,
+            // TV-36.4: Full CSS vars object for Playwright visual parity tests
+            cssVars: getThemeCssVars(theme),
+            // TV-35.5: Expose key theme tokens for Playwright visual testing
+            tokens: {
+              canvas: {
+                background: theme.canvas.background,
+                grid: theme.canvas.grid,
+              },
+              text: {
+                primary: theme.text.primary,
+                axis: theme.text.axis,
+              },
+              candle: {
+                up: theme.candle.upColor,
+                down: theme.candle.downColor,
+              },
+              crosshair: theme.crosshairTokens.line,
+              watermark: {
+                color: theme.watermark.color,
+                opacity: theme.watermark.opacity,
+              },
+              // TV-36.4: Add overlay tokens for unified component testing
+              overlay: {
+                line: theme.overlay.line,
+                selection: theme.overlay.selection,
+                handleFill: theme.overlay.handleFill,
+                handleStroke: theme.overlay.handleStroke,
+                labelBg: theme.overlay.labelBg,
+                labelText: theme.overlay.labelText,
+                toolbarBg: theme.overlay.toolbarBg,
+                toolbarBorder: theme.overlay.toolbarBorder,
+                modalBg: theme.overlay.modalBg,
+                modalBorder: theme.overlay.modalBorder,
+                chipBg: theme.overlay.chipBg,
+                chipText: theme.overlay.chipText,
+                chipBorder: theme.overlay.chipBorder,
+              },
+              spacing: { ...theme.spacing },
+            },
+            typography: {
+              fontFamily: theme.typography.fontFamily.axis,
+              fontSize: theme.typography.fontSize.sm,
+            },
             compareColors: compareItemsRef.current.map((item) => ({
               symbol: item.symbol,
               color: colorFor(item.symbol),
             })),
           },
           ui: {
-            activeTool: tool,
+            // TV-37.2: Include BottomBar state from _state (set by BottomBar component)
+            bottomBar: (window as Record<string, unknown>).__lwcharts?._state?.ui?.bottomBar ?? null,
+            activeTool: useChartControls.getState().tool, // Read from store for immediate updates
             chartType: chartTypeRef.current,
             timeframe: timeframeRef.current, // TV-11: Expose current timeframe
             settings: chartSettingsRef.current ?? null,
+            // TV-23.1: Settings dialog state - read directly from store to avoid render issues
+            settingsDialog: (() => {
+              const state = useSettingsStore.getState();
+              return { isOpen: state.isDialogOpen, activeTab: state.activeTab };
+            })(),
             // TV-22.0a: Expose Renko settings for testing
             renko: renkoSettingsRef.current ?? null,
             // TV-20.13: Expose LeftToolbar favorites + recents
             leftToolbar: leftToolbarStateRef.current ?? { favorites: [], recents: [] },
+            // TV-20.14: Expose global drawing controls (read from refs for real-time accuracy)
+            drawings: {
+              hidden: drawingsHiddenRef.current,
+              locked: drawingsLockedRef.current,
+            },
             inspectorOpen,
             inspectorTab,
             compareScaleMode,
@@ -2241,17 +2767,23 @@ const fitToContent = useCallback(() => {
             magnet: magnetEnabled,
             snap: snapToClose,
             watermarkVisible: showWatermark,
-            crosshair: {
-              visible: crosshairPosition.visible,
-              x: crosshairPosition.x,
-              y: crosshairPosition.y,
-              price: crosshairPosition.price,
-              time: crosshairPosition.time,
-            },
+            // TV-38.1: crosshair state moved to CrosshairOverlayLayer
+            crosshair: "managed by CrosshairOverlayLayer",
             volumeVisible: showVolume,
             crosshairEnabled: showCrosshair,
             selectedObjectId: selectedId,
+            // TV-39: Layout parity metrics for QA
             layout: {
+              // TV-39.1: Header dimensions (target 48-52px)
+              headerH: toolbarRef.current?.offsetHeight ?? 50,
+              // TV-39.2: Left toolbar dimensions (target 45-50px) - not yet in grid
+              leftW: 48,
+              // TV-39.3: Bottom bar dimensions (target 38-42px)
+              bottomH: 40,
+              // TV-39.4: Right panel dimensions (target 300-360px when expanded)
+              rightW: sidebarCollapsedRef.current ? 0 : (sidebarWidthRef.current ?? 320),
+              rightCollapsed: sidebarCollapsedRef.current,
+              // Legacy fields for backward compatibility
               workspaceMode: workspaceModeRef.current,
               sidebarCollapsed: sidebarCollapsedRef.current,
               sidebarWidth: sidebarWidthRef.current,
@@ -2328,6 +2860,70 @@ const fitToContent = useCallback(() => {
                 }
               })(),
             },
+            // TV-30.1: Floating toolbar state
+            floatingToolbar: (() => {
+              const selectedDrawing = selectedId ? drawings.find(d => d.id === selectedId) : null;
+              if (!selectedDrawing || drawingsHiddenRef.current) return null;
+              const width = containerRef.current?.clientWidth ?? 0;
+              const height = containerRef.current?.clientHeight ?? 0;
+              const handlesPx = computeHandlesPx(
+                selectedDrawing,
+                chartRef.current,
+                candleSeriesRef.current as ISeriesApi<SeriesType> | null,
+                width,
+                height
+              );
+              const bounds = computeSelectionBounds(handlesPx);
+              return {
+                visible: !!bounds,
+                drawingId: selectedDrawing.id,
+                drawingKind: selectedDrawing.kind,
+                bounds: bounds ?? null,
+                style: selectedDrawing.style ?? null,
+                locked: selectedDrawing.locked ?? false,
+              };
+            })(),
+            // TV-30.3: Object settings dialog state
+            objectSettingsDialog: {
+              isOpen: objectSettingsOpenRef.current,
+              drawingId: objectSettingsOpenRef.current && selectedId ? selectedId : null,
+            },
+            // TV-30.4: Create alert dialog state
+            createAlertDialog: {
+              isOpen: createAlertOpenRef.current,
+              drawingId: createAlertOpenRef.current && selectedId ? selectedId : null,
+            },
+            // TV-30.6: Style presets state
+            presets: getAllPresets(),
+            // TV-30.7: Label modal state
+            labelModal: {
+              isOpen: labelModalOpenRef.current,
+              drawingId: labelModalOpenRef.current && selectedId ? selectedId : null,
+            },
+          },
+          // ========== PERFORMANCE METRICS (for debug/QA only) ==========
+          perf: {
+            crosshair: (() => {
+              const metrics = getCrosshairPerfMetrics();
+              return {
+                rawEvents: metrics.crosshairRawEvents,
+                frameCommits: metrics.crosshairFrameCommits,
+                bailouts: metrics.crosshairBailouts,
+                lastHandlerMs: metrics.lastHandlerMs,
+                applyHoverCalls: metrics.applyHoverSnapshotCalls,
+                applyHoverMs: metrics.applyHoverSnapshotMs,
+                // TV-38.1: Track active handlers (should always be 1 in steady state)
+                activeCrosshairHandlers: metrics.activeCrosshairHandlers,
+                // Ratio shows how effective RAF throttling is (should be <<1 when working)
+                commitRatio: metrics.crosshairRawEvents > 0
+                  ? metrics.crosshairFrameCommits / metrics.crosshairRawEvents
+                  : 0,
+                // Bailout rate shows how often we skip work due to same-bar
+                bailoutRate: metrics.crosshairRawEvents > 0
+                  ? metrics.crosshairBailouts / metrics.crosshairRawEvents
+                  : 0,
+              };
+            })(),
           },
           // Objects (drawings) contract
           objects: drawings.map((d) => ({
@@ -2338,14 +2934,34 @@ const fitToContent = useCallback(() => {
             hidden: d.hidden ?? false,
             selected: d.id === selectedId,
             label: d.label ?? null,
+            // TV-30.8: Include z for z-order tests
+            z: d.z,
+            // TV-30: Include style for FloatingToolbar tests
+            style: d.style ?? null,
+            fillColor: (d as any).fillColor ?? null,
+            fillOpacity: (d as any).fillOpacity ?? null,
             points: d.kind === "hline" 
               ? [{ price: d.price }]
               : d.kind === "vline"
               ? [{ timeMs: d.timeMs }]
               : d.kind === "trend"
               ? [{ timeMs: d.p1.timeMs, price: d.p1.price }, { timeMs: d.p2.timeMs, price: d.p2.price }]
+              : d.kind === "ray"
+              ? [{ timeMs: d.p1.timeMs, price: d.p1.price }, { timeMs: d.p2.timeMs, price: d.p2.price }]
+              : d.kind === "extendedLine"
+              ? [{ timeMs: d.p1.timeMs, price: d.p1.price }, { timeMs: d.p2.timeMs, price: d.p2.price }]
               : d.kind === "rectangle"
               ? [{ timeMs: d.p1.timeMs, price: d.p1.price }, { timeMs: d.p2.timeMs, price: d.p2.price }]
+              : d.kind === "circle"
+              ? [{ timeMs: d.p1.timeMs, price: d.p1.price }, { timeMs: d.p2.timeMs, price: d.p2.price }]
+              : d.kind === "ellipse"
+              ? [{ timeMs: d.p1.timeMs, price: d.p1.price }, { timeMs: d.p2.timeMs, price: d.p2.price }]
+              : d.kind === "triangle"
+              ? [{ timeMs: d.p1.timeMs, price: d.p1.price }, { timeMs: d.p2.timeMs, price: d.p2.price }, { timeMs: d.p3.timeMs, price: d.p3.price }]
+              : d.kind === "callout"
+              ? [{ label: "anchor", timeMs: d.anchor.timeMs, price: d.anchor.price }, { label: "box", timeMs: d.box.timeMs, price: d.box.price }]
+              : d.kind === "note"
+              ? [{ label: "anchor", timeMs: d.anchor.timeMs, price: d.anchor.price }]
               : d.kind === "text"
               ? [{ timeMs: d.anchor.timeMs, price: d.anchor.price }]
               : d.kind === "channel"
@@ -2358,13 +2974,61 @@ const fitToContent = useCallback(() => {
               ? [{ timeMs: d.p1.timeMs, price: d.p1.price }, { timeMs: d.p2.timeMs, price: d.p2.price }]
               : d.kind === "pitchfork"
               ? [{ timeMs: d.p1.timeMs, price: d.p1.price }, { timeMs: d.p2.timeMs, price: d.p2.price }, { timeMs: d.p3.timeMs, price: d.p3.price }]
+              : d.kind === "schiffPitchfork"
+              ? [{ timeMs: d.p1.timeMs, price: d.p1.price }, { timeMs: d.p2.timeMs, price: d.p2.price }, { timeMs: d.p3.timeMs, price: d.p3.price }]
+              : d.kind === "modifiedSchiffPitchfork"
+              ? [{ timeMs: d.p1.timeMs, price: d.p1.price }, { timeMs: d.p2.timeMs, price: d.p2.price }, { timeMs: d.p3.timeMs, price: d.p3.price }]
               : d.kind === "flatTopChannel"
               ? [{ timeMs: d.p1.timeMs, price: d.p1.price }, { timeMs: d.p2.timeMs, price: d.p2.price }, { timeMs: d.p3.timeMs, price: d.p3.price }]
               : d.kind === "flatBottomChannel"
               ? [{ timeMs: d.p1.timeMs, price: d.p1.price }, { timeMs: d.p2.timeMs, price: d.p2.price }, { timeMs: d.p3.timeMs, price: d.p3.price }]
+              : d.kind === "fibExtension"
+              ? [{ timeMs: d.p1.timeMs, price: d.p1.price }, { timeMs: d.p2.timeMs, price: d.p2.price }, { timeMs: d.p3.timeMs, price: d.p3.price }]
+              : d.kind === "fibFan"
+              ? [{ timeMs: d.p1.timeMs, price: d.p1.price }, { timeMs: d.p2.timeMs, price: d.p2.price }]
+              : d.kind === "abcd"
+              ? [
+                  { label: "A", timeMs: d.p1.timeMs, price: d.p1.price },
+                  { label: "B", timeMs: d.p2.timeMs, price: d.p2.price },
+                  { label: "C", timeMs: d.p3.timeMs, price: d.p3.price },
+                  { label: "D", timeMs: d.p4.timeMs, price: d.p4.price },
+                ]
+              : d.kind === "headAndShoulders"
+              ? [
+                  { label: "LS", timeMs: d.p1.timeMs, price: d.p1.price },
+                  { label: "Head", timeMs: d.p2.timeMs, price: d.p2.price },
+                  { label: "RS", timeMs: d.p3.timeMs, price: d.p3.price },
+                  { label: "NL1", timeMs: d.p4.timeMs, price: d.p4.price },
+                  { label: "NL2", timeMs: d.p5.timeMs, price: d.p5.price },
+                ]
+              : d.kind === "elliottWave"
+              ? [
+                  { label: "0", timeMs: d.p0.timeMs, price: d.p0.price },
+                  { label: "1", timeMs: d.p1.timeMs, price: d.p1.price },
+                  { label: "2", timeMs: d.p2.timeMs, price: d.p2.price },
+                  { label: "3", timeMs: d.p3.timeMs, price: d.p3.price },
+                  { label: "4", timeMs: d.p4.timeMs, price: d.p4.price },
+                  { label: "5", timeMs: d.p5.timeMs, price: d.p5.price },
+                ]
               : [],
+            // Raw p1/p2 for trend tests
+            ...(d.kind === "trend" && { p1: d.p1, p2: d.p2 }),
+            // Raw p1/p2 for ray tests
+            ...(d.kind === "ray" && { p1: d.p1, p2: d.p2 }),
+            // Raw p1/p2 for extended line tests
+            ...(d.kind === "extendedLine" && { p1: d.p1, p2: d.p2 }),
             // Raw p1/p2 for rectangle tests
             ...(d.kind === "rectangle" && { p1: d.p1, p2: d.p2 }),
+            // Raw p1/p2 for circle tests (p1=center, p2=edge)
+            ...(d.kind === "circle" && { p1: d.p1, p2: d.p2 }),
+            // Raw p1/p2 for ellipse tests (p1=center, p2=bounding corner)
+            ...(d.kind === "ellipse" && { p1: d.p1, p2: d.p2 }),
+            // Raw p1/p2/p3 for triangle tests (3 vertices)
+            ...(d.kind === "triangle" && { p1: d.p1, p2: d.p2, p3: d.p3 }),
+            // TV-26: Callout anchor, box, text for callout tests
+            ...(d.kind === "callout" && { anchor: d.anchor, box: d.box, text: d.text }),
+            // TV-27: Note anchor, text for note tests
+            ...(d.kind === "note" && { anchor: d.anchor, text: d.text }),
             // Text content for text tests
             ...(d.kind === "text" && { content: d.content, anchor: d.anchor }),
             // PriceRange computed values for measure tests
@@ -2398,6 +3062,18 @@ const fitToContent = useCallback(() => {
             }),
             // Pitchfork raw points for pitchfork tests
             ...(d.kind === "pitchfork" && {
+              p1: d.p1,
+              p2: d.p2,
+              p3: d.p3,
+            }),
+            // Schiff Pitchfork raw points for tests
+            ...(d.kind === "schiffPitchfork" && {
+              p1: d.p1,
+              p2: d.p2,
+              p3: d.p3,
+            }),
+            // Modified Schiff Pitchfork raw points for tests
+            ...(d.kind === "modifiedSchiffPitchfork" && {
               p1: d.p1,
               p2: d.p2,
               p3: d.p3,
@@ -2511,6 +3187,63 @@ const fitToContent = useCallback(() => {
                 }));
               })(),
             }),
+            // TV-28.1: FibExtension computed values (3-point: p1=impulse start, p2=impulse end, p3=retracement anchor)
+            ...(d.kind === "fibExtension" && {
+              p1: d.p1,
+              p2: d.p2,
+              p3: d.p3,
+              levels: (() => {
+                // Impulse delta is from p1 to p2
+                const impulseDelta = d.p2.price - d.p1.price;
+                // Extension levels project from p3 (retracement point)
+                const FIB_EXT_RATIOS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.272, 1.618, 2, 2.618, 3.618, 4.236];
+                return FIB_EXT_RATIOS.map(ratio => ({
+                  ratio,
+                  price: d.p3.price + impulseDelta * ratio,
+                }));
+              })(),
+            }),
+            // TV-28.2: FibFan computed values (2-point: p1=anchor, p2=end, rays at fib ratios)
+            ...(d.kind === "fibFan" && {
+              p1: d.p1,
+              p2: d.p2,
+              ratios: [0.236, 0.382, 0.5, 0.618, 0.786],
+            }),
+            // TV-31: ABCD Pattern computed values (4-point: A, B, C, D where D = C + k*(B-A))
+            ...(d.kind === "abcd" && {
+              p1: d.p1,
+              p2: d.p2,
+              p3: d.p3,
+              p4: d.p4,
+              k: d.k,
+            }),
+            // TV-32: Head & Shoulders Pattern computed values (5-point: LS, Head, RS, NL1, NL2)
+            ...(d.kind === "headAndShoulders" && {
+              p1: d.p1,
+              p2: d.p2,
+              p3: d.p3,
+              p4: d.p4,
+              p5: d.p5,
+              inverse: d.inverse,
+            }),
+            // TV-33: Elliott Wave Impulse computed values (6-point: p0=origin, p1-p5=wave ends)
+            ...(d.kind === "elliottWave" && {
+              p0: d.p0,
+              p1: d.p1,
+              p2: d.p2,
+              p3: d.p3,
+              p4: d.p4,
+              p5: d.p5,
+              direction: d.direction,
+            }),
+            // TV-28.0: handlesPx for selected drawing only (enables deterministic drag tests)
+            ...(d.id === selectedId && (() => {
+              const containerEl = containerRef.current;
+              const width = containerEl?.clientWidth ?? 0;
+              const height = containerEl?.clientHeight ?? 0;
+              const hpx = computeHandlesPx(d, chartRef.current, candleSeriesRef.current as ISeriesApi<SeriesType> | null, width, height);
+              return hpx ? { handlesPx: hpx } : {};
+            })()),
           })),
           // Alerts contract (count only for now, full list via API)
           alerts: {
@@ -2573,8 +3306,75 @@ const fitToContent = useCallback(() => {
         csv: () => exportHandlersLocalRef.current.csv?.() ?? null,
       },
       set: (patch) => {
-        if (typeof window !== "undefined" && window.__lwcharts?.set) {
-          return window.__lwcharts.set({ ...patch });
+        if (import.meta.env.DEV) {
+          console.log("[set] called with patch:", JSON.stringify(patch));
+        }
+        // TV-30.8: Handle selectedId specially - update React state via ref for stability
+        if ("selectedId" in patch && patch.selectedId !== undefined) {
+          onSelectDrawingRef.current(patch.selectedId as string | null);
+        }
+        // TV-30.8: Handle activeTool - update via controls store
+        if ("activeTool" in patch && patch.activeTool !== undefined) {
+          useChartControls.getState().setTool(patch.activeTool as any);
+        }
+        // TV-34.1: Handle barSpacing - apply directly to chart (bypass guard)
+        if ("barSpacing" in patch && typeof patch.barSpacing === "number") {
+          const chart = chartRef.current;
+          if (import.meta.env.DEV) console.log("[set barSpacing] chart:", chart ? "exists" : "null", "value:", patch.barSpacing);
+          if (chart) {
+            const clamped = Math.max(1, Math.min(50, patch.barSpacing));
+            barSpacingLockedRef.current = true; // Lock to prevent guard override
+            chart.timeScale().applyOptions({ barSpacing: clamped });
+            barSpacingRef.current = clamped;
+            barSpacingGuardRef.current = clamped;
+            if (import.meta.env.DEV) console.log("[set barSpacing] applied:", clamped);
+          }
+        }
+        // TV-34.2: Handle autoScale - apply directly to chart
+        if ("autoScale" in patch && typeof patch.autoScale === "boolean") {
+          const chart = chartRef.current;
+          if (chart) {
+            const priceScale = chart.priceScale("right");
+            priceScale?.applyOptions({ autoScale: patch.autoScale });
+            onAutoScaleChangeRef.current?.(patch.autoScale); // TV-37.2: Sync UI state via ref
+          }
+        }
+        // TV-34.2: Handle autoFit - trigger auto-fit directly
+        if ("autoFit" in patch && patch.autoFit === true) {
+          const chart = chartRef.current;
+          if (chart) {
+            const priceScale = chart.priceScale("right");
+            priceScale?.applyOptions({ autoScale: true });
+            onAutoScaleChangeRef.current?.(true); // TV-37.2: Sync UI state via ref
+          }
+        }
+        // TV-37.4: Handle timeframe - sync UI state via ref (with validation)
+        if ("timeframe" in patch && typeof patch.timeframe === "string") {
+          const tf = patch.timeframe as Tf;
+          if (TIMEFRAME_VALUE_SET.has(tf)) {
+            if (import.meta.env.DEV) console.log("[set timeframe] calling onTimeframeChangeRef with:", tf);
+            onTimeframeChangeRef.current?.(tf);
+          } else {
+            console.warn(`[set timeframe] invalid timeframe "${tf}", valid values: ${[...TIMEFRAME_VALUE_SET].join(", ")}`);
+          }
+        }
+        // TV-34.1: Handle priceRange - disable autoScale (note: LWC doesn't support setVisibleRange on priceScale)
+        if ("priceRange" in patch && patch.priceRange && typeof patch.priceRange === "object") {
+          const range = patch.priceRange as { from?: number; to?: number };
+          if (typeof range.from === "number" && typeof range.to === "number") {
+            const chart = chartRef.current;
+            if (chart) {
+              const priceScale = chart.priceScale("right");
+              // Disable autoScale - LWC will fit to visible data range
+              priceScale?.applyOptions({ autoScale: false });
+              onAutoScaleChangeRef.current?.(false); // TV-37.2: Sync UI state via ref
+            }
+          }
+        }
+        // Update window.__lwcharts directly with merged properties
+        if (typeof window !== "undefined" && window.__lwcharts) {
+          Object.assign(window.__lwcharts, patch);
+          return window.__lwcharts;
         }
         Object.assign(nextApi, patch);
         return nextApi;
@@ -2595,11 +3395,20 @@ const fitToContent = useCallback(() => {
       delete nextApi.debug;
     }
     const w = window as typeof window;
-    if (w.__lwcharts?.set) {
-      w.__lwcharts.set(nextApi);
-    } else {
-      w.__lwcharts = nextApi;
+    // TV-37.2 FIX: Always assign nextApi directly to ensure our real set() replaces any stub
+    // The stub from main.tsx may intercept set() calls, so we need to overwrite completely
+    // IMPORTANT: Preserve _state which BottomBar uses for dump().ui.bottomBar state
+    const existingState = (w.__lwcharts as Record<string, unknown>)?._state;
+    w.__lwcharts = nextApi;
+    if (existingState && typeof existingState === "object") {
+      (w.__lwcharts as Record<string, unknown>)._state = existingState;
     }
+    // TV-38.1: Expose _perf for direct access (bypasses dump() for lightweight monitoring)
+    // Now uses module-level metrics from CrosshairOverlayLayer
+    (w.__lwcharts as Record<string, unknown>)._perf = {
+      get: () => getCrosshairPerfMetrics(),
+      reset: () => resetCrosshairPerfMetrics(),
+    };
     if (qaDebugEnabled && w.__lwcharts) {
       w.__lwcharts.debug = { ...(w.__lwcharts.debug ?? {}), ...debugApi };
     }
@@ -2622,6 +3431,9 @@ const fitToContent = useCallback(() => {
     selectedId,
     magnetEnabled,
     snapToClose,
+    // onAutoScaleChange: Now uses ref (onAutoScaleChangeRef) for stable access
+    // onSelectDrawing: Now uses ref (onSelectDrawingRef) for stable access
+    // drawingsHidden, drawingsLocked: Removed - now read from refs for real-time accuracy
   ]);
 
   bindTestApiRef.current = bindTestApi;
@@ -3289,11 +4101,12 @@ const fitToContent = useCallback(() => {
     // Update ref for dump() exposure
     baseScaleModeRef.current = lwScaleMode;
 
+    // TV-37.2 FIX: Use priceScaleAutoScale prop (boolean) instead of legacy string comparison
     chart.applyOptions({
       layout: { attributionLogo: false } as any,
       rightPriceScale: {
         mode: lwScaleMode,
-        autoScale: priceScaleMode === "auto",
+        autoScale: priceScaleAutoScale, // Use boolean prop, not legacy priceScaleMode === "auto"
         borderVisible: false,
         alignLabels: true,
         scaleMargins: { top: 0.1, bottom: 0.3 },
@@ -3303,6 +4116,19 @@ const fitToContent = useCallback(() => {
     // TV-21.4a: chartType is now UIChartType which is a subset of ChartType - no cast needed
     const targetType: ChartType = chartType;
     const needsNewSeries = !candleSeriesRef.current || baseSeriesTypeRef.current !== chartType;
+
+    // TV-37.2 OPT: Capture visible range before series swap to prevent flicker
+    let visibleRange: { from: number; to: number } | null = null;
+    if (needsNewSeries) {
+      try {
+        const r = chart.timeScale().getVisibleLogicalRange();
+        if (r && r.from != null && r.to != null) {
+          visibleRange = { from: r.from, to: r.to };
+        }
+      } catch {
+        // Ignore if chart not ready
+      }
+    }
 
     if (needsNewSeries) {
       if (chart && candleSeriesRef.current) {
@@ -3322,6 +4148,17 @@ const fitToContent = useCallback(() => {
       });
       candleSeriesRef.current = next;
       baseSeriesTypeRef.current = chartType;
+
+      // TV-37.2 OPT: Restore visible range after series swap to prevent scroll reset
+      if (visibleRange) {
+        requestAnimationFrame(() => {
+          try {
+            chart.timeScale().setVisibleLogicalRange(visibleRange);
+          } catch {
+            // Ignore if chart destroyed during raf
+          }
+        });
+      }
     } else if (candleSeriesRef.current) {
       const series = candleSeriesRef.current;
       if (chartType === "candles" || chartType === "bars") {
@@ -3363,14 +4200,15 @@ const fitToContent = useCallback(() => {
     try {
       chart.priceScale("right").applyOptions({
         mode: lwScaleMode,
-        autoScale: priceScaleMode === "auto",
+        autoScale: priceScaleAutoScale, // TV-37.2 FIX: Use boolean prop, not legacy string comparison
         borderVisible: false,
         alignLabels: true,
         scaleMargins: { top: 0.1, bottom: 0.3 },
       });
       baseScaleModeRef.current = lwScaleMode;
-    } catch {
-      // no-op if right scale is unavailable
+    } catch (e) {
+      // Log in DEV to help debug scale issues
+      if (import.meta.env.DEV) console.warn("[ensureBaseSeries] priceScale apply failed:", e);
     }
 
     enforceBasePriceScale();
@@ -3379,7 +4217,7 @@ const fitToContent = useCallback(() => {
       scaleMargins: { top: 0.8, bottom: 0 },
     });
     rebindTestApiWithSample();
-  }, [chartType, priceScaleMode, rebindTestApiWithSample, resolveAppearance, theme.volumeNeutral]);
+  }, [chartType, priceScaleMode, priceScaleAutoScale, rebindTestApiWithSample, resolveAppearance, theme.volumeNeutral]);
   ensureBaseSeriesRef.current = ensureBaseSeries;
 
   useEffect(() => {
@@ -3545,31 +4383,47 @@ const fitToContent = useCallback(() => {
   useEffect(() => {
     const chart = chartRef.current;
     if (!chart) return;
+    // TV-35.2: Apply theme with proper typography tokens
     chart.applyOptions({
       layout: {
-        background: { type: ColorType.Solid, color: theme.background },
-        textColor: theme.axisText,
-        fontFamily: theme.fontFamily,
+        background: { type: ColorType.Solid, color: theme.canvas.background },
+        textColor: theme.text.axis,
+        fontFamily: theme.typography.fontFamily.axis,
+        fontSize: theme.typography.fontSize.sm, // 10px for axis labels
         attributionLogo: false as any,
       },
       grid: {
-        horzLines: { color: theme.grid, style: LineStyle.Dotted },
-        vertLines: { color: theme.grid, style: LineStyle.Dotted },
+        horzLines: { 
+          color: theme.canvas.grid, 
+          style: LineStyle.Dotted,
+          visible: true,
+        },
+        vertLines: { 
+          color: theme.canvas.subtleGrid, 
+          style: LineStyle.Dotted,
+          visible: true,
+        },
       },
       crosshair: {
         mode: CrosshairMode.Magnet,
         vertLine: {
-          color: theme.crosshair,
-          width: 1,
+          color: theme.crosshairTokens.line,
+          width: theme.crosshairTokens.width as 1 | 2 | 3 | 4,
           style: LineStyle.Dashed,
           labelVisible: true,
-          labelBackgroundColor: theme.crosshairLabelBg,
+          labelBackgroundColor: theme.crosshairTokens.labelBackground,
         },
         horzLine: {
-          color: theme.crosshair,
+          color: theme.crosshairTokens.line,
           labelVisible: true,
-          labelBackgroundColor: theme.crosshairLabelBg,
+          labelBackgroundColor: theme.crosshairTokens.labelBackground,
         },
+      },
+      rightPriceScale: {
+        borderColor: theme.canvas.grid,
+      },
+      timeScale: {
+        borderColor: theme.canvas.grid,
       },
     });
     enforceBasePriceScale();
@@ -3598,6 +4452,41 @@ const fitToContent = useCallback(() => {
       rebindTestApiWithSample();
     });
   }, [chartSettings, chartType, theme, rebindTestApiWithSample]);
+
+  // TV-23.2 + TV-35.2: Apply Zustand settings store appearance to chart when settings change
+  useEffect(() => {
+    const chart = chartRef.current;
+    const series = candleSeriesRef.current;
+    if (!chart || !chartReady) return;
+
+    // Subscribe to settings store changes
+    const unsubscribe = useSettingsStore.subscribe(
+      (state) => state.settings.appearance,
+      (appearance) => {
+        // Apply chart-level appearance with full theme tokens (TV-35.2)
+        applyAppearanceToChart(chart, appearance, theme);
+
+        // Apply series-level appearance if series exists
+        const currentSeries = candleSeriesRef.current;
+        if (currentSeries) {
+          applyAppearanceToSeries(currentSeries, chartType, appearance);
+        }
+
+        // Update snapshot for dump()
+        appliedAppearanceRef.current = createAppearanceSnapshot(appearance, chartType);
+
+        // Refresh test API
+        queueAfterNextPaint(() => {
+          rebindTestApiWithSample();
+        });
+      },
+      { fireImmediately: true }
+    );
+
+    return () => {
+      unsubscribe();
+    };
+  }, [chartReady, chartType, theme, rebindTestApiWithSample]);
 
   // TV-22.0b: Re-apply base series when renkoSettings change (only in renko mode)
   useEffect(() => {
@@ -3850,52 +4739,12 @@ const fitToContent = useCallback(() => {
     }
   }, [chartReady, data]);
 
-  // Crosshair position tracking for overlay
-  useEffect(() => {
-    const chart = chartRef.current;
-    if (!chart) return;
-    const handler = (param: MouseEventParams<Time>) => {
-      if (!param || !param.time || !param.point) {
-        applyHoverSnapshot(null);
-        setCrosshairPosition({ x: 0, y: 0, price: null, time: null, visible: false });
-        return;
-      }
-      const timeKey = normalizeTimeKey(param.time);
-      applyHoverSnapshot(timeKey ?? null);
-      
-      // Track crosshair position for overlay
-      const bar = timeKey != null ? mainBarByTime.get(timeKey) : null;
-      const price = bar?.close ?? null;
-      
-      // Format time based on timeframe
-      let timeStr: string | null = null;
-      if (typeof param.time === "number") {
-        const date = new Date(param.time * 1000);
-        const tf = timeframeRef.current;
-        if (tf === "1d" || tf === "1w" || tf === "1M") {
-          timeStr = date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-        } else {
-          timeStr = date.toLocaleString("en-US", { 
-            month: "short", 
-            day: "numeric", 
-            hour: "2-digit", 
-            minute: "2-digit",
-            hour12: false 
-          });
-        }
-      }
-      
-      setCrosshairPosition({
-        x: param.point.x,
-        y: param.point.y,
-        price,
-        time: timeStr,
-        visible: true,
-      });
-    };
-    chart.subscribeCrosshairMove(handler);
-    return () => chart.unsubscribeCrosshairMove(handler);
-  }, [chartReady, applyHoverSnapshot, mainBarByTime]);
+  // TV-38.1: Crosshair subscription REMOVED from ChartViewport
+  // Now handled by CrosshairOverlayLayer component, which:
+  // - Owns its own subscription and state
+  // - Isolates crosshair updates from ChartViewport render cycle
+  // - Provides RAF-throttling and bail-early optimization
+  // - Tracks activeCrosshairHandlers for double-subscription detection
 
   const indicatorLegendItems = useMemo(
     () =>
@@ -3953,8 +4802,19 @@ const fitToContent = useCallback(() => {
     return { baseBounds, compares };
   }, [compareItems, compareVersion, debugModeActive]);
 
+  // TV-36.1: Generate CSS custom properties from theme for cascading to all children
+  const themeCssVars = useMemo(() => getThemeCssVars(theme), [theme]);
+
   return (
-    <div ref={rootRef} className="chartspro-root flex h-full flex-col overflow-hidden rounded-lg bg-slate-900/5 dark:bg-slate-900">
+    <div 
+      ref={rootRef} 
+      className="chartspro-root flex h-full flex-col overflow-hidden rounded-lg"
+      style={{
+        ...themeCssVars,
+        backgroundColor: "var(--cp-bg)",
+      }}
+      data-theme={theme.name}
+    >
       <div
         ref={toolbarRef}
         className="flex-none border-b border-slate-800/40 bg-slate-950/40 flex flex-wrap items-center"
@@ -4012,17 +4872,17 @@ const fitToContent = useCallback(() => {
           />
         )}
         
-        {/* Crosshair overlay with testable pills */}
-        {showCrosshair && (
-          <CrosshairOverlay
-            position={crosshairPosition}
-            theme={theme}
-            chartWidth={containerRef.current?.clientWidth ?? 0}
-            chartHeight={containerRef.current?.clientHeight ?? 0}
-            priceScaleWidth={80}
-            timeScaleHeight={30}
-          />
-        )}
+        {/* TV-38.1: Crosshair overlay layer - isolated from ChartViewport render cycle */}
+        <CrosshairOverlayLayer
+          chartRef={chartRef}
+          chartReady={chartReady}
+          theme={theme}
+          containerRef={containerRef}
+          timeframe={timeframe}
+          barByTime={mainBarByTime}
+          showCrosshair={showCrosshair}
+          onHoverSnapshot={applyHoverSnapshot}
+        />
         
         {/* Last price line with countdown */}
         <LastPriceLine
@@ -4091,6 +4951,8 @@ const fitToContent = useCallback(() => {
                 setTool={setTool}
                 onTextCreated={onTextCreated}
                 onTextEdit={onTextEdit}
+                globalHidden={drawingsHidden}
+                globalLocked={drawingsLocked}
               />
             </OverlayCanvasLayer>
             {/* TV-8.2: Alert markers layer – renders dashed lines + bell icons */}
@@ -4102,6 +4964,111 @@ const fitToContent = useCallback(() => {
               onMarkerClick={(alertId) => setSelectedAlertId(alertId)}
               theme={theme.mode}
             />
+            {/* TV-30.1: Floating Toolbar for selected drawing */}
+            {(() => {
+              // Find selected drawing
+              const selectedDrawing = selectedId ? drawings.find(d => d.id === selectedId) : null;
+              if (!selectedDrawing || drawingsHidden) return null;
+
+              // TV-30.1c: Use chartRootRef for positioning since bounds come from chart coordinates
+              const chartEl = chartRootRef.current;
+              const width = chartEl?.clientWidth ?? 0;
+              const height = chartEl?.clientHeight ?? 0;
+              const handlesPx = computeHandlesPx(
+                selectedDrawing, 
+                chartRef.current, 
+                candleSeriesRef.current as ISeriesApi<SeriesType> | null, 
+                width, 
+                height
+              );
+              const bounds = computeSelectionBounds(handlesPx);
+
+              if (!bounds) return null;
+
+              return (
+                <FloatingToolbar
+                  drawing={selectedDrawing}
+                  bounds={bounds}
+                  containerRef={chartRootRef}
+                  drawingsHidden={drawingsHidden}
+                  onUpdateStyle={(stylePatch) => {
+                    const updated = {
+                      ...selectedDrawing,
+                      style: { ...selectedDrawing.style, ...stylePatch } as any,
+                      updatedAt: Date.now(),
+                    };
+                    onUpsertDrawing(updated);
+                  }}
+                  onUpdateFill={(fillColor, fillOpacity) => {
+                    const updated = {
+                      ...selectedDrawing,
+                      fillColor,
+                      fillOpacity: fillOpacity ?? selectedDrawing.fillOpacity ?? 0.10,
+                      updatedAt: Date.now(),
+                    } as any;
+                    onUpsertDrawing(updated);
+                  }}
+                  onToggleLock={() => {
+                    onToggleLock(selectedDrawing.id);
+                  }}
+                  onToggleHidden={() => {
+                    onToggleHide(selectedDrawing.id);
+                  }}
+                  onDelete={() => {
+                    onRemoveDrawing(selectedDrawing.id);
+                  }}
+                  onOpenSettings={() => {
+                    setObjectSettingsOpen(true);
+                  }}
+                  onCreateAlert={() => {
+                    setCreateAlertOpen(true);
+                  }}
+                  onEditLabel={() => {
+                    setLabelModalOpen(true);
+                  }}
+                  onBringToFront={() => {
+                    // TV-30.8: Bring selected drawing to front (max z + 1)
+                    if (drawings.length <= 1) return;
+                    const zValues = drawings.map((d) => Number.isFinite(d.z) ? d.z : 0);
+                    const maxZ = Math.max(...zValues);
+                    const currentZ = Number.isFinite(selectedDrawing.z) ? selectedDrawing.z : 0;
+                    if (currentZ === maxZ) return; // Already at front
+                    const updated = {
+                      ...selectedDrawing,
+                      z: maxZ + 1,
+                      updatedAt: Date.now(),
+                    };
+                    onUpsertDrawing(updated);
+                  }}
+                  onSendToBack={() => {
+                    // TV-30.8: Send selected drawing to back (min z - 1)
+                    if (drawings.length <= 1) return;
+                    const zValues = drawings.map((d) => Number.isFinite(d.z) ? d.z : 0);
+                    const minZ = Math.min(...zValues);
+                    const currentZ = Number.isFinite(selectedDrawing.z) ? selectedDrawing.z : 0;
+                    if (currentZ === minZ) return; // Already at back
+                    const updated = {
+                      ...selectedDrawing,
+                      z: minZ - 1,
+                      updatedAt: Date.now(),
+                    };
+                    onUpsertDrawing(updated);
+                  }}
+                  onApplyPreset={(preset: Preset) => {
+                    // TV-30.6: Apply preset style to selected drawing
+                    const updates = applyPresetToDrawing(preset);
+                    const updated = {
+                      ...selectedDrawing,
+                      style: { ...selectedDrawing.style, ...updates.style } as any,
+                      fillColor: updates.fillColor ?? (selectedDrawing as any).fillColor,
+                      fillOpacity: updates.fillOpacity ?? (selectedDrawing as any).fillOpacity,
+                      updatedAt: Date.now(),
+                    } as any;
+                    onUpsertDrawing(updated);
+                  }}
+                />
+              );
+            })()}
           </div>
         ) : null}
         {lastValueLabels.base || lastValueLabels.compares.length ? (
@@ -4227,6 +5194,57 @@ const fitToContent = useCallback(() => {
         onAction={handleContextMenuAction}
         onClose={handleContextMenuClose}
         theme={theme}
+      />
+      {/* TV-30.3: Object Settings Modal */}
+      <ObjectSettingsModal
+        open={objectSettingsOpen}
+        drawing={selectedDrawing ?? null}
+        onClose={() => setObjectSettingsOpen(false)}
+        onSave={(updated) => {
+          onUpsertDrawing(updated);
+        }}
+        onDelete={() => {
+          if (selectedDrawing) {
+            onRemoveDrawing(selectedDrawing.id);
+            setObjectSettingsOpen(false);
+          }
+        }}
+        onToggleLock={() => {
+          if (selectedDrawing) {
+            onToggleLock(selectedDrawing.id);
+          }
+        }}
+      />
+      {/* TV-30.4: Create Alert Modal */}
+      <CreateAlertModal
+        open={createAlertOpen}
+        drawing={selectedDrawing ?? null}
+        apiBase={apiBase}
+        symbol={symbol}
+        timeframe={timeframe}
+        onClose={() => setCreateAlertOpen(false)}
+        onAlertCreated={() => {
+          void fetchAlerts();
+          setCreateAlertOpen(false);
+        }}
+      />
+      {/* TV-30.7: Label Modal */}
+      <LabelModal
+        open={labelModalOpen}
+        initialLabel={selectedDrawing?.label ?? ""}
+        drawingKind={selectedDrawing?.kind ?? "trend"}
+        onSave={(label) => {
+          if (selectedDrawing) {
+            const updated = {
+              ...selectedDrawing,
+              label,
+              updatedAt: Date.now(),
+            };
+            onUpsertDrawing(updated);
+          }
+          setLabelModalOpen(false);
+        }}
+        onClose={() => setLabelModalOpen(false)}
       />
     </div>
   );

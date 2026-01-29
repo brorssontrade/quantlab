@@ -38,64 +38,110 @@ function formatChange(close: number, prevClose: number | null): { text: string; 
 }
 
 /**
- * TradingView-style OHLC strip that displays in the top-left corner.
+ * TV-35.3: TradingView-style OHLC strip that displays in the top-left corner.
  * Shows symbol, O, H, L, C values with change % on hover.
+ * Uses theme typography tokens for consistent styling.
  */
 export function OhlcStrip({ symbol, timeframe, bar, prevClose, theme, className = "" }: OhlcStripProps) {
+  // TV-35.3: Use theme typography tokens
+  const baseStyle = {
+    fontFamily: theme.typography.fontFamily.mono,
+    fontSize: `${theme.typography.fontSize.md}px`, // 11px for OHLC values
+    lineHeight: theme.typography.lineHeight.normal,
+  };
+
+  const labelStyle = {
+    ...baseStyle,
+    color: theme.text.muted,
+    fontSize: `${theme.typography.fontSize.sm}px`, // 10px for labels
+    fontWeight: theme.typography.fontWeight.normal,
+  };
+
+  const symbolStyle = {
+    fontFamily: theme.typography.fontFamily.primary,
+    fontSize: `${theme.typography.fontSize.lg}px`, // 12px for symbol name
+    fontWeight: theme.typography.fontWeight.semibold,
+    color: theme.text.primary,
+  };
+
+  const timeframeStyle = {
+    fontFamily: theme.typography.fontFamily.primary,
+    fontSize: `${theme.typography.fontSize.sm}px`,
+    color: theme.text.muted,
+    marginLeft: `${theme.spacing.sm}px`,
+  };
+
   if (!bar) {
     return (
       <div
         data-testid="chartspro-ohlc-strip"
         className={`chartspro-ohlc-strip ${className}`}
+        style={{ display: "flex", alignItems: "center", gap: `${theme.spacing.md}px` }}
       >
-        <span className="chartspro-ohlc-strip__symbol">{symbol}</span>
-        <span className="chartspro-ohlc-strip__timeframe">{timeframe}</span>
+        <span style={symbolStyle}>{symbol}</span>
+        <span style={timeframeStyle}>{timeframe}</span>
       </div>
     );
   }
 
   const changeInfo = formatChange(bar.close, prevClose);
-  const changeColor = changeInfo.isPositive ? theme.candleUp : theme.candleDown;
-  const ohlcColor = bar.close >= bar.open ? theme.candleUp : theme.candleDown;
+  const changeColor = changeInfo.isPositive ? theme.candle.upColor : theme.candle.downColor;
+  const ohlcColor = bar.close >= bar.open ? theme.candle.upColor : theme.candle.downColor;
+
+  const valueStyle = {
+    ...baseStyle,
+    color: ohlcColor,
+    fontWeight: theme.typography.fontWeight.medium,
+  };
 
   return (
     <div
       data-testid="chartspro-ohlc-strip"
       className={`chartspro-ohlc-strip ${className}`}
+      style={{ 
+        display: "flex", 
+        alignItems: "center", 
+        gap: `${theme.spacing.xs}px`,
+        flexWrap: "wrap",
+      }}
     >
-      <span className="chartspro-ohlc-strip__symbol">{symbol}</span>
-      <span className="chartspro-ohlc-strip__timeframe">{timeframe}</span>
+      <span style={symbolStyle}>{symbol}</span>
+      <span style={timeframeStyle}>{timeframe}</span>
       
-      <span className="chartspro-ohlc-strip__label">O</span>
-      <span className="chartspro-ohlc-strip__value" style={{ color: ohlcColor }}>
+      <span style={{ ...labelStyle, marginLeft: `${theme.spacing.md}px` }}>O</span>
+      <span style={valueStyle}>
         {formatOhlcValue(bar.open)}
       </span>
       
-      <span className="chartspro-ohlc-strip__label">H</span>
-      <span className="chartspro-ohlc-strip__value" style={{ color: ohlcColor }}>
+      <span style={labelStyle}>H</span>
+      <span style={valueStyle}>
         {formatOhlcValue(bar.high)}
       </span>
       
-      <span className="chartspro-ohlc-strip__label">L</span>
-      <span className="chartspro-ohlc-strip__value" style={{ color: ohlcColor }}>
+      <span style={labelStyle}>L</span>
+      <span style={valueStyle}>
         {formatOhlcValue(bar.low)}
       </span>
       
-      <span className="chartspro-ohlc-strip__label">C</span>
-      <span className="chartspro-ohlc-strip__value" style={{ color: ohlcColor }}>
+      <span style={labelStyle}>C</span>
+      <span style={valueStyle}>
         {formatOhlcValue(bar.close)}
       </span>
       
       <span
-        className="chartspro-ohlc-strip__change"
-        style={{ color: changeColor }}
+        style={{ 
+          ...baseStyle,
+          color: changeColor,
+          fontWeight: theme.typography.fontWeight.medium,
+          marginLeft: `${theme.spacing.sm}px`,
+        }}
         data-testid="chartspro-ohlc-change"
       >
         {changeInfo.text}
       </span>
       
-      <span className="chartspro-ohlc-strip__label">Vol</span>
-      <span className="chartspro-ohlc-strip__volume">
+      <span style={{ ...labelStyle, marginLeft: `${theme.spacing.md}px` }}>Vol</span>
+      <span style={{ ...baseStyle, color: theme.text.secondary }}>
         {formatVolume(bar.volume)}
       </span>
     </div>

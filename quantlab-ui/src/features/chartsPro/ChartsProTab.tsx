@@ -3,10 +3,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
+// TV-39.11: Import TradingView tokens for full-viewport mode
+import "./tv-tokens.css";
+
 import { TopBar } from "./components/TopBar";
+import { TVCompactHeader } from "./components/TopBar/TVCompactHeader";
 import { ChartViewport } from "./components/ChartViewport";
 import { BottomBar } from "./components/BottomBar";
 import { LeftToolbar } from "./components/LeftToolbar/LeftToolbar";
+import { TVLayoutShell, TV_LAYOUT } from "./components/TVLayoutShell";
+import { TVRightRail, type RailTab } from "./components/TVLayoutShell/TVRightRail";
 import { useFavoritesRecents, type LeftToolbarState } from "./components/LeftToolbar/useFavoritesRecents";
 import { ObjectTree } from "./components/ObjectTree";
 import { IndicatorPanel } from "./components/IndicatorPanel";
@@ -16,13 +22,15 @@ import { IndicatorsTab } from "./components/RightPanel/IndicatorsTab";
 import { ObjectsTab } from "./components/RightPanel/ObjectsTab";
 import { AlertsTab } from "./components/RightPanel/AlertsTab";
 import { SettingsPanel, type ChartSettings, DEFAULT_SETTINGS } from "./components/TopBar/SettingsPanel";
+import { SettingsDialog } from "./components/Modal/SettingsDialog";
+import { useSettingsStore } from "./state/settings";
 import { LayoutManager, type SavedLayout } from "./components/TopBar/LayoutManager";
 import { ApiStatusBadge } from "./components/ApiStatusBadge";
 import { ModalPortal } from "./components/Modal/ModalPortal";
 import { IndicatorsModal } from "./components/Modal/IndicatorsModal";
 import { TextModal } from "./components/Modal/TextModal";
 import { RenkoSettingsModal } from "./components/Modal/RenkoSettingsModal";
-import { useOhlcvQuery } from "./hooks/useOhlcv";
+import { useOhlcvQuery, fetchOhlcvSeries } from "./hooks/useOhlcv";
 import { getLastHealthCheck, setQAForceDataMode } from "./runtime/dataClient";
 import type { LwChartsApi } from "./qaTypes";
 import { type UIChartType } from "./runtime/seriesFactory";
@@ -39,9 +47,12 @@ import {
   type ChartTimeframe,
   useChartControls,
 } from "./state/controls";
-import type { ChartThemeName, Tf } from "./types";
+import { VALID_TOOL_IDS } from "./components/LeftToolbar/toolRegistry";
+import type { ChartThemeName, NormalizedBar, Tf } from "./types";
 import { getChartTheme } from "./theme";
 import { useDrawingsStore } from "./state/drawings";
+import { createDataBounds } from "./utils/rangePresets";
+import type { BackfillRequest } from "./components/BottomBar";
 
 interface ChartsProTabProps {
   apiBase: string;
@@ -284,7 +295,8 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
   const [settings, setSettings] = useState<ChartSettings>(() => loadSettings());
   // TV-22.0a: Renko settings state with localStorage persistence
   const [renkoSettings, setRenkoSettingsState] = useState<RenkoSettings>(() => loadRenkoSettings());
-  const [settingsPanelOpen, setSettingsPanelOpen] = useState(false);
+  // TV-23.1: Settings dialog uses Zustand store
+  const { isDialogOpen: settingsDialogOpen, openDialog: openSettingsDialog, closeDialog: closeSettingsDialog } = useSettingsStore();
   const [layoutManagerOpen, setLayoutManagerOpen] = useState(false);
   // TV-19.3: Timezone ID (IANA format) - controlled by ChartsProTab, passed to BottomBar
   const [timezoneId, setTimezoneId] = useState<"UTC" | "Europe/Stockholm" | "America/New_York">(() => {
@@ -297,15 +309,25 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
       return "UTC";
     }
   });
-  // TV-19.4: Scale mode (auto/log/percent) - controlled by ChartsProTab
-  const [scaleMode, setScaleMode] = useState<"auto" | "log" | "percent">(() => {
-    if (typeof window === "undefined") return "auto";
+  // TV-37.2: Separate autoScale (toggle) and scaleMode (linear/log/percent)
+  const [autoScale, setAutoScale] = useState<boolean>(() => {
+    if (typeof window === "undefined") return true;
+    try {
+      const stored = window.localStorage?.getItem("cp.bottomBar.autoScale");
+      // Default true if not set
+      return stored !== "false";
+    } catch {
+      return true;
+    }
+  });
+  const [scaleMode, setScaleMode] = useState<"linear" | "log" | "percent">(() => {
+    if (typeof window === "undefined") return "linear";
     try {
       const stored = window.localStorage?.getItem("cp.bottomBar.scaleMode");
       if (stored === "log" || stored === "percent") return stored;
-      return "auto";
+      return "linear";
     } catch {
-      return "auto";
+      return "linear";
     }
   });
   // TV-18.1: Modal state (central portal for indicators/other modals)
@@ -347,6 +369,50 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
     dumpState: leftToolbarState,
     initialized: leftToolbarInitialized,
   } = useFavoritesRecents();
+
+  // TV-20.14: Drawing controls state (Lock All / Hide All)
+  const DRAWINGS_CONTROLS_KEY = "cp.drawings.controls";
+  const [drawingsLocked, setDrawingsLocked] = useState(() => {
+    try {
+      const stored = window.localStorage?.getItem(DRAWINGS_CONTROLS_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return Boolean(parsed.locked);
+      }
+    } catch { /* ignore */ }
+    return false;
+  });
+  const [drawingsHidden, setDrawingsHidden] = useState(() => {
+    try {
+      const stored = window.localStorage?.getItem(DRAWINGS_CONTROLS_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return Boolean(parsed.hidden);
+      }
+    } catch { /* ignore */ }
+    return false;
+  });
+
+  // TV-20.14: Persist drawing controls to localStorage
+  useEffect(() => {
+    try {
+      window.localStorage?.setItem(DRAWINGS_CONTROLS_KEY, JSON.stringify({
+        locked: drawingsLocked,
+        hidden: drawingsHidden,
+      }));
+    } catch { /* ignore */ }
+  }, [drawingsLocked, drawingsHidden]);
+
+  // TV-20.14: Toggle callbacks
+  const handleToggleDrawingsLocked = useCallback(() => {
+    setDrawingsLocked((prev) => !prev);
+  }, []);
+
+  const handleToggleDrawingsHidden = useCallback(() => {
+    setDrawingsHidden((prev) => !prev);
+  }, []);
+
+  // NOTE: handleRemoveAllDrawings moved after drawingsStore initialization (see below)
 
   const controls = useChartControls();
   
@@ -435,9 +501,19 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
     }
   }, []);
 
-  // TV-19.4: Handle scale mode change (auto/log/percent)
+  // TV-37.2: Handle autoScale toggle
+  const handleAutoScaleChange = useCallback((enabled: boolean) => {
+    setAutoScale(enabled);
+    try {
+      window.localStorage?.setItem("cp.bottomBar.autoScale", enabled ? "true" : "false");
+    } catch {
+      // ignore storage errors
+    }
+  }, []);
+
+  // TV-37.2: Handle scale mode change (linear/log/percent)
   const handleScaleModeChange = useCallback((mode: string) => {
-    const validMode = mode === "log" || mode === "percent" ? mode : "auto";
+    const validMode = (mode === "log" || mode === "percent") ? mode as "log" | "percent" : "linear";
     setScaleMode(validMode);
     try {
       window.localStorage?.setItem("cp.bottomBar.scaleMode", validMode);
@@ -580,9 +656,83 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
     mock: mockMode,
   });
 
+  // TV-37.2: Backfill state for range presets (windowed fetch)
+  const [backfillData, setBackfillData] = useState<NormalizedBar[]>([]);
+  const [backfillLoading, setBackfillLoading] = useState(false);
+  const backfillControllerRef = useRef<AbortController | null>(null);
+
+  // Reset backfill when symbol or timeframe changes
+  useEffect(() => {
+    setBackfillData([]);
+    backfillControllerRef.current?.abort();
+    backfillControllerRef.current = null;
+  }, [symbol, timeframe]);
+
+  // Merge hook data with backfill, dedupe by time, sort ascending
+  const mergedData = useMemo(() => {
+    if (backfillData.length === 0) return data;
+    const map = new Map<number, NormalizedBar>();
+    // Backfill data first (older)
+    for (const bar of backfillData) {
+      map.set(bar.time as number, bar);
+    }
+    // Then hook data (newer, overwrites if duplicate)
+    for (const bar of data) {
+      map.set(bar.time as number, bar);
+    }
+    const merged = Array.from(map.values());
+    merged.sort((a, b) => (a.time as number) - (b.time as number));
+    return merged;
+  }, [data, backfillData]);
+
+  // TV-37.2: Backfill handler for range presets
+  const handleBackfillRequest = useCallback(
+    async (request: BackfillRequest) => {
+      if (mockMode) {
+        // Mock mode: no backfill needed, data is synthetic
+        if (import.meta.env.DEV) console.log("[Backfill] Skipped in mock mode");
+        return;
+      }
+      backfillControllerRef.current?.abort();
+      const controller = new AbortController();
+      backfillControllerRef.current = controller;
+      setBackfillLoading(true);
+      try {
+        if (import.meta.env.DEV) {
+          console.log("[Backfill] Request:", request.preset, request.startIso, "→", request.endIso);
+        }
+        const rows = await fetchOhlcvSeries({
+          apiBase,
+          symbol,
+          timeframe,
+          start: request.startIso,
+          end: request.endIso,
+          limit: 5000,
+          signal: controller.signal,
+        });
+        if (controller.signal.aborted) return;
+        if (import.meta.env.DEV) {
+          console.log("[Backfill] Received", rows.length, "rows");
+        }
+        setBackfillData(rows);
+      } catch (err) {
+        if ((err as Error)?.name === "AbortError") return;
+        console.error("[Backfill] Error:", err);
+      } finally {
+        if (!controller.signal.aborted) setBackfillLoading(false);
+      }
+    },
+    [apiBase, symbol, timeframe, mockMode]
+  );
+
   const theme = useMemo(() => getChartTheme(themeName), [themeName]);
   const drawingsStore = useDrawingsStore(symbol, timeframe as Tf);
   const { undo, redo } = drawingsStore;
+
+  // TV-20.14: Remove all drawings callback (must be after drawingsStore init)
+  const handleRemoveAllDrawings = useCallback(() => {
+    drawingsStore.clearAll();
+  }, [drawingsStore]);
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -660,32 +810,90 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
         handleTimeframeChange(patch.timeframe as ChartTimeframe);
       }
       // Allow QA to set the active drawing tool
+      // P3: Use VALID_TOOL_IDS from registry (single source of truth)
       const nextTool = (patch as any)?.activeTool ?? (patch as any)?.tool;
-      if (typeof nextTool === "string") {
-        const validTools = new Set(["select", "hline", "vline", "trendline", "channel", "rectangle", "text", "priceRange", "dateRange", "dateAndPriceRange", "fibRetracement", "pitchfork", "flatTopChannel", "flatBottomChannel", "regressionTrend"]);
-        if (validTools.has(nextTool)) {
-          controls.setTool(nextTool as any);
+      if (typeof nextTool === "string" && VALID_TOOL_IDS.includes(nextTool)) {
+        controls.setTool(nextTool as any);
+      }
+      // TV-34.1: Handle barSpacing via _applyPatch
+      if (typeof (patch as any)?.barSpacing === "number") {
+        const chart = chartRef.current;
+        if (chart) {
+          const clamped = Math.max(1, Math.min(50, (patch as any).barSpacing));
+          chart.timeScale().applyOptions({ barSpacing: clamped });
+          if (import.meta.env.DEV) console.log("[_applyPatch] barSpacing applied:", clamped);
+        }
+      }
+      // TV-34.2: Handle autoScale via _applyPatch
+      if (typeof (patch as any)?.autoScale === "boolean") {
+        const chart = chartRef.current;
+        if (chart) {
+          const priceScale = chart.priceScale("right");
+          priceScale?.applyOptions({ autoScale: (patch as any).autoScale });
+        }
+      }
+      // TV-34.2: Handle autoFit via _applyPatch
+      if ((patch as any)?.autoFit === true) {
+        const chart = chartRef.current;
+        if (chart) {
+          const priceScale = chart.priceScale("right");
+          priceScale?.applyOptions({ autoScale: true });
+          if (import.meta.env.DEV) console.log("[_applyPatch] autoFit applied");
         }
       }
     };
     const patch: Partial<LwChartsApi> = {
       set: (payload?: Record<string, unknown>) => {
+        console.log("[QA:set ChartsProTab] called with:", JSON.stringify(payload));
         if (!payload) return window.__lwcharts as LwChartsApi;
         // symbol/timeframe handling
         if (typeof payload.symbol === "string") {
           handleSymbolChange(payload.symbol as string);
         }
         if (typeof payload.timeframe === "string") {
+          console.log("[QA:set] payload.timeframe:", payload.timeframe, "timeframeSet has:", timeframeSet.has(payload.timeframe as ChartTimeframe));
           if (timeframeSet.has(payload.timeframe as ChartTimeframe)) {
+            console.log("[QA:set] calling handleTimeframeChange with:", payload.timeframe);
             handleTimeframeChange(payload.timeframe as ChartTimeframe);
+            console.log("[QA:set] handleTimeframeChange returned");
           } else {
             console.warn("[ChartsPro] Ignorerar ogiltigt timeframe", payload.timeframe);
           }
         }
         if (typeof (payload as any).activeTool === "string" || typeof (payload as any).tool === "string") {
           const tool = ((payload as any).activeTool ?? (payload as any).tool) as string;
-          const validTools = new Set(["select", "hline", "vline", "trendline", "channel", "rectangle", "text", "priceRange", "dateRange", "dateAndPriceRange", "fibRetracement", "pitchfork", "flatTopChannel", "flatBottomChannel", "regressionTrend"]);
-          if (validTools.has(tool)) controls.setTool(tool as any);
+          // P3: Use VALID_TOOL_IDS from registry (single source of truth)
+          if (VALID_TOOL_IDS.includes(tool)) controls.setTool(tool as any);
+        }
+        // TV-30.1: QA API support for selecting drawings by ID
+        if (typeof (payload as any).selectedId !== "undefined") {
+          const id = (payload as any).selectedId;
+          drawingsStore.selectDrawing(typeof id === "string" ? id : null);
+        }
+        // TV-34.1: QA API support for barSpacing
+        if (typeof (payload as any).barSpacing === "number") {
+          const chart = chartRef.current;
+          if (chart) {
+            const clamped = Math.max(1, Math.min(50, (payload as any).barSpacing));
+            chart.timeScale().applyOptions({ barSpacing: clamped });
+            if (import.meta.env.DEV) console.log("[QA:set] barSpacing applied:", clamped);
+          }
+        }
+        // TV-34.2: QA API support for autoScale
+        if (typeof (payload as any).autoScale === "boolean") {
+          const chart = chartRef.current;
+          if (chart) {
+            const priceScale = chart.priceScale("right");
+            priceScale?.applyOptions({ autoScale: (payload as any).autoScale });
+          }
+        }
+        // TV-34.2: QA API support for autoFit
+        if ((payload as any).autoFit === true) {
+          const chart = chartRef.current;
+          if (chart) {
+            const priceScale = chart.priceScale("right");
+            priceScale?.applyOptions({ autoScale: true });
+          }
         }
         // inspector patch: dispatch event so chart viewport can react
         const hasInspectorOpen = typeof payload.inspectorOpen !== "undefined";
@@ -739,7 +947,11 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
 
   return (
     <div
-      className={workspaceMode ? "flex min-h-0 flex-1 flex-col overflow-hidden" : "space-y-4"}
+      className={workspaceMode 
+        ? "tv-fullscreen flex flex-col overflow-hidden" 
+        : "space-y-4"}
+      data-testid="chartspro-root"
+      data-fullscreen={workspaceMode ? "true" : "false"}
     >
       {!workspaceMode && (
         <>
@@ -768,24 +980,26 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
         </>
       )}
 
-      <Card className={workspaceMode ? "flex flex-col flex-1 min-h-0 border-0 shadow-none" : ""}>
+      <Card className={workspaceMode ? "flex flex-col flex-1 min-h-0 border-0 shadow-none bg-transparent" : ""}>
         {!workspaceMode && (
           <CardHeader>
             <CardTitle>Live chart</CardTitle>
           </CardHeader>
         )}
         <CardContent className={workspaceMode ? "flex flex-col flex-1 min-h-0 p-0" : "space-y-4"}>
-          <div className={workspaceMode ? "flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-slate-900/40 border-b border-slate-800/60" : "flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400"}>
-            <div className="flex items-center gap-4">
-              <button
-                type="button"
-                onClick={toggleWorkspaceMode}
-                className="px-2 py-1 text-xs font-medium rounded hover:bg-slate-800/60 transition"
-                title={workspaceMode ? "Exit workspace mode" : "Enter workspace mode"}
-                data-testid="workspace-toggle-btn"
-              >
-                {workspaceMode ? "📐 Workspace" : "📋 Info"}
-              </button>
+          {/* TV-39.11: Hide mode toggle in full viewport - integrate into header if needed */}
+          {!workspaceMode && (
+            <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400">
+              <div className="flex items-center gap-4">
+                <button
+                  type="button"
+                  onClick={toggleWorkspaceMode}
+                  className="px-2 py-1 text-xs font-medium rounded hover:bg-slate-800/60 transition"
+                  title="Enter workspace mode"
+                  data-testid="workspace-toggle-btn"
+                >
+                  📋 Info
+                </button>
               {exposeQa ? (
                 <div className="flex items-center gap-2">
                   <span className="uppercase tracking-wide text-slate-500">Data source</span>
@@ -829,48 +1043,13 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
             {debugMode ? (
               <span className="text-[11px] font-semibold uppercase tracking-wide text-amber-300">Debug overlay</span>
             ) : null}
-          </div>
-          <TopBar
-            symbol={symbol}
-            onSymbolChange={handleSymbolChange}
-            timeframe={timeframe}
-            onTimeframeChange={handleTimeframeChange}
-            chartType={chartType}
-            onChartTypeChange={handleChartTypeChange}
-            onSettingsClick={() => setSettingsPanelOpen(true)}
-            onRenkoSettingsClick={handleRenkoSettingsClick}
-            onIndicatorsClick={handleIndicatorsClick}
-            onAlertsClick={handleAlertsClick}
-            onObjectsClick={handleObjectsClick}
-            theme={themeName}
-            onThemeChange={handleThemeChange}
-            magnetEnabled={controls.magnet}
-            snapEnabled={controls.snap}
-            onMagnetToggle={controls.toggleMagnet}
-            onSnapToggle={controls.toggleSnap}
-            onSaveLayout={handleSaveLayout}
-            onLoadLayout={handleLoadLayout}
-            onExportPng={() => {
-              void handleExportPng();
-            }}
-            onExportCsv={() => {
-              void handleExportCsv();
-            }}
-            loading={loading}
-            onReload={reload}
-            meta={meta}
-            isCompact={isToolbarCompact}
-            showPanelsButton={isMobile}
-            onOpenPanelsDrawer={() => {
-              setSidebarCollapsed(true);
-              setMobileSidebarOpen(true);
-            }}
-          />
+            </div>
+          )}
           
-          {/* Settings Panel Overlay (TV-10.2) */}
+          {/* Legacy Settings Panel Overlay (TV-10.2) - kept for backwards compatibility */}
           <SettingsPanel
-            isOpen={settingsPanelOpen}
-            onClose={() => setSettingsPanelOpen(false)}
+            isOpen={false}
+            onClose={() => {}}
             settings={settings}
             onChange={(newSettings) => {
               setSettings(newSettings);
@@ -922,22 +1101,62 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
           <div
             className={
               workspaceMode
-                ? `flex ${isMobile ? "flex-col" : "flex-row"} flex-1 min-h-0`
+                ? "flex-1 min-h-0"
                 : "grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]"
             }
-            style={workspaceMode ? { gap: "var(--cp-gap)" } : undefined}
             data-testid="chartspro-workspace"
+            data-workspace-mode={workspaceMode ? "true" : "false"}
+            data-right-panel-active-tab={rightPanelActiveTab ?? "null"}
           >
-            {/* TV-4 Shell Layout */}
-            <div
-              className={workspaceMode ? "tv-shell flex-1 min-w-0 rounded-[var(--cp-radius)] bg-slate-900/30" : "tv-shell"}
-              data-testid="tv-shell"
-            >
-              {/* Top Bar */}
-              <div className="tv-topbar" data-testid="tv-topbar" />
-              
-              {/* Left Bar */}
-              <div className="tv-leftbar" data-testid="tv-leftbar">
+            {/* TV-39: Integrated TVLayoutShell - TradingView Supercharts layout parity */}
+            <TVLayoutShell
+              className={workspaceMode ? "flex-1 min-w-0" : ""}
+              rightPanelCollapsed={rightPanelActiveTab === null}
+              dataTheme={themeName}
+              showRightRail={workspaceMode}
+              header={
+                <TVCompactHeader
+                  symbol={symbol}
+                  onSymbolChange={handleSymbolChange}
+                  timeframe={timeframe}
+                  onTimeframeChange={handleTimeframeChange}
+                  chartType={chartType}
+                  onChartTypeChange={handleChartTypeChange}
+                  onSettingsClick={openSettingsDialog}
+                  onRenkoSettingsClick={handleRenkoSettingsClick}
+                  onIndicatorsClick={handleIndicatorsClick}
+                  onAlertsClick={handleAlertsClick}
+                  onObjectsClick={handleObjectsClick}
+                  theme={themeName}
+                  onThemeChange={handleThemeChange}
+                  magnetEnabled={controls.magnet}
+                  onMagnetToggle={controls.toggleMagnet}
+                  snapEnabled={controls.snap}
+                  onSnapToggle={controls.toggleSnap}
+                  onSaveLayout={handleSaveLayout}
+                  onLoadLayout={handleLoadLayout}
+                  onExportPng={() => { void handleExportPng(); }}
+                  onExportCsv={() => { void handleExportCsv(); }}
+                  loading={loading}
+                  onReload={reload}
+                  meta={meta}
+                  // API Status (PRIO 1 - integrated into header)
+                  apiStatus={getLastHealthCheck()?.ok ? "online" : getLastHealthCheck() === null ? "checking" : "offline"}
+                  dataMode={mockMode ? "mock" : "live"}
+                  onDataModeChange={(newMode) => {
+                    if (newMode === "live") {
+                      const health = getLastHealthCheck();
+                      if (!health?.ok) {
+                        toast.error("API is offline. Using demo data.");
+                        return;
+                      }
+                    }
+                    setMockMode(newMode === "mock");
+                  }}
+                  onInfoClick={toggleWorkspaceMode}
+                />
+              }
+              leftToolbar={
                 <LeftToolbar
                   activeTool={controls.tool}
                   onSelectTool={(tool) => {
@@ -946,60 +1165,37 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
                   favorites={favorites}
                   recents={recents}
                   onToggleFavorite={toggleFavorite}
+                  drawingsLocked={drawingsLocked}
+                  drawingsHidden={drawingsHidden}
+                  onToggleDrawingsLocked={handleToggleDrawingsLocked}
+                  onToggleDrawingsHidden={handleToggleDrawingsHidden}
+                  onRemoveAllDrawings={handleRemoveAllDrawings}
                 />
-              </div>
-              
-              {/* Center Chart Root */}
-              <div className="tv-chart-root" data-testid="tv-chart-root">
-                <ChartViewport
-                  apiBase={apiBase}
-                  data={data}
-                  meta={meta}
-                  theme={theme}
-                  loading={loading}
-                  symbol={symbol}
-                  timeframe={timeframe as Tf}
-                  chartType={chartType}
-                  chartSettings={settings}
-                  renkoSettings={renkoSettings}
-                  priceScaleMode={scaleMode}
-                  drawings={drawingsStore.drawings}
-                  selectedId={drawingsStore.selectedId}
-                  indicators={drawingsStore.indicators}
-                  magnetEnabled={controls.magnet}
-                  snapToClose={controls.snap}
-                  onSelectDrawing={drawingsStore.selectDrawing}
-                  onUpsertDrawing={drawingsStore.upsertDrawing}
-                  onRemoveDrawing={drawingsStore.removeDrawing}
-                  duplicateDrawing={drawingsStore.duplicateDrawing}
-                  onToggleLock={drawingsStore.toggleLock}
-                  onToggleHide={drawingsStore.toggleHidden}
-                  onUpdateIndicator={drawingsStore.updateIndicator}
-                  onTextCreated={(drawingId) => setEditingTextId(drawingId)}
-                  onTextEdit={(drawingId) => setEditingTextId(drawingId)}
-                  registerExports={(handlers) => {
-                    exportHandlersRef.current = handlers;
+              }
+              rightRail={
+                <TVRightRail
+                  activeTab={rightPanelActiveTab as RailTab | null}
+                  onTabChange={(tab) => {
+                    // If clicking same tab, toggle panel
+                    if (tab === rightPanelActiveTab) {
+                      setRightPanelActiveTab(null);
+                    } else {
+                      // Open panel with this tab
+                      setRightPanelActiveTab(tab as "indicators" | "objects" | "alerts");
+                    }
                   }}
-                  onChartReady={(chart) => {
-                    chartRef.current = chart;
+                  panelCollapsed={rightPanelActiveTab === null}
+                  onTogglePanel={() => {
+                    if (rightPanelActiveTab === null) {
+                      setRightPanelActiveTab("indicators");
+                    } else {
+                      setRightPanelActiveTab(null);
+                    }
                   }}
-                  mockMode={mockMode}
-                  debugMode={debugMode}
-
-                  workspaceMode={workspaceMode}
-                  sidebarCollapsed={sidebarCollapsed}
-                  sidebarWidth={sidebarWidth}
-                  rightPanelActiveTab={workspaceMode ? rightPanelActiveTab : null}
-                  
-                  modalOpen={modalState.open || editingTextId !== null}
-                  modalKind={editingTextId !== null ? "text" : modalState.kind}
-                  leftToolbarState={leftToolbarState}
                 />
-              </div>
-              
-              {/* Right Bar */}
-              <div className="tv-rightbar" data-testid="tv-rightbar">
-                {workspaceMode ? (
+              }
+              rightPanel={
+                workspaceMode ? (
                   <TabsPanel
                     indicatorsPanel={
                       <IndicatorsTab
@@ -1037,30 +1233,86 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
                     }
                     activeTab={rightPanelActiveTab}
                     onChangeActiveTab={(tab) => setRightPanelActiveTab(tab)}
-                    collapsed={sidebarCollapsed}
-                    onToggleCollapsed={toggleSidebar}
+                    collapsed={rightPanelActiveTab === null}
+                    onToggleCollapsed={() => {
+                      if (rightPanelActiveTab === null) {
+                        setRightPanelActiveTab("indicators");
+                      } else {
+                        setRightPanelActiveTab(null);
+                      }
+                    }}
                     isDesktop={isDesktop}
                   />
-                ) : null}
-              </div>
-              
-              {/* Bottom Bar */}
-              <BottomBar 
-                chart={chartRef.current}
-                dataBounds={data?.length > 0 ? {
-                  firstBarTime: Number(data[0].time),
-                  lastBarTime: Number(data[data.length - 1].time),
-                  dataCount: data.length,
-                  barTimes: data.map(d => Number(d.time)),
-                } : undefined}
-                timezoneId={timezoneId}
-                onTimezoneChange={handleTimezoneChange}
-                marketStatus={loading ? "LOADING" : mode === "live" ? "LIVE" : mode === "demo" ? "DEMO" : "OFFLINE"}
-                exchangeCode={symbol?.includes(".") ? symbol.split(".")[1] : undefined}
-                scaleMode={scaleMode}
-                onScaleModeChange={handleScaleModeChange}
+                ) : null
+              }
+              bottomBar={
+                <BottomBar 
+                  chart={chartRef.current}
+                  dataBounds={mergedData?.length > 0 
+                    ? createDataBounds(mergedData.map(d => Number(d.time))) ?? undefined
+                    : undefined
+                  }
+                  timezoneId={timezoneId}
+                  onTimezoneChange={handleTimezoneChange}
+                  marketStatus={loading || backfillLoading ? "LOADING" : mode === "live" ? "LIVE" : mode === "demo" ? "DEMO" : "OFFLINE"}
+                  exchangeCode={symbol?.includes(".") ? symbol.split(".")[1] : undefined}
+                  autoScale={autoScale}
+                  onAutoScaleChange={handleAutoScaleChange}
+                  scaleMode={scaleMode}
+                  onScaleModeChange={handleScaleModeChange}
+                  onBackfillRequest={handleBackfillRequest}
+                />
+              }
+            >
+              {/* Main chart area - fills tv-main grid slot */}
+              <ChartViewport
+                apiBase={apiBase}
+                data={mergedData}
+                meta={meta}
+                theme={theme}
+                loading={loading || backfillLoading}
+                symbol={symbol}
+                timeframe={timeframe as Tf}
+                chartType={chartType}
+                chartSettings={settings}
+                renkoSettings={renkoSettings}
+                priceScaleMode={scaleMode}
+                priceScaleAutoScale={autoScale}
+                onAutoScaleChange={handleAutoScaleChange}
+                onTimeframeChange={handleTimeframeChange}
+                drawings={drawingsStore.drawings}
+                selectedId={drawingsStore.selectedId}
+                indicators={drawingsStore.indicators}
+                magnetEnabled={controls.magnet}
+                snapToClose={controls.snap}
+                onSelectDrawing={drawingsStore.selectDrawing}
+                onUpsertDrawing={drawingsStore.upsertDrawing}
+                onRemoveDrawing={drawingsStore.removeDrawing}
+                duplicateDrawing={drawingsStore.duplicateDrawing}
+                onToggleLock={drawingsStore.toggleLock}
+                onToggleHide={drawingsStore.toggleHidden}
+                onUpdateIndicator={drawingsStore.updateIndicator}
+                onTextCreated={(drawingId) => setEditingTextId(drawingId)}
+                onTextEdit={(drawingId) => setEditingTextId(drawingId)}
+                registerExports={(handlers) => {
+                  exportHandlersRef.current = handlers;
+                }}
+                onChartReady={(chart) => {
+                  chartRef.current = chart;
+                }}
+                mockMode={mockMode}
+                debugMode={debugMode}
+                workspaceMode={workspaceMode}
+                sidebarCollapsed={sidebarCollapsed}
+                sidebarWidth={sidebarWidth}
+                rightPanelActiveTab={workspaceMode ? rightPanelActiveTab : null}
+                modalOpen={modalState.open || editingTextId !== null}
+                modalKind={editingTextId !== null ? "text" : modalState.kind}
+                leftToolbarState={leftToolbarState}
+                drawingsHidden={drawingsHidden}
+                drawingsLocked={drawingsLocked}
               />
-            </div>
+            </TVLayoutShell>
             {!workspaceMode && !isMobile && !sidebarCollapsed && (
               <div
                 className={
@@ -1215,15 +1467,23 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
         />
       </ModalPortal>
 
-      {/* TV-20.3: Text editing modal */}
+      {/* TV-20.3: Text editing modal (also used for TV-26 Callout and TV-27 Note) */}
       <ModalPortal
         open={editingTextId !== null}
         kind="text"
         onClose={() => {
-          // Cancel: remove the text drawing if it still has placeholder content
+          // Cancel: remove the drawing if it still has placeholder/empty content
           if (editingTextId) {
             const drawing = drawingsStore.drawings.find((d) => d.id === editingTextId);
             if (drawing?.kind === "text" && drawing.content === "Text") {
+              drawingsStore.removeDrawing(editingTextId);
+            }
+            // TV-26: Remove callout if text is still empty
+            if (drawing?.kind === "callout" && drawing.text === "") {
+              drawingsStore.removeDrawing(editingTextId);
+            }
+            // TV-27: Remove note if text is still empty
+            if (drawing?.kind === "note" && drawing.text === "") {
               drawingsStore.removeDrawing(editingTextId);
             }
           }
@@ -1233,7 +1493,13 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
         <TextModal
           initialContent={
             editingTextId
-              ? (drawingsStore.drawings.find((d) => d.id === editingTextId) as { content?: string } | undefined)?.content ?? "Text"
+              ? (() => {
+                  const d = drawingsStore.drawings.find((d) => d.id === editingTextId);
+                  if (d?.kind === "text") return d.content ?? "Text";
+                  if (d?.kind === "callout") return d.text ?? "";
+                  if (d?.kind === "note") return d.text ?? "";
+                  return "Text";
+                })()
               : "Text"
           }
           onSave={(content) => {
@@ -1246,14 +1512,38 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
                   updatedAt: Date.now(),
                 });
               }
+              // TV-26: Update callout text
+              if (existing?.kind === "callout") {
+                drawingsStore.upsertDrawing({
+                  ...existing,
+                  text: content,
+                  updatedAt: Date.now(),
+                });
+              }
+              // TV-27: Update note text
+              if (existing?.kind === "note") {
+                drawingsStore.upsertDrawing({
+                  ...existing,
+                  text: content,
+                  updatedAt: Date.now(),
+                });
+              }
             }
             setEditingTextId(null);
           }}
           onCancel={() => {
-            // Cancel: remove the text drawing if it still has placeholder content
+            // Cancel: remove the drawing if it still has placeholder/empty content
             if (editingTextId) {
               const drawing = drawingsStore.drawings.find((d) => d.id === editingTextId);
               if (drawing?.kind === "text" && drawing.content === "Text") {
+                drawingsStore.removeDrawing(editingTextId);
+              }
+              // TV-26: Remove callout if text is still empty
+              if (drawing?.kind === "callout" && drawing.text === "") {
+                drawingsStore.removeDrawing(editingTextId);
+              }
+              // TV-27: Remove note if text is still empty
+              if (drawing?.kind === "note" && drawing.text === "") {
                 drawingsStore.removeDrawing(editingTextId);
               }
             }
@@ -1276,6 +1566,15 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
           }}
           onCancel={() => setModalState({ open: false, kind: null })}
         />
+      </ModalPortal>
+
+      {/* TV-23.1: Chart Settings Dialog */}
+      <ModalPortal
+        open={settingsDialogOpen}
+        kind="settings"
+        onClose={closeSettingsDialog}
+      >
+        <SettingsDialog onClose={closeSettingsDialog} />
       </ModalPortal>
     </div>
   );

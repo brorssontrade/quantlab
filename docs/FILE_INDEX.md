@@ -89,8 +89,12 @@
 | `features/chartsPro/` | Professional charting | ChartsProTab |
 | `features/chartsPro/ChartsProTab.tsx` | Main charts component | - |
 | `features/chartsPro/ChartsProTab.tsx` | **TV-18.1: Modal state (modalOpen, modalKind) managed here, passed to ChartViewport** | - |
+| `features/chartsPro/ChartsProTab.tsx` | **TV-39: TVLayoutShell integrated as root CSS Grid container (header, leftToolbar, main, rightPanel, bottomBar slots)** | - |
 | `features/chartsPro/components/` | Chart subcomponents | ChartViewport, TopBar, LeftToolbar, Toolbar, **RightPanel** |
-| `features/chartsPro/components/TopBar/` | **TV-1+: TopBar (symbol/timeframe/type), TV-10.2: Settings overlay, TV-12: Layout Manager** | TopBar.tsx, PrimaryControls.tsx, SettingsPanel.tsx, LayoutManager.tsx |
+| `features/chartsPro/components/TVLayoutShell/` | **TV-39: TradingView "Supercharts" layout shell (CSS Grid, TV_LAYOUT constants, dump().ui.layout contract)** | TVLayoutShell.tsx, useTVLayout, TV_LAYOUT |
+| `features/chartsPro/components/TVLayoutShell/TVRightRail.tsx` | **TV-39: Slim vertical icon rail (40-44px) for panel toggles (Watchlist/Alerts/Objects)** | TVRightRail, RailButton |
+| `features/chartspro/components/TopBar/` | **TV-1+: TopBar (symbol/timeframe/type), TV-10.2: Settings overlay, TV-12: Layout Manager** | TopBar.tsx, PrimaryControls.tsx, SettingsPanel.tsx, LayoutManager.tsx |
+| `features/chartspro/components/TopBar/TVCompactHeader.tsx` | **TV-39: TradingView-style compact single-row header (48-52px), replaces multi-row TopBar (~170px)** | TVCompactHeader, SymbolChip, TimeframeDropdown, ChartTypeDropdown, SimpleDropdown, CompactButton |
 | `features/chartsPro/components/TopBar/SettingsPanel.tsx` | **TV-10.2: Settings gear panel (appearance + scales, localStorage cp.settings.*)** | SettingsPanel, ChartSettings, DEFAULT_SETTINGS |
 | `features/chartsPro/components/TopBar/LayoutManager.tsx` | **TV-12.1-12.4: Layout save/load/delete manager (overlay panel, localStorage cp.layouts.*, JSON schema)** | LayoutManager, SavedLayout, LayoutManagerState |
 | `features/chartsPro/components/Modal/` | **TV-18.1+: Modal infrastructure (central portal for indicators, alerts, text edit, settings)** | ModalPortal, IndicatorsModal, TextModal, SettingsDialog |
@@ -144,6 +148,7 @@
 | `tests/chartsPro.cp37.scaleToggles.spec.ts` | **TV-37.2: Scale toggle tests (17 cases: auto, log/%, ADJ, dump contract, persistence, regression)** |
 | `tests/chartsPro.cp37.density.spec.ts` | **TV-37.2D: Data density tests (16 cases: ohlcv diagnostics, range widths, backfill, anchoring, timeframe density validation)** |
 | `tests/chartsPro.cp37.drift.spec.ts` | **TV-37: State drift tests (4 cases: autoScale/scaleMode survives chartType/symbol changes)** |
+| `tests/chartsPro.cp37.timeframes.spec.ts` | **TV-37.4: Timeframe switcher tests (21 cases: ready/non-ready TFs, QA API set, keyboard nav, persistence, tooltips)** |
 | `tests/chartsPro.tvUi.indicators.tab.spec.ts` | **TV-7/TV-18.2: Indicators tab tests (updated for modal, 12 cases)** |
 | `tests/chartsPro.tvUi.bottomBar.spec.ts` | **TV-9: BottomBar tests (13 cases, functional + responsive + deterministic, repeat-each=10, 130 runs, zero flakes)** |
 | `tests/chartsPro.tvUi.alerts.tab.spec.ts` | **TV-8: Alerts tab tests (12 cases, form/create/delete/sorting/determinism coverage)** |
