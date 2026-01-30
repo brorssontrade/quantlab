@@ -276,8 +276,11 @@ export function TVLayoutShell({
         style={{
           ...themeCssVars,
           display: "grid",
-          gridTemplateRows: `${headerRowHeight} 1fr ${TV_LAYOUT.BOTTOM_HEIGHT}px`,
-          gridTemplateColumns: `${leftColumnWidth} 1fr ${railColumnWidth} ${panelColumnWidth}`,
+          /* FIX 1: Use minmax(0, 1fr) to allow middle row to shrink below content height.
+             This prevents overflow/clipping in fullscreen when right panel content is tall.
+             Classic CSS Grid issue: 1fr has min-content implicit minimum, minmax(0, 1fr) removes it. */
+          gridTemplateRows: `${headerRowHeight} minmax(0, 1fr) ${TV_LAYOUT.BOTTOM_HEIGHT}px`,
+          gridTemplateColumns: `${leftColumnWidth} minmax(0, 1fr) ${railColumnWidth} ${panelColumnWidth}`,
           gridTemplateAreas: `
             "header header header header"
             "left main rail panel"
@@ -291,7 +294,7 @@ export function TVLayoutShell({
           color: "var(--tv-text, #d1d4dc)",
         }}
         data-theme={dataTheme}
-        data-testid="tv-layout-shell"
+        data-testid="tv-shell"
         data-panel-collapsed={rightPanelCollapsed ? "true" : "false"}
       >
         {/* HEADER ROW - FIXED height for TV parity (48-52px) */}
@@ -363,6 +366,10 @@ export function TVLayoutShell({
               flexDirection: "column",
               borderLeft: "1px solid var(--tv-border, #363a45)",
               backgroundColor: "var(--tv-panel, #1e222d)",
+              /* FIX 1: Critical for grid shrinking in fullscreen */
+              minWidth: 0,
+              minHeight: 0,
+              overflow: "hidden",
             }}
             data-testid="tv-right-rail-container"
           >
@@ -384,8 +391,11 @@ export function TVLayoutShell({
               flexDirection: "column",
               borderLeft: "1px solid var(--tv-border, #363a45)",
               backgroundColor: "var(--tv-panel, #1e222d)",
-              overflowY: "auto",
-              overflowX: "hidden",
+              /* PRIO 1: Critical flex layout - fill grid cell height, allow children to scroll */
+              height: "100%", /* Fill grid cell */
+              maxHeight: "100%", /* Don't exceed grid cell */
+              minHeight: 0, /* Allow flex shrinking */
+              overflow: "hidden", /* Let children handle scroll */
               position: "relative",
             }}
             data-testid="tv-right-panel"

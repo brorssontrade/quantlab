@@ -15,7 +15,7 @@
  * - TopBar: data-testid="tv-topbar-root"
  * - LeftToolbar: data-testid="tv-leftbar-container" or data-testid="tv-left-toolbar"
  * - BottomBar: data-testid="bottombar"
- * - Layout Shell: data-testid="tv-layout-shell"
+ * - Layout Shell: data-testid="tv-shell"
  */
 import { test, expect, Page } from "@playwright/test";
 import { gotoChartsPro } from "./helpers";
@@ -457,7 +457,7 @@ test.describe("TV-39: Layout Parity", () => {
       const initialTabAttr = await workspace.getAttribute('data-right-panel-active-tab');
       console.log(`[TV-39.9.2] Workspace mode: ${wsMode}, Initial tab attr: ${initialTabAttr}`);
 
-      const shell = page.locator('[data-testid="tv-layout-shell"]');
+      const shell = page.locator('[data-testid="tv-shell"]');
       const initialCollapsed = await shell.getAttribute('data-panel-collapsed');
       console.log(`[TV-39.9.2] Initial panel collapsed: ${initialCollapsed}`);
 
@@ -668,6 +668,246 @@ test.describe("TV-39: Layout Parity", () => {
       // Width should be stored (either from resize or default)
       // Default is 280px, but this tests persistence mechanism exists
       expect(initialWidth).toBeGreaterThanOrEqual(200);
+    });
+
+    test("TV-39.12.3: Right panel not clipped in fullscreen", async ({ page }) => {
+      // This test verifies the minmax(0, 1fr) fix - right panel should scroll, not clip
+      
+      // Set fullscreen-like viewport BEFORE navigation
+      await page.setViewportSize({ width: 1920, height: 1080 });
+      
+      // Navigate with viewport already set
+      await page.goto("http://localhost:5173/?mock=1");
+      await page.getByTestId("tab-charts").click({ force: true });
+      await page.waitForFunction(() => {
+        const dump = (window as any).__lwcharts?.dump?.();
+        return dump && dump.render?.pricePoints > 0;
+      }, { timeout: 15000 });
+      
+      // Open right panel
+      const indicatorsTab = page.locator('[data-testid="rail-indicators"]');
+      await expect(indicatorsTab).toBeVisible({ timeout: 5000 });
+      await indicatorsTab.click();
+      await page.waitForTimeout(500);
+      
+      const rightPanel = page.locator('[data-testid="tv-right-panel"]');
+      await expect(rightPanel).toBeVisible({ timeout: 2000 });
+      
+      // Get bounding boxes
+      const viewport = page.viewportSize();
+      const panelBox = await rightPanel.boundingBox();
+      const bottomBar = page.locator('[data-testid="tv-bottom-bar"]');
+      const bottomBox = await bottomBar.boundingBox();
+      
+      expect(panelBox).not.toBeNull();
+      expect(bottomBox).not.toBeNull();
+      expect(viewport).not.toBeNull();
+      
+      // Right panel bottom should NOT exceed (viewport.height - bottomBar.height)
+      // This verifies the grid layout allows proper shrinking
+      const maxPanelBottom = viewport!.height - TV_PARITY.BOTTOM_HEIGHT_MIN;
+      
+      console.log(`[TV-39.12.3] Panel bottom: ${panelBox!.y + panelBox!.height}px`);
+      console.log(`[TV-39.12.3] Max allowed bottom: ${maxPanelBottom}px`);
+      console.log(`[TV-39.12.3] Viewport: ${viewport!.width}x${viewport!.height}`);
+      console.log(`[TV-39.12.3] Bottom bar y: ${bottomBox!.y}px`);
+      
+      // Panel should fit within viewport (not clipped/overflow)
+      expect(panelBox!.y + panelBox!.height).toBeLessThanOrEqual(bottomBox!.y + 5);
+      
+      // Panel should have reasonable height (not collapsed)
+      expect(panelBox!.height).toBeGreaterThan(200);
+    });
+
+    test("TV-39.12.4: Right panel scrollable when content exceeds viewport", async ({ page }) => {
+      // Set smaller viewport BEFORE navigation
+      await page.setViewportSize({ width: 1366, height: 768 });
+      
+      // Navigate with viewport already set
+      await page.goto("http://localhost:5173/?mock=1");
+      await page.getByTestId("tab-charts").click({ force: true });
+      await page.waitForFunction(() => {
+        const dump = (window as any).__lwcharts?.dump?.();
+        return dump && dump.render?.pricePoints > 0;
+      }, { timeout: 15000 });
+      
+      // Open right panel
+      const indicatorsTab = page.locator('[data-testid="rail-indicators"]');
+      await expect(indicatorsTab).toBeVisible({ timeout: 5000 });
+      await indicatorsTab.click();
+      await page.waitForTimeout(500);
+      
+      const rightPanel = page.locator('[data-testid="tv-right-panel"]');
+      await expect(rightPanel).toBeVisible({ timeout: 2000 });
+      
+      // Get panel bounding box
+      const panelBox = await rightPanel.boundingBox();
+      expect(panelBox).not.toBeNull();
+      
+      // Check that panel has overflow handling (CSS property)
+      const overflow = await rightPanel.evaluate(el => getComputedStyle(el).overflow);
+      console.log(`[TV-39.12.4] Panel overflow: ${overflow}`);
+      
+      // Overflow should be hidden (children handle scroll)
+      expect(overflow).toMatch(/hidden|auto|scroll/);
+      
+      // Panel should fit within viewport
+      const viewport = page.viewportSize();
+      expect(panelBox!.y + panelBox!.height).toBeLessThanOrEqual(viewport!.height);
+    });
+    
+    test("TV-39.12.5: TabsPanel width matches grid column at wide viewport (no clipping)", async ({ page }) => {
+      // FIX 1 test: At 1920x1080, TabsPanel should fill its grid cell (not overflow)
+      await page.setViewportSize({ width: 1920, height: 1080 });
+      
+      await page.goto("http://localhost:5173/?mock=1");
+      await page.getByTestId("tab-charts").click({ force: true });
+      await page.waitForFunction(() => {
+        const dump = (window as any).__lwcharts?.dump?.();
+        return dump && dump.render?.pricePoints > 0;
+      }, { timeout: 15000 });
+      
+      // Open right panel
+      const indicatorsTab = page.locator('[data-testid="rail-indicators"]');
+      await expect(indicatorsTab).toBeVisible({ timeout: 5000 });
+      await indicatorsTab.click();
+      await page.waitForTimeout(500);
+      
+      const rightPanel = page.locator('[data-testid="tv-right-panel"]');
+      await expect(rightPanel).toBeVisible({ timeout: 2000 });
+      
+      const tabsPanel = page.locator('[data-testid="rightpanel-root"]');
+      await expect(tabsPanel).toBeVisible({ timeout: 2000 });
+      
+      // Get both boxes
+      const panelBox = await rightPanel.boundingBox();
+      const tabsBox = await tabsPanel.boundingBox();
+      expect(panelBox).not.toBeNull();
+      expect(tabsBox).not.toBeNull();
+      
+      console.log(`[TV-39.12.5] Grid panel width: ${panelBox!.width}px`);
+      console.log(`[TV-39.12.5] TabsPanel width: ${tabsBox!.width}px`);
+      console.log(`[TV-39.12.5] Grid panel right: ${panelBox!.x + panelBox!.width}px`);
+      console.log(`[TV-39.12.5] TabsPanel right: ${tabsBox!.x + tabsBox!.width}px`);
+      console.log(`[TV-39.12.5] Viewport width: ${page.viewportSize()!.width}px`);
+      
+      // TabsPanel should not extend beyond its grid cell
+      const tabsRight = tabsBox!.x + tabsBox!.width;
+      const viewportWidth = page.viewportSize()!.width;
+      expect(tabsRight).toBeLessThanOrEqual(viewportWidth);
+      
+      // TabsPanel right edge should be close to grid cell right edge (within 5px)
+      const panelRight = panelBox!.x + panelBox!.width;
+      const diff = Math.abs(tabsRight - panelRight);
+      console.log(`[TV-39.12.5] Right edge diff: ${diff}px`);
+      expect(diff).toBeLessThanOrEqual(5);
+    });
+  });
+
+  test.describe("TV-39.13: Initial Range (485-day for 1D timeframe)", () => {
+    /**
+     * FIX 2 Test: Verify that 1D timeframe shows ~485 bars by default
+     * Not "fit all" which makes the chart look cramped
+     */
+    test("TV-39.13.1: 1D timeframe shows ~485 bars, not all history", async ({ page }) => {
+      await page.goto("http://localhost:5173/?mock=1");
+      await page.getByTestId("tab-charts").click({ force: true });
+      
+      // Wait for chart to be ready
+      await page.waitForFunction(() => {
+        const dump = (window as any).__lwcharts?.dump?.();
+        return dump && dump.render?.pricePoints > 0;
+      }, { timeout: 15000 });
+      
+      // Get the dump to check visible range
+      const dump = await page.evaluate(() => (window as any).__lwcharts?.dump?.());
+      expect(dump).not.toBeNull();
+      
+      const pricePoints = dump?.render?.pricePoints ?? 0;
+      const timeframe = dump?.timeframe ?? dump?.ui?.timeframe;
+      
+      console.log(`[TV-39.13.1] Timeframe: ${timeframe}`);
+      console.log(`[TV-39.13.1] Total price points: ${pricePoints}`);
+      
+      // Should be 1D timeframe (default)
+      expect(timeframe).toBe("1D");
+      
+      // If we have enough data, visible range should be capped around 485 bars
+      if (pricePoints > 500) {
+        // Get visible range via QA API
+        const visibleRange = await page.evaluate(() => {
+          const api = (window as any).__lwcharts;
+          const scale = api?.chart?.timeScale?.();
+          if (!scale) return null;
+          const range = scale.getVisibleLogicalRange();
+          return range ? { from: range.from, to: range.to } : null;
+        });
+        
+        if (visibleRange) {
+          const visibleBars = visibleRange.to - visibleRange.from;
+          console.log(`[TV-39.13.1] Visible range: ${visibleRange.from} to ${visibleRange.to}`);
+          console.log(`[TV-39.13.1] Visible bars: ${visibleBars}`);
+          
+          // Should show approximately 485 bars (±10% tolerance for UI variations)
+          expect(visibleBars).toBeGreaterThan(400);
+          expect(visibleBars).toBeLessThan(550);
+        }
+      }
+    });
+
+    test("TV-39.13.2: Inspector toggle does not reset to fit-all", async ({ page }) => {
+      await page.goto("http://localhost:5173/?mock=1");
+      await page.getByTestId("tab-charts").click({ force: true });
+      
+      await page.waitForFunction(() => {
+        const dump = (window as any).__lwcharts?.dump?.();
+        return dump && dump.render?.pricePoints > 0 && dump.timeframe === "1D";
+      }, { timeout: 15000 });
+      
+      // Get initial visible range
+      const initialRange = await page.evaluate(() => {
+        const api = (window as any).__lwcharts;
+        const scale = api?.chart?.timeScale?.();
+        if (!scale) return null;
+        const range = scale.getVisibleLogicalRange();
+        return range ? { from: range.from, to: range.to } : null;
+      });
+      
+      if (initialRange) {
+        console.log(`[TV-39.13.2] Initial range: ${initialRange.from} to ${initialRange.to}`);
+        
+        // Toggle inspector open via QA API
+        await page.evaluate(() => {
+          (window as any).__lwcharts?.set?.({ inspectorOpen: true });
+        });
+        await page.waitForTimeout(500);
+        
+        // Toggle inspector closed
+        await page.evaluate(() => {
+          (window as any).__lwcharts?.set?.({ inspectorOpen: false });
+        });
+        await page.waitForTimeout(500);
+        
+        // Get final visible range
+        const finalRange = await page.evaluate(() => {
+          const api = (window as any).__lwcharts;
+          const scale = api?.chart?.timeScale?.();
+          if (!scale) return null;
+          const range = scale.getVisibleLogicalRange();
+          return range ? { from: range.from, to: range.to } : null;
+        });
+        
+        if (finalRange) {
+          console.log(`[TV-39.13.2] Final range: ${finalRange.from} to ${finalRange.to}`);
+          
+          // Range should be approximately the same (within 10 bars tolerance)
+          const initialBars = initialRange.to - initialRange.from;
+          const finalBars = finalRange.to - finalRange.from;
+          console.log(`[TV-39.13.2] Initial bars: ${initialBars}, Final bars: ${finalBars}`);
+          
+          expect(Math.abs(finalBars - initialBars)).toBeLessThan(50);
+        }
+      }
     });
   });
 

@@ -13,14 +13,15 @@
 import { useRef, useEffect, useState } from "react";
 import { ChevronDown } from "lucide-react";
 
-const TIMEFRAMES = ["1m", "5m", "15m", "1h", "4h", "1D", "1W"];
+const TIMEFRAMES = ["1m", "5m", "15m", "30m", "1h", "2H", "4h", "1D", "1W"];
 const DEFAULT_TIMEFRAME = "1D";
 
 /**
- * TV-37.3: Only these timeframes are production-ready.
- * Others require real intraday data subscription or are not fully tested.
+ * TV-37.3: Timeframes that are production-ready.
+ * PRIO 4: Extended to support range→timeframe auto-mapping.
+ * Note: Intraday timeframes (1m, 5m) require intraday data subscription.
  */
-const READY_TIMEFRAMES = new Set(["1h", "1D", "1W"]);
+const READY_TIMEFRAMES = new Set(["1m", "5m", "15m", "30m", "1h", "2H", "4h", "1D", "1W"]);
 
 function getTimeframeTooltip(tf: string): string {
   if (READY_TIMEFRAMES.has(tf)) {

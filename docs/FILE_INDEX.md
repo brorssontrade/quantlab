@@ -97,9 +97,10 @@
 | `features/chartspro/components/TopBar/TVCompactHeader.tsx` | **TV-39: TradingView-style compact single-row header (48-52px), replaces multi-row TopBar (~170px)** | TVCompactHeader, SymbolChip, TimeframeDropdown, ChartTypeDropdown, SimpleDropdown, CompactButton |
 | `features/chartsPro/components/TopBar/SettingsPanel.tsx` | **TV-10.2: Settings gear panel (appearance + scales, localStorage cp.settings.*)** | SettingsPanel, ChartSettings, DEFAULT_SETTINGS |
 | `features/chartsPro/components/TopBar/LayoutManager.tsx` | **TV-12.1-12.4: Layout save/load/delete manager (overlay panel, localStorage cp.layouts.*, JSON schema)** | LayoutManager, SavedLayout, LayoutManagerState |
-| `features/chartsPro/components/Modal/` | **TV-18.1+: Modal infrastructure (central portal for indicators, alerts, text edit, settings)** | ModalPortal, IndicatorsModal, TextModal, SettingsDialog |
+| `features/chartsPro/components/Modal/` | **TV-18.1+: Modal infrastructure (central portal for indicators, alerts, text edit, settings)** | ModalPortal, IndicatorsModal, TextModal, SettingsDialog, IndicatorsModalV2 |
 | `features/chartsPro/components/Modal/ModalPortal.tsx` | **TV-18.1: Central modal component (portal, Esc + click-outside, focus trap, data-testid)** | ModalPortal |
-| `features/chartsPro/components/Modal/IndicatorsModal.tsx` | **TV-18.2: Indicators picker modal (search + add, TradingView-style)** | IndicatorsModal |
+| `features/chartsPro/components/Modal/IndicatorsModal.tsx` | **TV-18.2: Legacy indicators picker (deprecated, use IndicatorsModalV2)** | IndicatorsModal |
+| `features/chartsPro/components/Modal/IndicatorsModalV2.tsx` | **PRIO 3: TV-style indicators modal (categories sidebar, search, keyboard nav, premium styling)** | IndicatorsModalV2 |
 | `features/chartsPro/components/Modal/TextModal.tsx` | **TV-20.3: Text annotation modal (edit content, Enter=save, data-testid)** | TextModal |
 | `features/chartsPro/components/Modal/SettingsDialog.tsx` | **TV-23.1: Chart settings dialog (tabs: Appearance/Layout/Advanced, pending changes, localStorage)** | SettingsDialog |
 | `features/chartsPro/state/settings.ts` | **TV-23.1: Settings Zustand store (ChartSettings, pendingSettings, localStorage cp.settings)** | useSettingsStore, DEFAULT_SETTINGS |
@@ -107,7 +108,8 @@
 | `features/chartsPro/components/FloatingToolbar/` | **TV-30.1+30.2a: Floating quick-edit toolbar (appears when drawing selected, portal-based, stroke/fill opacity sliders)** | FloatingToolbar.tsx, index.ts |
 | `features/chartsPro/components/BottomBar/` | **TV-9: Bottom bar (quick ranges, scale toggles, UTC clock, persistence)** | BottomBar.tsx, useBottomBarState |
 | `features/chartsPro/components/RightPanel/TabsPanel.tsx` | **Day 8+: RightPanel tabs (Indicators/Objects/Alerts, persistence)** | TabsPanel |
-| `features/chartsPro/components/RightPanel/IndicatorsTab.tsx` | **TV-18.2: Simplified to list view only (installed indicators management), overlay removed** | IndicatorsTab |
+| `features/chartsPro/components/RightPanel/IndicatorsTab.tsx` | **TV-18.2: Legacy simplified list view (deprecated, use IndicatorsTabV2)** | IndicatorsTab |
+| `features/chartsPro/components/RightPanel/IndicatorsTabV2.tsx` | **PRIO 3: TV-style indicators panel (hide/show, edit params, remove, color dot)** | IndicatorsTabV2 |
 | `features/chartsPro/components/RightPanel/ObjectsTab.tsx` | **Day 8+: Wrapper for ObjectTree (TV-5 modularization)** | ObjectsTab |
 | `features/chartsPro/components/RightPanel/AlertsTab.tsx` | **TV-8: TradingView-style Alerts tab (sticky header, list, create form, sorting, theme tokens)** | AlertsTab |
 | `features/chartsPro/components/AlertMarkersLayer.tsx` | **TV-8.2: Alert markers in chart (dashed lines + bell icons at prices)** | AlertMarkersLayer |
@@ -149,6 +151,9 @@
 | `tests/chartsPro.cp37.density.spec.ts` | **TV-37.2D: Data density tests (16 cases: ohlcv diagnostics, range widths, backfill, anchoring, timeframe density validation)** |
 | `tests/chartsPro.cp37.drift.spec.ts` | **TV-37: State drift tests (4 cases: autoScale/scaleMode survives chartType/symbol changes)** |
 | `tests/chartsPro.cp37.timeframes.spec.ts` | **TV-37.4: Timeframe switcher tests (21 cases: ready/non-ready TFs, QA API set, keyboard nav, persistence, tooltips)** |
+| `tests/chartsPro.prio2.topControls.spec.ts` | **PRIO 2: TopControls tests (6 cases: visibility, internal toolbar hidden, compare add, overlay toggle, inspector toggle, scale mode)** |
+| `tests/chartsPro.prio2-5.defaultRange.spec.ts` | **PRIO 2.5: Default range stability tests (7 cases: 1D timeframe, 485 bars, resize/inspector/compare/panel stability)** |
+| `tests/chartsPro.prio3.indicators.spec.ts` | **PRIO 3: Indicator library tests (22 cases: modal, categories, search, 9 indicators, panel actions, multi-output, performance)** |
 | `tests/chartsPro.tvUi.indicators.tab.spec.ts` | **TV-7/TV-18.2: Indicators tab tests (updated for modal, 12 cases)** |
 | `tests/chartsPro.tvUi.bottomBar.spec.ts` | **TV-9: BottomBar tests (13 cases, functional + responsive + deterministic, repeat-each=10, 130 runs, zero flakes)** |
 | `tests/chartsPro.tvUi.alerts.tab.spec.ts` | **TV-8: Alerts tab tests (12 cases, form/create/delete/sorting/determinism coverage)** |
@@ -159,11 +164,15 @@
 | `features/chartsPro/components/CrosshairOverlay.tsx` | **Day 10: Testable crosshair pills** | CrosshairOverlay |
 | `features/chartsPro/components/Watermark.tsx` | **Day 10: Symbol watermark** | Watermark |
 | `features/chartsPro/hooks/` | Custom hooks | useOhlcv, useIndicators |
-| `features/chartsPro/state/` | State management | controls, drawings |
+| `features/chartsPro/state/` | State management | controls, drawings, toolbar |
 | `features/chartsPro/state/drawings.ts` | **T-013: Drawings state (Zustand, localStorage + backend sync, debounced autosave, hydration)** | useDrawings, hydrateFromBackend |
+| `features/chartsPro/state/toolbar.ts` | **PRIO 2: Toolbar state (Zustand, compareItems, overlayState, inspectorOpen, compareScaleMode)** | useToolbarStore, CompareItem, OverlayState |
 | `features/chartsPro/api/drawingsApi.ts` | **T-013: Backend API client (CRUD, serialization, payloadToDrawing, drawingToPayload)** | fetchDrawings, saveDrawings, deleteDrawing |
 | `features/chartsPro/types.ts` | **TV-7+TV-20+TV-24: Type definitions, DrawingKind (hline, vline, trend, channel, pitchfork, rectangle, text, priceRange, dateRange, dateAndPriceRange, fibRetracement, ray, extendedLine), IndicatorInstance** | DrawingKind, Drawing, Pitchfork, Channel, TextDrawing, Ray, ExtendedLine, IndicatorInstance |
-| `features/chartsPro/indicators/` | Technical indicators | SMA, EMA |
+| `features/chartsPro/indicators/` | **PRIO 3: Technical indicators (registry, compute, worker)** | indicatorManifest, compute, registryV2 |
+| `features/chartsPro/indicators/indicatorManifest.ts` | **PRIO 3: Indicator registry manifest (9 indicators, categories, inputs, outputs, TV defaults)** | INDICATOR_MANIFESTS, CATEGORY_META |
+| `features/chartsPro/indicators/compute.ts` | **PRIO 3: Pure compute functions (SMA, EMA, RSI, MACD, BB, ATR, ADX, VWAP, OBV)** | computeSMA, computeEMA, ... |
+| `features/chartsPro/indicators/registryV2.ts` | **PRIO 3: Unified compute with caching (50 entries, 5min TTL)** | computeIndicator, cache |
 | `features/chartsPro/theme.ts` | Chart theming (TradingView-style colors Day 10) | - |
 | `features/fundamentals/` | Fundamentals tab | FundamentalsTab |
 | `features/fundamentals/FundamentalsTab.tsx` | Main component | - |

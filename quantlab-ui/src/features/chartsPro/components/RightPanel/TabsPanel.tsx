@@ -60,12 +60,11 @@ export function TabsPanel({
     persistActiveTab(currentTab);
   }, [currentTab]);
 
+  // FIX 1: TabsPanel should fill its grid cell (TVLayoutShell controls width)
+  // Previously used clamp() which caused mismatch with grid column width at wide viewports
   const widthStyle = useMemo(() => {
-    // Constrain right panel width similar to external sidebar
-    return isDesktop
-      ? { width: "clamp(var(--cp-sidebar-w-min), 25vw, var(--cp-sidebar-w-max))" }
-      : { width: "var(--cp-sidebar-w-laptop)" };
-  }, [isDesktop]);
+    return { width: "100%" };
+  }, []);
 
   const handleTabClick = (next: RightPanelTab) => {
     if (onChangeActiveTab) onChangeActiveTab(next);
@@ -74,7 +73,7 @@ export function TabsPanel({
 
   if (collapsed) {
     return (
-      <div className="flex items-center justify-center" style={widthStyle}>
+      <div className="flex items-center justify-center" style={{ width: "100%" }}>
         <button
           type="button"
           onClick={onToggleCollapsed}
@@ -102,11 +101,18 @@ export function TabsPanel({
 
   return (
     <div
-      className="flex flex-col min-h-0 border-l"
+      className="flex flex-col border-l"
       style={{
         ...widthStyle,
         backgroundColor: "var(--tv-panel, #1e222d)",
         borderLeftColor: "var(--tv-border, #363a45)",
+        /* PRIO 1: Critical flex layout for scroll - fill height, allow shrinking, no overflow */
+        height: "100%",
+        maxHeight: "100%", /* Prevent growing beyond parent */
+        minHeight: 0, /* Allow shrinking below content height */
+        flexGrow: 1,
+        flexShrink: 1,
+        overflow: "hidden", /* Panel container clips - content area scrolls */
       }}
       data-testid="rightpanel-root"
     >
@@ -169,13 +175,17 @@ export function TabsPanel({
           </button>
         ))}
       </div>
-      {/* Content area - Tighter padding */}
+      {/* Content area - flex:1 fills remaining space, min-h-0 allows shrinking, overflow-y-auto enables scroll */}
       <div
-        className="flex flex-col flex-1 min-h-0 overflow-y-auto"
+        className="flex flex-col overflow-y-auto overflow-x-hidden"
         style={{
           color: "var(--tv-text, #d1d4dc)",
           padding: "6px 8px",
           gap: "4px",
+          /* PRIO 1: Critical flex for scrollable content */
+          flex: "1 1 0%", /* grow, shrink, basis=0 */
+          minHeight: 0, /* Enables flex child to shrink and scroll */
+          maxHeight: "100%", /* Don't exceed parent */
         }}
         data-testid="rightpanel-content"
       >

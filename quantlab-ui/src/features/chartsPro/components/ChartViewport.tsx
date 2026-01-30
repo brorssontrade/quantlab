@@ -65,8 +65,9 @@ import { CrosshairOverlayLayer, getCrosshairPerfMetrics, resetCrosshairPerfMetri
 import { Watermark } from "./Watermark";
 import { LastPriceLine } from "./LastPriceLine";
 import { type ChartsTheme, getThemeCssVars } from "../theme";
-import type { IndicatorWorkerResponse } from "../indicators/registry";
+import type { IndicatorWorkerResponse } from "../indicators/registryV2";
 import { useSettingsStore } from "../state/settings";
+import { useToolbarStore, type CompareScaleMode } from "../state/toolbar";
 import {
   applyPresetToDrawing,
   getAllPresets,
@@ -655,6 +656,8 @@ interface ChartViewportProps {
   onAutoScaleChange?: (enabled: boolean) => void;
   /** TV-37.4: Callback when timeframe is changed via QA API (to sync UI) */
   onTimeframeChange?: (timeframe: Tf) => void;
+  /** FIX 3: Hide internal toolbar (when controls are in TVCompactHeader) */
+  hideToolbar?: boolean;
   drawings: Drawing[];
   selectedId: string | null;
   indicators: IndicatorInstance[];
@@ -669,6 +672,8 @@ interface ChartViewportProps {
   registerExports?: (handlers: ExportHandlers) => void;
   onChartReady?: (chart: IChartApi) => void;
   onUpdateIndicator?: (id: string, patch: Partial<IndicatorInstance>) => void;
+  /** PRIO 3: Callback when indicator compute results change */
+  onIndicatorResultsChange?: (results: Record<string, IndicatorWorkerResponse>) => void;
   /** TV-20.3: Callback when text drawing is created (opens modal) */
   onTextCreated?: (drawingId: string) => void;
   /** TV-20.4: Callback when text drawing is edited (double-click or Enter) */
@@ -732,6 +737,7 @@ export function ChartViewport({
   registerExports,
   onChartReady,
   onUpdateIndicator,
+  onIndicatorResultsChange,
   onTextCreated,
   onTextEdit,
   mockMode = false,
@@ -752,6 +758,8 @@ export function ChartViewport({
   onAutoScaleChange,
   // TV-37.4: Callback when timeframe changes via QA API
   onTimeframeChange,
+  // FIX 3: Hide internal toolbar when controls are in TVCompactHeader
+  hideToolbar = false,
 }: ChartViewportProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -877,6 +885,10 @@ export function ChartViewport({
   const baseLoadSeqRef = useRef(0);
   const indicatorWorkerRef = useRef<Worker | null>(null);
   const dataRevisionRef = useRef<number>(0); // TV-11: Incremented on timeframe change (test signal, not timestamp)
+  
+  // FIX 2: Track whether initial range has been applied for 1D timeframe
+  // This prevents fitToContent() from overriding the 485-day range on initial load
+  const rangeInitializedRef = useRef<boolean>(false);
 
   // Percent mode anchor tracking
   const percentAnchorRef = useRef<{ time: number | null; index: number | null; baseClose: number | null; compareCloses: Record<string, number> }>({
@@ -890,6 +902,12 @@ export function ChartViewport({
 
   const [data, setData] = useState<NormalizedBar[]>(initialData);
   const [indicatorResults, setIndicatorResults] = useState<Record<string, IndicatorWorkerResponse>>({});
+  
+  // PRIO 3: Notify parent of indicator results changes
+  useEffect(() => {
+    onIndicatorResultsChange?.(indicatorResults);
+  }, [indicatorResults, onIndicatorResultsChange]);
+  
   const [dataWindowRows, setDataWindowRows] = useState<DataWindowRow[]>([]);
   const [lastValueLabels, setLastValueLabels] = useState<{ base: LastValueLabel | null; compares: LastValueLabel[] }>({
     base: null,
@@ -1070,6 +1088,60 @@ export function ChartViewport({
   const tool = useChartControls((state) => state.tool);
   const setTool = useChartControls((state) => state.setTool);
 
+  // PRIO 2: Sync with toolbar store when controls are in TVCompactHeader (hideToolbar=true)
+  // This allows the topbar controls to drive the chart state
+  const storeCompareItems = useToolbarStore((state) => state.compareItems);
+  const storeOverlayState = useToolbarStore((state) => state.overlayState);
+  const storeInspectorOpen = useToolbarStore((state) => state.inspectorOpen);
+  const storeInspectorTab = useToolbarStore((state) => state.inspectorTab);
+  const storeCompareScaleMode = useToolbarStore((state) => state.compareScaleMode);
+  const storeSetCompareItems = useToolbarStore((state) => state.setCompareItems);
+  
+  // Sync store → internal state when hideToolbar is true (workspace mode)
+  useEffect(() => {
+    if (!hideToolbar) return;
+    
+    // Sync compare items from store
+    const storeItems = storeCompareItems.map((item) => ({
+      symbol: item.symbol.toUpperCase(),
+      mode: item.mode,
+      timeframe: item.timeframe,
+      hidden: item.hidden ?? false,
+      addMode: (item.mode === "price" ? "newPriceScale" : "samePercent") as CompareAddMode,
+    }));
+    setCompareItems(storeItems);
+    
+    // Sync overlay state from store
+    setOverlayState(storeOverlayState);
+    
+    // Sync inspector state from store
+    setInspectorOpen(storeInspectorOpen);
+    setInspectorTab(storeInspectorTab);
+    
+    // Sync compare scale mode from store
+    setCompareScaleMode(storeCompareScaleMode);
+  }, [hideToolbar, storeCompareItems, storeOverlayState, storeInspectorOpen, storeInspectorTab, storeCompareScaleMode]);
+
+  // PRIO 2: Reverse sync - internal state → store when hideToolbar is true
+  // This ensures state changes from chart API (e.g., addCompare with guard) propagate to TopControls
+  useEffect(() => {
+    if (!hideToolbar) return;
+    
+    // Compare internal items with store items
+    const internalSymbols = compareItems.map((i) => i.symbol.toUpperCase()).sort().join(",");
+    const storeSymbols = storeCompareItems.map((i) => i.symbol.toUpperCase()).sort().join(",");
+    
+    if (internalSymbols !== storeSymbols) {
+      // Internal state changed (e.g., addCompare was called), sync to store
+      storeSetCompareItems(compareItems.map((item) => ({
+        symbol: item.symbol,
+        mode: item.mode,
+        timeframe: item.timeframe,
+        hidden: item.hidden ?? false,
+      })));
+    }
+  }, [hideToolbar, compareItems, storeCompareItems, storeSetCompareItems]);
+
   // TV-8.2: Alert markers state and fetching
   interface AlertMarker {
     id: number;
@@ -1121,8 +1193,10 @@ export function ChartViewport({
   }, [symbol, timeframe, fetchAlerts]);
 
   // TV-11: Increment data revision when timeframe changes (signals fetch trigger for tests)
+  // FIX 2: Reset rangeInitializedRef so new timeframe gets proper initial range
   useEffect(() => {
     dataRevisionRef.current += 1;
+    rangeInitializedRef.current = false; // Allow new initial range to be set
   }, [timeframe]);
 
   // Auto-refresh alerts every 10 seconds (useful for triggered alerts)
@@ -1356,6 +1430,56 @@ const overlayCanvasClassName = "chartspro-overlay__canvas absolute inset-0";
     },
     [],
   );
+
+/**
+ * FIX 2: ALWAYS show ~485 days from right edge when timeframe is 1D.
+ * This ensures a clean default view (not "fit all" which looks cramped).
+ * For other timeframes or insufficient data: use fitContent.
+ * Sets rangeInitializedRef to prevent later effects from overriding.
+ */
+const applyInitialRange = useCallback((dataCount: number, currentTimeframe: string) => {
+  const chart = chartRef.current;
+  const host = containerRef.current;
+  if (!chart || !host) return;
+  
+  // Resize canvas first
+  const nextWidth = Math.floor(host.clientWidth);
+  const nextHeight = Math.floor(host.clientHeight);
+  if (nextWidth > 0 && nextHeight > 0) {
+    chart.resize(nextWidth, nextHeight);
+  }
+  
+  // For 1D timeframe with sufficient data: show last 485 bars (≈1Y of trading days)
+  // For other timeframes or insufficient data: use fitContent
+  const is1DTimeframe = currentTimeframe === "1D";
+  const visibleBars = 485;
+  const hasEnoughData = dataCount > 50; // Need reasonable amount of data
+  
+  if (is1DTimeframe && hasEnoughData && dataCount > 0) {
+    // Show last N bars (485 for ~1Y, fallback to 365 if needed)
+    const barsToShow = Math.min(visibleBars, dataCount);
+    const fromIndex = Math.max(0, dataCount - barsToShow);
+    const toIndex = dataCount;
+    
+    try {
+      chart.timeScale().setVisibleLogicalRange({ from: fromIndex, to: toIndex });
+      // Mark range as initialized to prevent fitToContent from overriding
+      rangeInitializedRef.current = true;
+    } catch {
+      // Fallback to fitContent if setVisibleLogicalRange fails
+      chart.timeScale().fitContent();
+    }
+  } else {
+    // Other timeframes or insufficient data - use fitContent
+    chart.timeScale().fitContent();
+  }
+  
+  queueAfterNextPaint(() => {
+    if (!chartRef.current) return;
+    updateBarSpacingGuard(chartRef.current.timeScale().getVisibleLogicalRange());
+    rebindTestApiWithSample();
+  });
+}, [rebindTestApiWithSample, updateBarSpacingGuard]);
 
 const fitToContent = useCallback(() => {
   const chart = chartRef.current;
@@ -3452,11 +3576,24 @@ const fitToContent = useCallback(() => {
     } catch {
       // ignore
     }
-    // trigger resize/fit path so canvas snaps to new width
+    // FIX 2: Only resize, don't fitToContent if initial 1D range was set
+    // This prevents overriding the 485-day view when inspector opens/closes
     queueAfterNextPaint(() => {
-      fitToContent();
+      const chart = chartRef.current;
+      const host = containerRef.current;
+      if (chart && host) {
+        const w = Math.floor(host.clientWidth);
+        const h = Math.floor(host.clientHeight);
+        if (w > 0 && h > 0) {
+          chart.resize(w, h);
+        }
+        // Only fitContent if range hasn't been initialized (non-1D or user has zoomed)
+        if (!rangeInitializedRef.current) {
+          chart.timeScale().fitContent();
+        }
+      }
     });
-  }, [inspectorOpen, inspectorTab, fitToContent]);
+  }, [inspectorOpen, inspectorTab]);
 
   useEffect(() => {
     const handler = (ev: Event) => {
@@ -3679,7 +3816,8 @@ const fitToContent = useCallback(() => {
       enforceBasePriceScale(bars);
       seriesPointCountsRef.current.price = priceSeriesData.length;
       seriesPointCountsRef.current.volume = volumeData.length;
-      fitToContent();
+      // FIX 2: Show 485 days for 1D timeframe, fitContent for others
+      applyInitialRange(priceSeriesData.length, timeframeRef.current);
       setCompareVersion((tick) => tick + 1);
       updateLastValueLabelsRef.current();
       queueAfterNextPaint(() => {
@@ -3688,7 +3826,7 @@ const fitToContent = useCallback(() => {
     },
     [
       compareScaleMode,
-      fitToContent,
+      applyInitialRange,
       rebindTestApiWithSample,
       theme.candleBorderDown,
       theme.candleBorderUp,
@@ -3863,7 +4001,8 @@ const fitToContent = useCallback(() => {
         percentLastValuesRef.current.compares[symbolKey] = lastPoint.value;
       }
       seriesPointCountsRef.current.compares[symbolKey] = aligned.length;
-      if (!hidden) {
+      // FIX 2: Don't fitToContent if initial 1D range was set (preserves 485-day view)
+      if (!hidden && !rangeInitializedRef.current) {
         fitToContent();
       }
       updateLastValueLabelsRef.current();
@@ -4345,11 +4484,23 @@ const fitToContent = useCallback(() => {
       const { width, height } = entry.contentRect;
       if (width <= 0 || height <= 0) return;
       if (chartRef.current) {
-        chartRef.current.resize(Math.floor(width), Math.floor(height));
+        const chart = chartRef.current;
+        const ts = chart.timeScale();
+        
+        // PRIO 2.5: Capture exact range BEFORE resize
+        const rangeBeforeResize = rangeInitializedRef.current ? ts.getVisibleLogicalRange() : null;
+        
+        chart.resize(Math.floor(width), Math.floor(height));
         queueAfterNextPaint(() => {
-          if (chartReady) {
+          // FIX 2: Don't fitToContent if initial 1D range was set (preserves 485-day view)
+          // Just resize the canvas, keep the current visible range
+          if (chartReady && !rangeInitializedRef.current) {
             fitToContent();
           } else {
+            // PRIO 2.5: Restore exact range AFTER resize to prevent drift
+            if (rangeBeforeResize) {
+              ts.setVisibleLogicalRange(rangeBeforeResize);
+            }
             rebindTestApiWithSample();
           }
           updateLastValueLabelsRef.current();
@@ -4677,6 +4828,70 @@ const fitToContent = useCallback(() => {
     registerExports({ png, csv });
   }, [registerExports, drawings, chartReady, buildVisibleRows]);
 
+  // PRIO 3: Configure scaleMargins for "separate" indicator panes
+  // This gives each oscillator (RSI, MACD, ADX, etc.) its own vertical section
+  // TV-style: Price takes ~60%, indicators share remaining ~40% with min-height guarantees
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chartReady || !chart) return;
+    
+    // Collect unique separate indicator IDs
+    const separateIndicators = indicators
+      .filter(ind => !ind.hidden && ind.pane === "separate")
+      .map(ind => ind.id);
+    
+    if (separateIndicators.length === 0) {
+      // Reset price scale to use full height when no separate indicators
+      chart.priceScale("right").applyOptions({
+        scaleMargins: { top: 0.02, bottom: 0.08 },
+      });
+      return;
+    }
+    
+    // Calculate vertical sections with min-height guarantees:
+    // - Price pane: minimum 50% of chart, up to 65% if few indicators
+    // - Each indicator: minimum 10% of chart height
+    const MIN_INDICATOR_HEIGHT = 0.10; // 10% minimum per indicator
+    const MAX_INDICATORS_ZONE = 0.45; // Indicators can take up to 45%
+    const indicatorCount = separateIndicators.length;
+    
+    // Calculate ideal indicator zone
+    const idealIndicatorZone = Math.min(
+      indicatorCount * MIN_INDICATOR_HEIGHT + 0.02, // 10% per + 2% buffer
+      MAX_INDICATORS_ZONE
+    );
+    
+    // Price zone is the rest
+    const priceZoneHeight = 1 - idealIndicatorZone - 0.03; // 3% gap between price and indicators
+    const priceTop = 0.02;
+    const priceBottom = 1 - priceZoneHeight - priceTop;
+    
+    // Indicator zone starts after price + gap
+    const indicatorZoneStart = 1 - idealIndicatorZone;
+    const indicatorZoneEnd = 0.98;
+    const indicatorZoneHeight = indicatorZoneEnd - indicatorZoneStart;
+    const perIndicatorHeight = indicatorZoneHeight / indicatorCount;
+    
+    // Configure price scale margins
+    chart.priceScale("right").applyOptions({
+      scaleMargins: { top: priceTop, bottom: priceBottom },
+    });
+    
+    // Configure each separate indicator scale
+    separateIndicators.forEach((indId, index) => {
+      const scaleId = `ind_${indId}`;
+      const top = indicatorZoneStart + (index * perIndicatorHeight);
+      const bottom = 1 - (indicatorZoneStart + ((index + 1) * perIndicatorHeight));
+      
+      chart.priceScale(scaleId).applyOptions({
+        scaleMargins: { top, bottom: Math.max(0.01, bottom) },
+        autoScale: true,
+        borderVisible: true,
+        borderColor: "rgba(54, 58, 69, 0.8)",
+      });
+    });
+  }, [chartReady, indicators]);
+
   useEffect(() => {
     const chart = chartRef.current;
     if (!chartReady || !chart) return;
@@ -4815,6 +5030,8 @@ const fitToContent = useCallback(() => {
       }}
       data-theme={theme.name}
     >
+      {/* FIX 3: Conditionally render toolbar (hidden when controls are in TVCompactHeader) */}
+      {!hideToolbar && (
       <div
         ref={toolbarRef}
         className="flex-none border-b border-slate-800/40 bg-slate-950/40 flex flex-wrap items-center"
@@ -4851,6 +5068,7 @@ const fitToContent = useCallback(() => {
           </button>
         </div>
       </div>
+      )}
         <div ref={containerRef} className="chartspro-surface relative flex-1 min-h-0 overflow-hidden" onContextMenu={handleContextMenu} style={{ display: 'grid', gridTemplateRows: inspectorOpen ? '1fr auto' : '1fr 0px' }}>
           <div className="min-h-0 min-w-0 relative" style={{ display: 'flex' }}>
             <div

@@ -14,10 +14,34 @@
 import type { IChartApi, ITimeScaleApi, Time } from "lightweight-charts";
 
 /** Supported range preset keys */
-export type RangePresetKey = "1D" | "5D" | "1M" | "6M" | "YTD" | "1Y" | "All";
+export type RangePresetKey = "1D" | "5D" | "1M" | "3M" | "6M" | "YTD" | "1Y" | "All";
 
 /** All preset keys in display order */
-export const RANGE_PRESET_KEYS: RangePresetKey[] = ["1D", "5D", "1M", "6M", "YTD", "1Y", "All"];
+export const RANGE_PRESET_KEYS: RangePresetKey[] = ["1D", "5D", "1M", "3M", "6M", "YTD", "1Y", "All"];
+
+/**
+ * PRIO 4: Range → Timeframe auto-mapping
+ * 
+ * When clicking a range preset, we auto-switch to the optimal timeframe:
+ * - 1D → 1m  (intraday detail for day traders)
+ * - 5D → 5m  (intraday with context)
+ * - 1M → 30m (swing trading view)
+ * - 3M → 1H  (medium-term positioning)
+ * - 6M → 2H  (longer positioning)
+ * - YTD → 1D (year view with daily detail)
+ * - 1Y → 1D  (yearly view)
+ * - All → 1D (full history at daily)
+ */
+export const RANGE_TIMEFRAME_MAP: Record<RangePresetKey, string> = {
+  "1D": "1m",
+  "5D": "5m",
+  "1M": "30m",
+  "3M": "1h",   // Use lowercase 1h to match TIMEFRAME_OPTIONS
+  "6M": "2H",
+  "YTD": "1D",
+  "1Y": "1D",
+  "All": "1D",
+};
 
 /** Data bounds required for range calculations */
 export interface DataBounds {
@@ -64,6 +88,7 @@ const RANGE_SECONDS: Record<RangePresetKey, number | null> = {
   "1D": 1 * 24 * 60 * 60,      // 86400 seconds
   "5D": 5 * 24 * 60 * 60,      // 432000 seconds
   "1M": 30 * 24 * 60 * 60,     // ~30 days
+  "3M": 90 * 24 * 60 * 60,     // ~90 days (PRIO 4: added 3M preset)
   "6M": 180 * 24 * 60 * 60,    // ~180 days
   "YTD": null,                  // Special: from Jan 1
   "1Y": 365 * 24 * 60 * 60,    // ~365 days

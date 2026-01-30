@@ -18,7 +18,7 @@ import { ObjectTree } from "./components/ObjectTree";
 import { IndicatorPanel } from "./components/IndicatorPanel";
 import { AlertsPanel } from "./components/AlertsPanel";
 import { TabsPanel, type RightPanelTab } from "./components/RightPanel/TabsPanel";
-import { IndicatorsTab } from "./components/RightPanel/IndicatorsTab";
+import { IndicatorsTabV2 } from "./components/RightPanel/IndicatorsTabV2";
 import { ObjectsTab } from "./components/RightPanel/ObjectsTab";
 import { AlertsTab } from "./components/RightPanel/AlertsTab";
 import { SettingsPanel, type ChartSettings, DEFAULT_SETTINGS } from "./components/TopBar/SettingsPanel";
@@ -27,7 +27,7 @@ import { useSettingsStore } from "./state/settings";
 import { LayoutManager, type SavedLayout } from "./components/TopBar/LayoutManager";
 import { ApiStatusBadge } from "./components/ApiStatusBadge";
 import { ModalPortal } from "./components/Modal/ModalPortal";
-import { IndicatorsModal } from "./components/Modal/IndicatorsModal";
+import { IndicatorsModalV2 } from "./components/Modal/IndicatorsModalV2";
 import { TextModal } from "./components/Modal/TextModal";
 import { RenkoSettingsModal } from "./components/Modal/RenkoSettingsModal";
 import { useOhlcvQuery, fetchOhlcvSeries } from "./hooks/useOhlcv";
@@ -334,6 +334,8 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
   const [modalState, setModalState] = useState<{ open: boolean; kind: string | null }>({ open: false, kind: null });
   // TV-20.3: Text editing modal state (stores drawing ID being edited)
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
+  // PRIO 3: Indicator compute results (from ChartViewport)
+  const [indicatorResults, setIndicatorResults] = useState<Record<string, any>>({});
   const [workspaceMode, setWorkspaceMode] = useState(() => loadWorkspaceLayout().mode);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => loadWorkspaceLayout().sidebarCollapsed);
   const [sidebarWidth] = useState(() => loadWorkspaceLayout().sidebarWidth);
@@ -1154,6 +1156,8 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
                     setMockMode(newMode === "mock");
                   }}
                   onInfoClick={toggleWorkspaceMode}
+                  // PRIO 2: Show Compare/Overlay/Inspector controls in header when in workspace mode
+                  showTopControls={workspaceMode}
                 />
               }
               leftToolbar={
@@ -1198,8 +1202,9 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
                 workspaceMode ? (
                   <TabsPanel
                     indicatorsPanel={
-                      <IndicatorsTab
+                      <IndicatorsTabV2
                         indicators={drawingsStore.indicators}
+                        indicatorResults={indicatorResults}
                         onAdd={drawingsStore.addIndicator}
                         onUpdate={drawingsStore.updateIndicator}
                         onRemove={drawingsStore.removeIndicator}
@@ -1261,6 +1266,8 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
                   scaleMode={scaleMode}
                   onScaleModeChange={handleScaleModeChange}
                   onBackfillRequest={handleBackfillRequest}
+                  onTimeframeChange={handleTimeframeChange}
+                  currentTimeframe={timeframe}
                 />
               }
             >
@@ -1280,6 +1287,8 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
                 priceScaleAutoScale={autoScale}
                 onAutoScaleChange={handleAutoScaleChange}
                 onTimeframeChange={handleTimeframeChange}
+                /* PRIO 2: Hide internal toolbar when controls are in TVCompactHeader (workspace mode) */
+                hideToolbar={workspaceMode}
                 drawings={drawingsStore.drawings}
                 selectedId={drawingsStore.selectedId}
                 indicators={drawingsStore.indicators}
@@ -1292,6 +1301,7 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
                 onToggleLock={drawingsStore.toggleLock}
                 onToggleHide={drawingsStore.toggleHidden}
                 onUpdateIndicator={drawingsStore.updateIndicator}
+                onIndicatorResultsChange={setIndicatorResults}
                 onTextCreated={(drawingId) => setEditingTextId(drawingId)}
                 onTextEdit={(drawingId) => setEditingTextId(drawingId)}
                 registerExports={(handlers) => {
@@ -1455,13 +1465,13 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
         </CardContent>
       </Card>
 
-      {/* TV-18.2: Indicators modal (central, TradingView-style) */}
+      {/* PRIO 3: TradingView-style Indicators modal */}
       <ModalPortal
         open={modalState.open && modalState.kind === "indicators"}
         kind="indicators"
         onClose={() => setModalState({ open: false, kind: null })}
       >
-        <IndicatorsModal
+        <IndicatorsModalV2
           onAdd={drawingsStore.addIndicator}
           onClose={() => setModalState({ open: false, kind: null })}
         />

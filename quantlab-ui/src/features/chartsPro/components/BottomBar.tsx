@@ -4,6 +4,7 @@ import {
   type RangePresetKey,
   type RangePresetResult,
   RANGE_PRESET_KEYS,
+  RANGE_TIMEFRAME_MAP,
   applyRangePreset,
   isRangePresetValid,
   getRangePresetDescription,
@@ -74,6 +75,10 @@ interface BottomBarProps {
   onRangeChange?: (rangeKey: string) => void;
   /** TV-37.2: Callback to request data backfill when range needs more history */
   onBackfillRequest?: (request: BackfillRequest) => Promise<void>;
+  /** PRIO 4: Callback to auto-change timeframe when range preset is clicked */
+  onTimeframeChange?: (tf: string) => void;
+  /** PRIO 4: Current timeframe (used to show if auto-switch will occur) */
+  currentTimeframe?: string;
 }
 
 /** TV-37.1: Use RangePresetKey from utility */
@@ -106,8 +111,12 @@ export function BottomBar({
   onScaleModeChange,
   onRangeChange,
   onBackfillRequest,
+  onTimeframeChange,
+  currentTimeframe,
 }: BottomBarProps) {
-  const [selectedRange, setSelectedRange] = useState<RangeKey>("1D");
+  // PRIO 4: Default first-load: 1Y range (≈485 days back) + 1D timeframe
+  // The 1Y preset maps to 1D timeframe via RANGE_TIMEFRAME_MAP
+  const [selectedRange, setSelectedRange] = useState<RangeKey>("1Y");
   // TV-37.2: Local state for UI - synced with props
   const [localAutoScale, setLocalAutoScale] = useState<boolean>(autoScale);
   const [localScaleMode, setLocalScaleMode] = useState<ScaleModeValue>(scaleMode);
@@ -131,12 +140,14 @@ export function BottomBar({
   }, [scaleMode]);
 
   // Load persisted range state on mount (autoScale and scaleMode are owned by parent)
+  // PRIO 4: Default is 1Y (≈365 days, maps to 1D timeframe) if not stored
   useEffect(() => {
     try {
       const stored = window.localStorage?.getItem("cp.bottomBar.range");
       if (stored && (RANGE_KEYS as string[]).includes(stored)) {
         setSelectedRange(stored as RangeKey);
       }
+      // If not stored, keep default "1Y" (set in useState init)
     } catch {
       // Ignore storage errors
     }
@@ -301,8 +312,27 @@ export function BottomBar({
   // TV-37.1: Handle range click using applyRangePreset utility
   // Uses TIME-BASED ranges (calendar days, timeframe-agnostic) with stabilization
   // TV-37.2: Now with backfill support for windowed fetch
+  // PRIO 4: Auto-switches timeframe based on RANGE_TIMEFRAME_MAP
   const handleRangeClick = useCallback(
     async (range: RangeKey) => {
+      // PRIO 4: Auto-switch timeframe when range changes
+      const targetTimeframe = RANGE_TIMEFRAME_MAP[range];
+      if (onTimeframeChange && targetTimeframe && targetTimeframe !== currentTimeframe) {
+        // Request timeframe change BEFORE applying range
+        // This allows parent to fetch data for new timeframe first
+        onTimeframeChange(targetTimeframe);
+        // Return early - the range will be applied when dataBounds updates
+        // after the new timeframe data loads
+        setSelectedRange(range);
+        try {
+          window.localStorage?.setItem("cp.bottomBar.range", range);
+        } catch {
+          // Ignore storage errors
+        }
+        if (onRangeChange) onRangeChange(range);
+        return;
+      }
+
       // Determine effective bounds
       const bounds: DataBounds | null = dataBounds ?? (lastBarTime && lastBarTime > 0 ? {
         firstBarTime: lastBarTime, // Fallback: same as last
@@ -350,7 +380,7 @@ export function BottomBar({
         });
       }
     },
-    [chart, dataBounds, lastBarTime, onRangeChange, timezoneId, onBackfillRequest]
+    [chart, dataBounds, lastBarTime, onRangeChange, timezoneId, onBackfillRequest, onTimeframeChange, currentTimeframe]
   );
 
   // TV-37.2: Handle auto-scale toggle (independent of mode)
@@ -495,18 +525,19 @@ export function BottomBar({
       className="tv-bottombar flex items-center justify-between text-sm" 
       data-testid="bottombar"
       style={{
-        // PRIO 3: TV-tight bottom bar using CSS tokens
+        // PRIO 6: TV-tight bottom bar with compact padding
         backgroundColor: "var(--tv-panel, #1e222d)",
         color: "var(--tv-text-muted, #787b86)",
         borderTop: "1px solid var(--tv-border, #363a45)",
-        gap: "8px",
-        padding: "0 8px",
+        gap: "4px", /* Tighter gap */
+        padding: "0 6px", /* Tighter horizontal padding */
         height: "100%",
         minWidth: 0, // Prevent overflow from grid children
+        fontSize: "11px", /* Compact text */
       }}
     >
       {/* Left: Range quick-select (TV-37.1) - TV-style text+underline */}
-      <div className="flex items-center" style={{ gap: "var(--cp-space-xs, 4px)" }}>
+      <div className="flex items-center" style={{ gap: "2px" }}>
         {RANGE_KEYS.map((range) => {
           const isSelected = selectedRange === range;
           const hasData = chart && (dataBounds?.dataCount ?? 0) > 0;
@@ -521,8 +552,8 @@ export function BottomBar({
               disabled={!canSelect}
               className={`cp-icon-btn ${isSelected ? "is-active" : ""}`}
               style={{
-                padding: "2px 8px",
-                fontSize: "11px",
+                padding: "2px 6px", /* PRIO 6: Tighter padding */
+                fontSize: "10px", /* PRIO 6: Smaller text */
                 fontWeight: isSelected ? 600 : 500,
                 // TV-style: transparent bg, text + bottom border underline
                 backgroundColor: "transparent",
@@ -558,8 +589,8 @@ export function BottomBar({
       <div style={{
         display: "flex",
         alignItems: "center",
-        gap: "4px",
-        padding: "0 8px",
+        gap: "2px", /* PRIO 6: Tighter gap */
+        padding: "0 6px", /* PRIO 6: Tighter padding */
         borderLeft: "1px solid var(--tv-border, #363a45)",
         borderRight: "1px solid var(--tv-border, #363a45)",
       }}>
@@ -569,8 +600,8 @@ export function BottomBar({
           onClick={handleAutoToggle}
           className={`cp-icon-btn ${localAutoScale ? "is-active" : ""}`}
           style={{
-            padding: "2px 8px",
-            fontSize: "11px",
+            padding: "2px 6px", /* PRIO 6: Tighter padding */
+            fontSize: "10px", /* PRIO 6: Smaller text */
             fontWeight: localAutoScale ? 600 : 500,
             // TV-style: transparent bg, text + underline
             backgroundColor: "transparent",
@@ -616,8 +647,8 @@ export function BottomBar({
               disabled={isDisabled}
               className={`cp-icon-btn ${isSelected ? "is-active" : ""}`}
               style={{
-                padding: "2px 8px",
-                fontSize: "11px",
+                padding: "2px 6px", /* PRIO 6: Tighter padding */
+                fontSize: "10px", /* PRIO 6: Smaller text */
                 fontWeight: isSelected ? 600 : 500,
                 // TV-style: transparent bg, text + underline
                 backgroundColor: "transparent",
@@ -652,49 +683,51 @@ export function BottomBar({
 
       {/* Right: Market session + Clock + Timezone selector - TV-style compact */}
       <div className="flex items-center gap-1.5 ml-auto" style={{ minWidth: 0 }}>
-        {/* Market session status (based on exchange hours) - TV compact */}
+        {/* Market session status (based on exchange hours) - TV compact muted */}
         <span 
           data-testid="bottombar-market-session"
-          className="text-[10px] font-medium px-1 py-px rounded-sm"
+          className="text-[9px] font-medium px-1 py-px rounded-sm"
           style={{
+            // PRIO 6: Muted colors for session badge
             backgroundColor: marketSession === "OPEN" 
-              ? "rgba(38, 166, 154, 0.15)" 
+              ? "rgba(38, 166, 154, 0.1)" 
               : marketSession === "PRE" || marketSession === "POST"
-                ? "rgba(255, 193, 7, 0.15)" 
+                ? "rgba(255, 193, 7, 0.1)" 
                 : marketSession === "CLOSED"
-                  ? "rgba(239, 83, 80, 0.15)"
-                  : "var(--tv-bg-secondary, rgba(42, 46, 57, 0.5))",
+                  ? "rgba(239, 83, 80, 0.08)"
+                  : "transparent",
             color: marketSession === "OPEN" 
               ? "var(--tv-green, #26a69a)" 
               : marketSession === "PRE" || marketSession === "POST"
-                ? "var(--tv-yellow, #ffc107)" 
+                ? "rgba(255, 193, 7, 0.8)" 
                 : marketSession === "CLOSED"
-                  ? "var(--tv-red, #ef5350)"
+                  ? "rgba(239, 83, 80, 0.7)"
                   : "var(--tv-text-muted, #787b86)",
           }}
         >
           {marketSession === "OPEN" ? "●" : marketSession === "PRE" ? "◐" : marketSession === "POST" ? "◑" : marketSession === "CLOSED" ? "○" : "—"}
         </span>
 
-        {/* Data status indicator (LIVE/DEMO/etc) - TV compact */}
+        {/* Data status indicator (LIVE/DEMO/etc) - TV compact muted */}
         <span 
           data-testid="bottombar-market-status"
-          className="text-[10px] font-medium px-1 py-px rounded-sm"
+          className="text-[9px] font-medium px-1 py-px rounded-sm"
           style={{
+            // PRIO 6: Muted colors for data status
             backgroundColor: marketStatus === "LIVE" 
-              ? "rgba(38, 166, 154, 0.15)" 
+              ? "rgba(38, 166, 154, 0.1)" 
               : marketStatus === "DEMO" 
-                ? "rgba(255, 193, 7, 0.15)" 
+                ? "rgba(255, 193, 7, 0.1)" 
                 : marketStatus === "LOADING"
-                  ? "rgba(66, 165, 245, 0.15)"
-                  : "rgba(239, 83, 80, 0.15)",
+                  ? "rgba(66, 165, 245, 0.1)"
+                  : "rgba(239, 83, 80, 0.08)",
             color: marketStatus === "LIVE" 
               ? "var(--tv-green, #26a69a)" 
               : marketStatus === "DEMO" 
-                ? "var(--tv-yellow, #ffc107)" 
+                ? "rgba(255, 193, 7, 0.8)" 
                 : marketStatus === "LOADING"
-                  ? "var(--tv-blue, #2962ff)"
-                  : "var(--tv-red, #ef5350)",
+                  ? "rgba(66, 165, 245, 0.8)"
+                  : "rgba(239, 83, 80, 0.7)",
           }}
         >
           {marketStatus === "LIVE" ? "LIVE" : marketStatus === "DEMO" ? "DEMO" : marketStatus === "LOADING" ? "..." : "OFF"}
@@ -703,8 +736,8 @@ export function BottomBar({
         {/* Clock - TV mono style */}
         <span 
           data-testid="bottombar-clock"
-          className="font-mono text-[11px] tabular-nums" 
-          style={{ color: "var(--tv-text-muted, #787b86)" }}
+          className="font-mono tabular-nums" 
+          style={{ color: "var(--tv-text-muted, #787b86)", fontSize: "10px" }}
         >
           {clockText || "--:--:--"}
         </span>

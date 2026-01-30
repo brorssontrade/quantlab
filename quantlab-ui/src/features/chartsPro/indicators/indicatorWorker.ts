@@ -1,15 +1,16 @@
 /// <reference lib="webworker" />
 
-import type { IndicatorInstance, NormalizedBar, Tf } from "../types";
-import { computeIndicator } from "./registry";
+import type { NormalizedBar, Tf } from "../types";
+import type { IndicatorKind, IndicatorPane } from "./registryV2";
+import { computeIndicator } from "./registryV2";
 
 interface WorkerRequest {
   type: "compute";
   payload: {
     id: string;
-    kind: IndicatorInstance["kind"];
-    params: IndicatorInstance["params"];
-    pane: IndicatorInstance["pane"];
+    kind: IndicatorKind;
+    params: Record<string, number | string>;
+    pane: IndicatorPane;
     color: string;
     timeframe: Tf;
     data: NormalizedBar[];
@@ -30,9 +31,8 @@ ctx.onmessage = (event: MessageEvent<WorkerRequest>) => {
         pane: payload.pane,
         color: payload.color,
         params: payload.params,
-      } as IndicatorInstance,
-      data: payload.data,
-      timeframe: payload.timeframe,
+      },
+      data: payload.data as any,
     });
     ctx.postMessage(result);
   } catch (error) {

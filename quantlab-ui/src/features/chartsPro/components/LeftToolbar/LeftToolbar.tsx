@@ -149,12 +149,20 @@ function DesktopToolbar({
         hidden md:flex flex-col items-center
         border-r border-slate-800/40
         bg-slate-950/40
-        overflow-y-auto
       "
       style={{
         gap: 'var(--cp-gap-xs)',
-        padding: 'var(--cp-pad) var(--cp-pad-sm)',
+        padding: '8px 4px', /* TV-style compact padding - prevents child overflow */
+        /* PRIO 2: Fixed dimensions prevent scrollbar - NO horizontal scroll ever */
+        height: '100%',
         maxHeight: '100%',
+        width: '48px', /* Fixed width matches TV sidebar exactly */
+        minWidth: '48px',
+        maxWidth: '48px',
+        boxSizing: 'border-box',
+        overflow: 'hidden', /* Clip any overflow - no scrollbars */
+        overflowX: 'clip', /* Modern clip is stronger than hidden */
+        overflowY: 'auto', /* Allow vertical scroll if needed */
       }}
       data-testid="tv-leftbar-container"
     >

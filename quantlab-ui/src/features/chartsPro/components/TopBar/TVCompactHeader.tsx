@@ -4,13 +4,15 @@
  * TradingView-style compact single-row header (48-52px)
  * 
  * Layout (TradingView Supercharts parity):
- * ┌──────────────────────────────────────────────────────────────────────┐
- * │ [Symbol] [TF▼] [Type▼] [⚙] │ ─gap─ │ [fx] [🔔] [📐] │ [🎨] [≡] [⋮] │
- * └──────────────────────────────────────────────────────────────────────┘
+ * ┌─────────────────────────────────────────────────────────────────────────────────┐
+ * │ [Symbol] [TF▼] [Type▼] [⚙] │ [Compare/Overlay controls] │ [fx] [🔔] [📐] [⋮] │
+ * └─────────────────────────────────────────────────────────────────────────────────┘
  * 
  * - Left: Symbol chip, Timeframe dropdown, ChartType dropdown, Settings gear
- * - Center: Flexible spacer
+ * - Center: Compare/Overlay/Inspector controls (scrollable, flex-1 min-w-0)
  * - Right: Panel toggles (fx/alerts/objects), Theme, Utils menu
+ * 
+ * PRIO 2: TopControls section added - Compare/Overlay moved from ChartViewport toolbar
  * 
  * Target dimensions:
  * - Height: 48-52px (strict)
@@ -38,11 +40,19 @@ import {
   ChevronDown,
   Loader2,
   Layers,
+  Plus,
+  X,
+  Eye,
+  EyeOff,
+  PanelRightOpen,
 } from "lucide-react";
-import type { ChartThemeName, ChartMeta } from "../../types";
+import type { ChartThemeName, ChartMeta, Tf } from "../../types";
 import type { ChartTimeframe } from "../../state/controls";
 import type { ChartType } from "./ChartTypeSelector";
 import { TV_LAYOUT } from "../TVLayoutShell";
+import { useToolbarStore, type CompareItem, type CompareMode, type OverlayState, type CompareScaleMode } from "../../state/toolbar";
+import { colorFor } from "../../state/compare";
+import { TIMEFRAME_OPTIONS } from "../../state/controls";
 
 // ========== TYPES ==========
 type ApiStatus = "online" | "offline" | "checking";
@@ -90,11 +100,16 @@ interface TVCompactHeaderProps {
   dataMode?: DataMode;
   onDataModeChange?: (mode: DataMode) => void;
   onInfoClick?: () => void;
+  
+  // PRIO 2: TopControls (Compare/Overlay/Inspector) in header
+  // When true, renders Compare/Overlay controls in the center section
+  showTopControls?: boolean;
 }
 
 // ========== CONSTANTS ==========
-const READY_TIMEFRAMES: ChartTimeframe[] = ["1h", "1D", "1W"];
-const ALL_TIMEFRAMES: ChartTimeframe[] = ["1m", "5m", "15m", "1h", "4h", "1D", "1W"];
+// PRIO 4: Extended timeframes to support range→timeframe mapping
+const READY_TIMEFRAMES: ChartTimeframe[] = ["1m", "5m", "15m", "30m", "1h", "2H", "4h", "1D", "1W"];
+const ALL_TIMEFRAMES: ChartTimeframe[] = ["1m", "5m", "15m", "30m", "1h", "2H", "4h", "1D", "1W"];
 
 // ========== COMPACT API STATUS (fits in 26px height) ==========
 interface CompactApiStatusProps {
@@ -175,7 +190,9 @@ const TF_LABELS: Record<ChartTimeframe, string> = {
   "1m": "1m",
   "5m": "5m",
   "15m": "15m",
+  "30m": "30m",
   "1h": "1H",
+  "2H": "2H",
   "4h": "4H",
   "1D": "1D",
   "1W": "1W",
@@ -593,52 +610,322 @@ const UtilsMenu = memo(function UtilsMenu({
         </button>
       }
     >
-      <DropdownItem onClick={onMagnetToggle}>
+      <DropdownItem onClick={onMagnetToggle} data-testid="utils-magnet-btn">
         <span className="flex items-center gap-2">
           <Magnet className={`w-4 h-4 ${magnetEnabled ? "text-[#2962ff]" : ""}`} />
           Magnet {magnetEnabled ? "On" : "Off"}
         </span>
       </DropdownItem>
-      <DropdownItem onClick={onSnapToggle}>
+      <DropdownItem onClick={onSnapToggle} data-testid="utils-snap-btn">
         <span className="flex items-center gap-2">
           <Grid3X3 className={`w-4 h-4 ${snapEnabled ? "text-[#2962ff]" : ""}`} />
           Snap {snapEnabled ? "On" : "Off"}
         </span>
       </DropdownItem>
       <DropdownSeparator />
-      <DropdownItem onClick={onSaveLayout}>
+      <DropdownItem onClick={onSaveLayout} data-testid="utils-save-layout">
         <span className="flex items-center gap-2">
           <Layout className="w-4 h-4" />
           Save Layout
         </span>
       </DropdownItem>
-      <DropdownItem onClick={onLoadLayout}>
+      <DropdownItem onClick={onLoadLayout} data-testid="utils-load-layout">
         <span className="flex items-center gap-2">
           <Layout className="w-4 h-4" />
           Load Layout
         </span>
       </DropdownItem>
       <DropdownSeparator />
-      <DropdownItem onClick={onExportPng}>
+      <DropdownItem onClick={onExportPng} data-testid="utils-export-png">
         <span className="flex items-center gap-2">
           <FileImage className="w-4 h-4" />
           Export PNG
         </span>
       </DropdownItem>
-      <DropdownItem onClick={onExportCsv}>
+      <DropdownItem onClick={onExportCsv} data-testid="utils-export-csv">
         <span className="flex items-center gap-2">
           <Download className="w-4 h-4" />
           Export CSV
         </span>
       </DropdownItem>
       <DropdownSeparator />
-      <DropdownItem onClick={onReload}>
+      <DropdownItem onClick={onReload} data-testid="utils-reload-btn">
         <span className="flex items-center gap-2">
           <RefreshCw className="w-4 h-4" />
           Reload Data
         </span>
       </DropdownItem>
     </SimpleDropdown>
+  );
+});
+
+// ========== TOP CONTROLS (Compare/Overlay/Inspector) ==========
+// PRIO 2: Moved from ChartViewport toolbar to header for TradingView-style layout
+
+const MODE_OPTIONS: Array<{ label: string; value: CompareMode }> = [
+  { label: "%", value: "percent" },
+  { label: "Idx", value: "indexed" },
+  { label: "$", value: "price" },
+];
+
+const OVERLAY_CONFIG: Array<{ group: "sma" | "ema"; value: number; label: string }> = [
+  { group: "sma", value: 20, label: "SMA 20" },
+  { group: "sma", value: 50, label: "SMA 50" },
+  { group: "ema", value: 12, label: "EMA 12" },
+  { group: "ema", value: 26, label: "EMA 26" },
+];
+
+interface TopControlsProps {
+  defaultTimeframe: Tf;
+}
+
+const TopControls = memo(function TopControls({ defaultTimeframe }: TopControlsProps) {
+  const {
+    compareItems,
+    defaultCompareMode,
+    defaultCompareTimeframe,
+    compareScaleMode,
+    overlayState,
+    inspectorOpen,
+    addCompare,
+    removeCompare,
+    toggleCompare,
+    setCompareMode,
+    setCompareTimeframe,
+    setDefaultCompareMode,
+    setDefaultCompareTimeframe,
+    setCompareScaleMode,
+    toggleOverlay,
+    toggleInspector,
+  } = useToolbarStore();
+  
+  const [symbolInput, setSymbolInput] = useState("");
+  const [addModeValue, setAddModeValue] = useState<CompareMode>(defaultCompareMode);
+  const [addTimeframeValue, setAddTimeframeValue] = useState<Tf>(defaultCompareTimeframe);
+  
+  // Sync local state when store defaults change
+  useEffect(() => {
+    setAddModeValue(defaultCompareMode);
+  }, [defaultCompareMode]);
+  
+  useEffect(() => {
+    setAddTimeframeValue(defaultCompareTimeframe);
+  }, [defaultCompareTimeframe]);
+  
+  const handleAddCompare = () => {
+    const trimmed = symbolInput.trim().toUpperCase();
+    if (!trimmed) return;
+    
+    // Use chart API to add compare (handles data fetching, rendering, AND max count guard)
+    // Do NOT call addCompare directly - the ChartViewport handles state sync
+    const lwcharts = (window as any).__lwcharts;
+    if (lwcharts?.compare?.add) {
+      lwcharts.compare.add(trimmed, { mode: addModeValue, timeframe: addTimeframeValue });
+    }
+    
+    // Update defaults
+    setDefaultCompareMode(addModeValue);
+    setDefaultCompareTimeframe(addTimeframeValue);
+    setSymbolInput("");
+  };
+  
+  return (
+    <div
+      className="flex items-center gap-1 overflow-x-auto scrollbar-hide"
+      style={{
+        flex: "1 1 0%",
+        minWidth: 0,
+        whiteSpace: "nowrap",
+        scrollbarWidth: "none",
+        msOverflowStyle: "none",
+      }}
+      data-testid="topbar-controls"
+    >
+      {/* Scale mode toggle */}
+      <button
+        type="button"
+        data-testid="topbar-scale-mode-toggle"
+        onClick={() => setCompareScaleMode(compareScaleMode === "percent" ? "price" : "percent")}
+        className={`
+          inline-flex items-center justify-center
+          h-[22px] px-1.5
+          rounded-sm text-[10px] font-medium uppercase
+          transition-colors
+          ${compareScaleMode === "percent"
+            ? "bg-[#2962ff]/15 text-[#2962ff]"
+            : "bg-transparent text-[#787b86] hover:bg-[#2a2e39] hover:text-[#d1d4dc]"
+          }
+        `}
+        title={compareScaleMode === "percent" ? "Scale: Percent" : "Scale: Price"}
+      >
+        {compareScaleMode === "percent" ? "%" : "$"}
+      </button>
+      
+      {/* Add compare input */}
+      <div className="flex items-center gap-0.5">
+        <input
+          type="text"
+          value={symbolInput}
+          onChange={(e) => setSymbolInput(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleAddCompare()}
+          placeholder="+ Compare"
+          className="
+            h-[22px] w-20 px-1.5
+            bg-transparent text-[10px] text-[#d1d4dc]
+            border border-[#363a45] rounded-sm
+            placeholder:text-[#787b86]
+            focus:outline-none focus:border-[#2962ff]
+          "
+          data-testid="topbar-compare-input"
+        />
+        <select
+          value={addTimeframeValue}
+          onChange={(e) => setAddTimeframeValue(e.target.value as Tf)}
+          className="
+            h-[22px] px-0.5
+            bg-[#1e222d] text-[10px] text-[#787b86]
+            border border-[#363a45] rounded-sm
+            focus:outline-none
+          "
+          data-testid="topbar-compare-tf"
+        >
+          {TIMEFRAME_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.value}</option>
+          ))}
+        </select>
+        <select
+          value={addModeValue}
+          onChange={(e) => setAddModeValue(e.target.value as CompareMode)}
+          className="
+            h-[22px] px-0.5
+            bg-[#1e222d] text-[10px] text-[#787b86]
+            border border-[#363a45] rounded-sm
+            focus:outline-none
+          "
+          data-testid="topbar-compare-mode"
+        >
+          {MODE_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+        {symbolInput.trim() && (
+          <button
+            type="button"
+            onClick={handleAddCompare}
+            className="h-[22px] px-1.5 text-[10px] bg-[#2962ff]/15 text-[#2962ff] rounded-sm hover:bg-[#2962ff]/25"
+            data-testid="topbar-compare-add-btn"
+          >
+            <Plus className="w-3 h-3" />
+          </button>
+        )}
+      </div>
+      
+      {/* Separator */}
+      {compareItems.length > 0 && <div className="w-px h-4 bg-[#363a45] mx-1" />}
+      
+      {/* Compare chips */}
+      {compareItems.map((item) => (
+        <div
+          key={item.symbol}
+          className={`
+            inline-flex items-center gap-0.5
+            h-[22px] px-1.5
+            bg-[#2a2e39] rounded-sm
+            text-[10px] font-medium
+            ${item.hidden ? "opacity-50" : ""}
+          `}
+          data-testid={`topbar-compare-chip-${item.symbol.toLowerCase().replace(/\./g, "-")}`}
+        >
+          <span
+            className="w-1.5 h-1.5 rounded-full"
+            style={{ backgroundColor: colorFor(item.symbol) }}
+          />
+          <span className="text-[#d1d4dc]">{item.symbol}</span>
+          <select
+            value={item.mode}
+            onChange={(e) => setCompareMode(item.symbol, e.target.value as CompareMode)}
+            className="
+              h-4 px-0.5 ml-0.5
+              bg-transparent text-[9px] text-[#787b86]
+              border-none
+              focus:outline-none cursor-pointer
+            "
+            onClick={(e) => e.stopPropagation()}
+          >
+            {MODE_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => toggleCompare(item.symbol)}
+            className="p-0.5 hover:bg-[#363a45] rounded-sm"
+            title={item.hidden ? "Show" : "Hide"}
+          >
+            {item.hidden ? <EyeOff className="w-2.5 h-2.5 text-[#787b86]" /> : <Eye className="w-2.5 h-2.5 text-[#787b86]" />}
+          </button>
+          <button
+            type="button"
+            onClick={() => removeCompare(item.symbol)}
+            className="p-0.5 hover:bg-[#363a45] rounded-sm"
+            title="Remove"
+          >
+            <X className="w-2.5 h-2.5 text-[#787b86]" />
+          </button>
+        </div>
+      ))}
+      
+      {/* Separator before overlays */}
+      <div className="w-px h-4 bg-[#363a45] mx-1" />
+      
+      {/* Overlay toggles (SMA/EMA) */}
+      {OVERLAY_CONFIG.map((item) => {
+        const active = overlayState[item.group].includes(item.value);
+        return (
+          <button
+            key={`${item.group}-${item.value}`}
+            type="button"
+            onClick={() => toggleOverlay(item.group, item.value)}
+            className={`
+              inline-flex items-center justify-center
+              h-[22px] px-1.5
+              rounded-sm text-[10px] font-medium
+              transition-colors
+              ${active
+                ? "bg-[#2962ff]/15 text-[#2962ff]"
+                : "bg-transparent text-[#787b86] hover:bg-[#2a2e39] hover:text-[#d1d4dc]"
+              }
+            `}
+            data-testid={`topbar-overlay-${item.group}-${item.value}`}
+          >
+            {item.label}
+          </button>
+        );
+      })}
+      
+      {/* Separator before inspector */}
+      <div className="w-px h-4 bg-[#363a45] mx-1" />
+      
+      {/* Inspector toggle */}
+      <button
+        type="button"
+        onClick={toggleInspector}
+        className={`
+          inline-flex items-center justify-center
+          h-[22px] px-1.5
+          rounded-sm text-[10px] font-medium
+          transition-colors
+          ${inspectorOpen
+            ? "bg-[#2962ff]/15 text-[#2962ff]"
+            : "bg-transparent text-[#787b86] hover:bg-[#2a2e39] hover:text-[#d1d4dc]"
+          }
+        `}
+        data-testid="topbar-inspector-toggle"
+        title="Inspector"
+      >
+        <PanelRightOpen className="w-3.5 h-3.5" />
+      </button>
+    </div>
   );
 });
 
@@ -673,6 +960,8 @@ export const TVCompactHeader = memo(function TVCompactHeader({
   dataMode = "mock",
   onDataModeChange,
   onInfoClick,
+  // PRIO 2: TopControls
+  showTopControls = false,
 }: TVCompactHeaderProps) {
   const isDark = theme === "dark";
 
@@ -721,8 +1010,12 @@ export const TVCompactHeader = memo(function TVCompactHeader({
         </CompactButton>
       </div>
 
-      {/* CENTER SPACER */}
-      <div className="flex-1 min-w-0" />
+      {/* CENTER: TopControls (Compare/Overlay) OR spacer */}
+      {showTopControls ? (
+        <TopControls defaultTimeframe={timeframe as Tf} />
+      ) : (
+        <div className="flex-1 min-w-0" />
+      )}
 
       {/* RIGHT GROUP: API Status + Panel Toggles + Theme + Utils */}
       <div className="flex items-center gap-1" data-testid="tv-header-right">
@@ -750,7 +1043,7 @@ export const TVCompactHeader = memo(function TVCompactHeader({
         <CompactButton
           onClick={onIndicatorsClick}
           title="Indicators"
-          data-testid="indicators-button"
+          data-testid="topbar-indicators-btn"
         >
           <Layers className="w-4 h-4" />
         </CompactButton>
@@ -758,7 +1051,7 @@ export const TVCompactHeader = memo(function TVCompactHeader({
         <CompactButton
           onClick={onAlertsClick}
           title="Alerts"
-          data-testid="alerts-button"
+          data-testid="topbar-alerts-btn"
         >
           <Bell className="w-4 h-4" />
         </CompactButton>
@@ -766,7 +1059,7 @@ export const TVCompactHeader = memo(function TVCompactHeader({
         <CompactButton
           onClick={onObjectsClick}
           title="Objects"
-          data-testid="objects-button"
+          data-testid="topbar-objects-btn"
         >
           <Ruler className="w-4 h-4" />
         </CompactButton>

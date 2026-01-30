@@ -1,8 +1,312 @@
+### PRIO 3: Indicator Library (2025-01-31)
+
+**Status:** ✅ **COMPLETE** (render pipeline fixed 2025-01-30)
+
+**Context:** User requested a full TradingView-style indicator system with:
+- Indicator Registry ("single source of truth") with manifest structure
+- Compute pipeline (worker + caching + incremental)
+- TradingView-style modal (search + categories + keyboard nav)
+- Indicators panel (edit/hide/remove)
+- Batch implement core set: SMA, EMA, RSI, MACD, BB, ATR, ADX, VWAP, OBV
+- Playwright tests using selectors.ts
+
+**Implementation Details:**
+
+1. **Indicator Registry (indicatorManifest.ts)**
+   - 9 indicators defined with full metadata
+   - Categories: moving-average, momentum, volatility, volume
+   - Each manifest has: id, name, shortName, category, tags, description, panePolicy, inputs, outputs
+   - TV_COLORS constants for TradingView-style defaults
+   - Helper functions: getIndicatorManifest, getAllIndicators, searchIndicators, getDefaultInputs
+
+2. **Compute Pipeline (compute.ts + registryV2.ts)**
+   - Pure compute functions: computeSMA, computeEMA, computeRSI, computeMACD, computeBollingerBands, computeATR, computeADX, computeVWAP, computeOBV
+   - Source helpers for different price types (close, open, high, low, hl2, hlc3, ohlc4)
+   - Cache with 50 entries, 5-minute TTL
+   - Cache key: indicatorId + kind + paramsHash + dataHash
+   - Unified computeIndicator() function
+
+3. **TradingView-style Modal (IndicatorsModalV2.tsx)**
+   - Left sidebar with categories (All, Moving Averages, Momentum, Volatility, Volume)
+   - Search input with instant filtering
+   - Keyboard navigation (ArrowUp/Down, Enter to add, Esc to close)
+   - Premium TV styling with proper tokens
+   - Shows indicator count, overlay/separate badge
+
+4. **Indicators Panel (IndicatorsTabV2.tsx)**
+   - Color dot indicator
+   - Drag handle (visual)
+   - Hide/Show toggle (eye icon)
+   - Inline param editing with proper input types
+   - Remove button (trash icon)
+   - **NEW: Compute status display** - Shows pts count, last value, or error badge
+   - **NEW: Pane badge** - Overlay (blue) / Separate (orange)
+   - Premium TV spacing and hover states
+
+5. **Core Indicators (9 total)**
+   - **Moving Averages (overlay):** SMA, EMA
+   - **Momentum (separate):** RSI, MACD, ADX
+   - **Volatility (overlay/separate):** BB (overlay), ATR (separate)
+   - **Volume (overlay/separate):** VWAP (overlay), OBV (separate)
+   - All with proper default params matching TradingView
+
+6. **Updated types.ts**
+   - Extended IndicatorKind: "sma" | "ema" | "rsi" | "macd" | "bb" | "atr" | "adx" | "vwap" | "obv"
+   - Added param interfaces: BbParams, AtrParams, AdxParams, VwapParams, ObvParams
+   - Updated helper functions for all indicators
+
+7. **Render Pipeline Fixes (2025-01-30)**
+   - **scaleMargins-banding in ChartViewport.tsx** - Gives each "separate" indicator its own vertical section:
+     - Price pane: top 56% (scaleMargins: top 0.02, bottom 0.42)
+     - Separate indicators: zones from 60%-98%, divided equally among them
+     - Each separate scale gets `autoScale: true` and `borderVisible: true`
+   - **onIndicatorResultsChange callback** - Exposes compute results from ChartViewport → ChartsProTab → IndicatorsTabV2
+   - **drawings.ts pane fix** - Uses manifest panePolicy via `getIndicatorManifest()` for all 9 indicators (not just RSI/MACD)
+   - **KNOWN_INDICATOR_KINDS expanded** - Now includes all 9: sma, ema, rsi, macd, bb, atr, adx, vwap, obv
+
+**Test Suite: `chartsPro.prio3.indicators.spec.ts`** (22 tests):
+- Modal UI: Open, categories, search, filter, Escape, keyboard nav
+- Adding Indicators: All 9 types with correct pane assignment
+- Panel Actions: Hide/show, remove, edit params, param update
+- Multi-output: MACD (3 lines), BB (3 lines), ADX (3 lines)
+- Performance: Adding 5 indicators rapidly doesn't freeze UI
+
+**Key File Locations:**
+- `indicators/indicatorManifest.ts` - Registry definitions
+- `indicators/compute.ts` - Pure compute functions
+- `indicators/registryV2.ts` - Unified compute with caching
+- `components/Modal/IndicatorsModalV2.tsx` - TV-style picker modal
+- `components/RightPanel/IndicatorsTabV2.tsx` - Enhanced panel with status
+- `components/ChartViewport.tsx` - scaleMargins effect for separate panes
+- `state/drawings.ts` - pane assignment using manifest
+- `tests/chartsPro.prio3.indicators.spec.ts` - Playwright tests
+- `tests/selectors.ts` - Added INDICATORS_MODAL selectors
+
+---
+
 ### TV-39: Layout Parity (COMPLETE + POLISH PASS)
 
-**Status:** ✅ **COMPLETE + POLISH PASS** (2025-07-12, extended 2025-07-13, polish 2025-07-14)
+**Status:** ✅ **COMPLETE + POLISH PASS** (2025-07-12, extended 2025-07-13, polish 2025-07-14, PRIO pass 2025-07-15, fullscreen fix 2025-07-16, final 2025-01-29, test stabilization 2025-01-30, PRIO 2.5 2025-01-31)
 
 **Task Description:** Add layout dimension verification tests for TradingView-style layout parity. Validates that key UI regions (TopBar, LeftToolbar, BottomBar, RightPanel) have proper dimensions and exposes layout metrics via `dump().ui.layout`.
+
+---
+
+### PRIO 2.5: Default 485-day + 1D Range Stability (2025-01-31)
+
+**Context:** User requested hardening of the default view: 1D timeframe, ~485 bars visible, range must NOT reset on inspector toggle, compare add, window resize, or panel open/close. Only explicit Fit button should reset range.
+
+**Implementation Details:**
+
+1. **DEFAULT_TIMEFRAME = "1D"** - Already correct in `state/controls.ts`
+
+2. **applyInitialRange()** - Shows last 485 bars for 1D timeframe:
+   - Calculates visible range to show max 485 bars (or all if less data)
+   - Sets `rangeInitializedRef.current = true` to prevent auto-fit
+
+3. **rangeInitializedRef Guard** - Gates all auto-fitToContent triggers:
+   - Inspector toggle: ✓ Gated
+   - Compare callback: ✓ Gated
+   - ResizeObserver: ✓ Gated + preserves exact range before/after resize
+
+4. **ResizeObserver Range Preservation Fix:**
+   - Problem: `chart.resize()` caused lightweight-charts to recalculate visible range
+   - Solution: Capture exact `getVisibleLogicalRange()` before resize, restore with `setVisibleLogicalRange()` after resize
+   - This prevents range drift when viewport dimensions change
+
+**Test Suite: `chartsPro.prio2-5.defaultRange.spec.ts`** (7/7 passing):
+1. Initial timeframe is 1D ✓
+2. Initial view shows ~485 bars (or max available) ✓
+3. Range does NOT reset when toggling inspector ✓
+4. Range does NOT reset when adding compare symbol ✓
+5. Range does NOT reset when resizing window ✓ (fixed with range preservation)
+6. Range does NOT reset when opening/closing right panel tabs ✓
+7. Explicit Fit button DOES reset to all history ✓
+
+**Key Code Locations:**
+- `ChartViewport.tsx#applyInitialRange` - Initial 485-bar view
+- `ChartViewport.tsx#rangeInitializedRef` - Guard flag
+- `ChartViewport.tsx` ResizeObserver - Range preservation on resize
+- `state/controls.ts#DEFAULT_TIMEFRAME` - "1D"
+
+---
+
+### QUALITY GATE: Test Stabilization (2025-01-30)
+
+**Context:** PRIO 2 (TopControls in TVCompactHeader) changed many UI selectors. Many Playwright tests failed due to selector rot.
+
+**Actions Taken:**
+
+1. **Created `tests/selectors.ts`** - Central test selector definitions to prevent selector rot:
+   - TOPBAR: symbolChip, symbolInput, symbolDropdown, timeframe, chartType, compare controls, overlay toggles, inspector toggle, utils menu
+   - COMPARE_TOOLBAR: Legacy non-workspace mode selectors
+   - TV_SHELL: Layout shell components (root, header, left, right, bottom, main)
+   - LEFT_TOOLBAR: Drawing tools (select, hline, trendline, text, ruler)
+   - RIGHT_PANEL: Panel tabs (indicators, objects, alerts)
+   - BOTTOM_BAR: Quick ranges, scale toggles, clock
+   - CHARTS_PRO: Core chart components (legend, ohlc, crosshair, inspector)
+   - SETTINGS: Updated for modal dialog (was panel)
+   - MODALS: Indicator search, alert form, series settings
+   - Helper functions: waitForChartReady, waitForCompareReady, getDump, chartSet, addCompareViaTopbar
+
+2. **Added data-testid to TVCompactHeader UtilsMenu:**
+   - `utils-magnet-btn`, `utils-snap-btn`
+   - `utils-save-layout`, `utils-load-layout`
+   - `utils-export-png`, `utils-export-csv`
+   - `utils-reload-btn`
+
+3. **Updated test suites:**
+   - `chartsPro.tvUi.topbar.spec.ts` - 7/7 passing (symbol chip, timeframe, utils menu, theme toggle)
+   - `chartsPro.tvUi.symbolSearch.spec.ts` - 3/3 passing (type→enter, escape, localStorage persistence)
+   - `chartsPro.tvUi.settingsPanel.spec.ts` - 3/4 passing (opens, esc closes, TopBar height; click-outside skipped)
+
+4. **Key UI Changes Documented:**
+   - **Symbol:** Now displayed as chip (`tv-symbol-chip`), click to activate input
+   - **Utils:** Magnet, snap, reload moved to UtilsMenu dropdown
+   - **Theme:** Single toggle button instead of dark/light buttons
+   - **Settings:** Now modal dialog (`SettingsDialog`) instead of panel
+
+**Test Status Summary:**
+- Core topbar/symbolSearch/settings tests: 13 passed, 6 skipped (deprecated panel tests)
+- Candle visibility tests: 2 passed
+- Full tvUi suite needs more fixes (timeframe, topbar.actions)
+
+**Pending Test Fixes (T-XXX):**
+- `chartsPro.tvUi.timeframe.spec.ts` - Case sensitivity (`1h` vs `1H`), dropdown close behavior
+- `chartsPro.tvUi.topbar.actions.spec.ts` - Drawing tool not visible (left toolbar collapsed?)
+- Settings controls: Need full rewrite for `SettingsDialog` modal
+
+---
+
+### KNOWN UX ISSUE: Candle "Perception" (barSpacing/zoom)
+
+**Status:** ⚠️ **DOCUMENTED** - Not a bug, but a perception issue
+
+**Symptom:** At initial load with 485 days of 1D data, candles appear as thin vertical lines (barSpacing ~3px).
+
+**Root Cause:** This is correct behavior - showing 485 bars in ~1138px width requires ~3px per bar.
+
+**TradingView Comparison:** TV also shows thin candles at this zoom level. User must zoom in for "normal" candle appearance.
+
+**Current Behavior:**
+- Initial: 365 pricePoints visible, barSpacing 3.1px
+- After zoom in: barSpacing ~22px, fat candles visible
+- Test confirms: `hasUpColor: true` at initial zoom (candles are there, just thin)
+
+**Potential Future Enhancements:**
+1. Auto-zoom to show last N days (e.g., 60 days) for better UX
+2. Add zoom presets in bottom bar (1M, 3M, 6M, 1Y)
+3. Remember user's preferred zoom level per symbol/timeframe
+
+**No action required** - behavior is correct. Document for user education.
+
+---
+
+**TV-39.16: Final Panel Width + Range Fix (2025-01-29):**
+
+**FIX 1: TabsPanel Width Mismatch (DONE):**
+- **Root cause:** TabsPanel.tsx used `clamp(var(--cp-sidebar-w-min), 25vw, var(--cp-sidebar-w-max))` for width, but TVLayoutShell grid uses `rightPanelWidth` (280-400px). At wide viewports (>1280px), 25vw exceeds grid column → content clips.
+- **Fix:** Changed TabsPanel to use `width: 100%` - inherits from grid cell, TVLayoutShell controls actual width.
+- **Test:** TV-39.12.5 verifies TabsPanel right edge matches grid panel at 1920×1080
+
+**FIX 2: 485-day Range Override Prevention (DONE):**
+- **Root cause:** Multiple `fitToContent()` calls in effects (inspector toggle, compare series, ResizeObserver) were overriding the initial 485-day range.
+- **Fix:** Added `rangeInitializedRef` guard. Set to `true` in `applyInitialRange` when 1D range is applied. Gated fitToContent calls in:
+  - Inspector open/close effect (now just resizes, doesn't fit)
+  - Compare series data callback
+  - ResizeObserver callback
+- Reset `rangeInitializedRef` to `false` when timeframe changes (so new TF gets proper initial range)
+- **Tests:** TV-39.13.1 (485 bars visible), TV-39.13.2 (inspector toggle doesn't reset range)
+
+**FIX 3: Compare Toolbar Visible (DONE):**
+- `hideToolbar={false}` in ChartsProTab.tsx - Compare/Overlay/Add controls remain visible
+- Step B pending: Integrate controls into TVCompactHeader
+
+**New Tests (31 total):**
+- TV-39.12.5: TabsPanel width matches grid column at 1920×1080
+- TV-39.13.1: 1D timeframe shows ~485 bars, not all history
+- TV-39.13.2: Inspector toggle does not reset to fit-all
+
+**TV-39.15: Fullscreen Clipping Fix (2025-07-16):**
+
+**FIX 1: Right Rail Grid Shrinking (DONE):**
+- Added `minWidth: 0`, `minHeight: 0`, `overflow: hidden` to right rail container in TVLayoutShell.tsx
+- CSS Grid children need these properties to allow shrinking below content size
+- `minmax(0, 1fr)` alone is not sufficient - children must also have minHeight/minWidth: 0
+
+**FIX 2: 485-day Default Range Always Applies (DONE):**
+- Rewrote `applyInitialRange` in ChartViewport.tsx to ALWAYS show last 485 bars for 1D timeframe
+- Removed `chartInitializedRef` and localStorage `cp.chartpro.initialized` flag
+- Logic: For 1D timeframe with >50 bars, show last 485 bars; otherwise fitContent()
+- Updated call site: `applyInitialRange(priceSeriesData.length, timeframeRef.current)`
+
+**FIX 3 (Step A): Compare Toolbar Visible (DONE):**
+- Changed `hideToolbar={workspaceMode}` to `hideToolbar={false}` in ChartsProTab.tsx
+- Compare/Overlay/Add controls must remain visible until properly integrated into TVCompactHeader
+- Step B (TODO): Integrate controls INTO topbar with icons/compact layout
+
+**Test Coverage:**
+- TV-39.12.3: Right panel not clipped in fullscreen (1920x1080)
+- TV-39.12.4: Right panel scrollable when content exceeds viewport (1366x768)
+- All 28 TV-39 tests pass
+
+**TV-39.14: Pixel + UX Parity Pass (2025-07-15):**
+
+**PRIO 1: Right Panel Full Height (DONE):**
+- Fixed TVLayoutShell right panel: `display: flex`, `flexDirection: column`, `minHeight: 0`, `overflow: hidden`
+- Fixed TabsPanel: `height: 100%`, `minHeight: 0`, `overflow-y-auto` on content area
+- Children handle scroll, not the panel container
+- All 26 TV-39 layout tests pass
+
+**PRIO 2: Left Toolbar Scrollbar Fix (DONE):**
+- Fixed LeftToolbar width: `width: 48px`, `minWidth: 48px`, `maxWidth: 48px`
+- Added `box-sizing: border-box`, `overflowX: hidden`, `overflowY: auto`
+- No horizontal scrollbar at bottom
+
+**PRIO 2: TopControls in TVCompactHeader (DONE 2025-01-29):**
+- Moved Compare/Overlay/Inspector controls from ChartViewport's internal toolbar into TVCompactHeader
+- Created `state/toolbar.ts` Zustand store for single source of truth (compareItems, overlayState, inspectorOpen, compareScaleMode)
+- Added `TopControls` component in TVCompactHeader.tsx with:
+  - Scale mode toggle ($/%)
+  - Compare input with timeframe/mode selects
+  - Compare chips with visibility toggle and remove buttons
+  - Overlay toggles (SMA 20, SMA 50, EMA 12, EMA 26)
+  - Inspector toggle button
+- ChartsProTab passes `showTopControls={workspaceMode}` to TVCompactHeader
+- ChartViewport syncs state from store when `hideToolbar=true`
+- TopControls uses `window.__lwcharts.compare.add()` API for proper data fetching
+- 6 Playwright tests in `chartsPro.prio2.topControls.spec.ts` - all pass:
+  - TC1: TopControls visible in header
+  - TC2: Internal toolbar NOT rendered
+  - TC3: Compare input adds symbol to chart
+  - TC4: Overlay toggles work from header
+  - TC5: Inspector toggle works from header
+  - TC6: Scale mode toggle works from header
+
+**PRIO 3: Toolbar Row into TopBar (SUPERSEDED by PRIO 2):**
+- Scale/Compare/Overlay/Add controls currently in BottomBar (TV-style)
+- TVCompactHeader already has panel toggles (fx/alerts/objects)
+- Requires design decision on what to move
+- **Superseded:** See PRIO 2 above - controls now in TVCompactHeader
+
+**PRIO 4: Range→Timeframe Mapping (DONE):**
+- Added `RANGE_TIMEFRAME_MAP` constant to rangePresets.ts
+- Added 3M preset (90 days) to range presets
+- Mapping: 1D→1m, 5D→5m, 1M→30m, 3M→1h, 6M→2H, YTD/1Y/All→1D
+- Extended timeframes: Added 30m, 2H to TIMEFRAME_OPTIONS and all selectors
+- Default timeframe changed to 1D (was 1h)
+- BottomBar calls `onTimeframeChange` when range preset clicked
+- ChartsProTab passes `onTimeframeChange` and `currentTimeframe` to BottomBar
+- Created 6 tests in `chartsPro.rangeTimeframe.spec.ts` - all pass
+
+**PRIO 5: App Nav + API Status in TopBar (ALREADY DONE):**
+- TVCompactHeader already has API status integration (green/red dot + LIVE/MOCK toggle)
+- URL shown on hover tooltip
+- No additional app nav needed - design is TV-tight
+
+**Test Changes:**
+- Fixed testid: `tv-layout-shell` → `tv-shell` (matching test expectations)
+- Updated `chartsPro.tv39.layoutParity.spec.ts` selector reference
 
 **TV-39.13: Full UI Polish Pass (2025-07-14):**
 1. **TVCompactHeader API Status Integration:**

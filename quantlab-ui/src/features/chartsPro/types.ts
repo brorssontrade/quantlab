@@ -393,7 +393,8 @@ export interface CompareSeriesConfig {
   hidden?: boolean;
 }
 
-export type IndicatorKind = "sma" | "ema" | "rsi" | "macd";
+// PRIO 3: Extended indicator kinds
+export type IndicatorKind = "sma" | "ema" | "rsi" | "macd" | "bb" | "atr" | "adx" | "vwap" | "obv";
 
 export type IndicatorPane = "price" | "separate";
 
@@ -403,14 +404,19 @@ export interface IndicatorBase {
   pane: IndicatorPane;
   color: string;
   hidden?: boolean;
+  // PRIO 3: Generic params - allows any indicator-specific params
+  params: Record<string, number | string>;
 }
 
+// Legacy specific param interfaces (kept for backwards compatibility)
 export interface SmaParams {
   period: number;
+  source?: string;
 }
 
 export interface EmaParams {
   period: number;
+  source?: string;
 }
 
 export interface RsiParams {
@@ -423,29 +429,54 @@ export interface MacdParams {
   signal: number;
 }
 
-export type IndicatorParams = SmaParams | EmaParams | RsiParams | MacdParams;
+export interface BbParams {
+  period: number;
+  stdDev: number;
+  source?: string;
+}
 
-export interface SmaIndicator extends IndicatorBase {
+export interface AtrParams {
+  period: number;
+}
+
+export interface AdxParams {
+  period: number;
+  smoothing: number;
+}
+
+export interface VwapParams {
+  anchorPeriod: "session" | "week" | "month";
+}
+
+export interface ObvParams {
+  // OBV has no params
+}
+
+export type IndicatorParams = SmaParams | EmaParams | RsiParams | MacdParams | BbParams | AtrParams | AdxParams | VwapParams | ObvParams;
+
+// PRIO 3: Simplified IndicatorInstance using generic params
+export type IndicatorInstance = IndicatorBase;
+
+// Legacy specific indicator types (kept for backwards compatibility)
+export interface SmaIndicator extends Omit<IndicatorBase, "params"> {
   kind: "sma";
   params: SmaParams;
 }
 
-export interface EmaIndicator extends IndicatorBase {
+export interface EmaIndicator extends Omit<IndicatorBase, "params"> {
   kind: "ema";
   params: EmaParams;
 }
 
-export interface RsiIndicator extends IndicatorBase {
+export interface RsiIndicator extends Omit<IndicatorBase, "params"> {
   kind: "rsi";
   params: RsiParams;
 }
 
-export interface MacdIndicator extends IndicatorBase {
+export interface MacdIndicator extends Omit<IndicatorBase, "params"> {
   kind: "macd";
   params: MacdParams;
 }
-
-export type IndicatorInstance = SmaIndicator | EmaIndicator | RsiIndicator | MacdIndicator;
 
 export const tsMsToUtc = (ts: EpochMs): UTCTimestamp => Math.floor(ts / 1000) as UTCTimestamp;
 
@@ -551,15 +582,25 @@ export function slopePercentPerBar(trend: Trend, tf: Tf): number {
   return (pricePerBar / trend.p1.price) * 100;
 }
 
-export function defaultIndicatorParams(kind: IndicatorKind): IndicatorParams {
+export function defaultIndicatorParams(kind: IndicatorKind): Record<string, number | string> {
   switch (kind) {
     case "ema":
     case "sma":
-      return { period: 20 };
+      return { period: 20, source: "close" };
     case "rsi":
       return { period: 14 };
     case "macd":
       return { fast: 12, slow: 26, signal: 9 };
+    case "bb":
+      return { period: 20, stdDev: 2, source: "close" };
+    case "atr":
+      return { period: 14 };
+    case "adx":
+      return { period: 14, smoothing: 14 };
+    case "vwap":
+      return { anchorPeriod: "session" };
+    case "obv":
+      return {};
     default:
       return { period: 20 };
   }
@@ -570,6 +611,11 @@ const INDICATOR_LABELS: Record<IndicatorKind, string> = {
   ema: "EMA",
   rsi: "RSI",
   macd: "MACD",
+  bb: "BB",
+  atr: "ATR",
+  adx: "ADX",
+  vwap: "VWAP",
+  obv: "OBV",
 };
 
 export function indicatorDisplayName(kind: IndicatorKind) {
@@ -582,14 +628,25 @@ export function indicatorDisplayName(kind: IndicatorKind) {
  */
 export function indicatorParamsSummary(indicator: IndicatorInstance): string {
   const name = indicatorDisplayName(indicator.kind);
+  const params = indicator.params;
   switch (indicator.kind) {
     case "ema":
     case "sma":
-      return `${name}(${indicator.params.period})`;
+      return `${name}(${params.period ?? 20})`;
     case "rsi":
-      return `${name}(${indicator.params.period})`;
+      return `${name}(${params.period ?? 14})`;
     case "macd":
-      return `${name}(${indicator.params.fast},${indicator.params.slow},${indicator.params.signal})`;
+      return `${name}(${params.fast ?? 12},${params.slow ?? 26},${params.signal ?? 9})`;
+    case "bb":
+      return `${name}(${params.period ?? 20},${params.stdDev ?? 2})`;
+    case "atr":
+      return `${name}(${params.period ?? 14})`;
+    case "adx":
+      return `${name}(${params.period ?? 14})`;
+    case "vwap":
+      return name;
+    case "obv":
+      return name;
     default:
       return name;
   }

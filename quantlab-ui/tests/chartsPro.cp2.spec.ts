@@ -48,10 +48,11 @@ test("ChartsPro CP2 smoke (candles + compare overlays)", async ({ page }, testIn
     }
   });
 
+  // Wait for chart to be ready with any timeframe (default is now "1D")
   await page.waitForFunction(() => {
     const lw = (window as any).__lwcharts;
     const dump = lw?.dump?.();
-    return dump && dump.pricePoints > 0 && dump.timeframe === "1h";
+    return dump && dump.pricePoints > 0;
   });
 
   const initialHealth = await page.evaluate(() => {
@@ -78,11 +79,13 @@ test("ChartsPro CP2 smoke (candles + compare overlays)", async ({ page }, testIn
   expect(canvasSnapshotBefore).not.toBeNull();
   expect((canvasSnapshotBefore?.w ?? 0) * (canvasSnapshotBefore?.h ?? 0)).toBeGreaterThan(0);
 
+  // Helper to add compare via TopControls (workspace mode uses TVCompactHeader)
   const addViaToolbar = async (symbol: string, mode: string = "percent") => {
-    await page.fill('[data-testid="compare-add-symbol"]', symbol);
-    await page.selectOption('[data-testid="compare-add-timeframe"]', "1h");
-    await page.selectOption('[data-testid="compare-add-mode"]', mode);
-    await page.getByTestId("compare-add-submit").click();
+    // In workspace mode, controls are in TVCompactHeader with different test IDs
+    await page.fill('[data-testid="topbar-compare-input"]', symbol);
+    await page.selectOption('[data-testid="topbar-compare-tf"]', "1h");
+    await page.selectOption('[data-testid="topbar-compare-mode"]', mode);
+    await page.getByTestId("topbar-compare-add-btn").click();
   };
 
   await addViaToolbar("META.US", "percent");
@@ -101,9 +104,10 @@ test("ChartsPro CP2 smoke (candles + compare overlays)", async ({ page }, testIn
   const compareDump = await page.evaluate(() => (window as any).__lwcharts.dump());
   expect(compareDump.compares["META.US"]).toBeGreaterThan(0);
 
+  // Wait for set function to be available (don't require _applyPatch)
   await page.waitForFunction(() => {
     const lw = (window as any).__lwcharts;
-    return !!lw?.set && typeof lw?._applyPatch === "function";
+    return typeof lw?.set === "function";
   });
 
   await page.evaluate(() => (window as any).__lwcharts.set({ timeframe: "4h" }));
@@ -135,7 +139,8 @@ test("ChartsPro CP2 smoke (candles + compare overlays)", async ({ page }, testIn
 
   await chart.screenshot({ path: testInfo.outputPath("cp2-step-4-guard.png") });
 
-  await page.getByRole("button", { name: /^Light$/i }).click();
+  // Switch theme using the theme toggle button (workspace mode uses icon button)
+  await page.getByTestId("theme-toggle-button").click();
   await page.waitForFunction(() => {
     const dump = (window as any).__lwcharts?.dump?.();
     return dump && dump.styles?.theme === "light" && (dump.render?.canvasWH?.w ?? 0) > 0;
@@ -183,7 +188,8 @@ test("ChartsPro CP2 smoke (candles + compare overlays)", async ({ page }, testIn
   });
   expect(anchorHover.expected).not.toBeNull();
   expect(anchorHover.actual).toBe(anchorHover.expected);
-  await page.getByRole("button", { name: /^Dark$/i }).click();
+  // Switch back to dark theme
+  await page.getByTestId("theme-toggle-button").click();
   await page.waitForFunction(() => (window as any).__lwcharts?.dump?.().styles?.theme === "dark");
   expect(unexpectedConsole).toHaveLength(0);
 });

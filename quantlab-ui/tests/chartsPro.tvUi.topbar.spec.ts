@@ -7,16 +7,18 @@
  * - Symbol + Timeframe interactions work
  * - No regressions from old Toolbar
  * - Chart data persists through TopBar changes
+ * 
+ * Updated: 2026-01-30 (PRIO2 selectors migration)
  */
 
 import { test, expect } from "@playwright/test";
+import { TOPBAR, TV_SHELL } from "./selectors";
 
 test.describe("ChartsPro TV-1.1 TopBar", () => {
   async function gotoChartsPro(page: any) {
     await page.goto("/?mock=1", { waitUntil: "networkidle" });
-    await expect(page.locator('[data-testid="tab-list"]')).toBeVisible({ timeout: 10000 });
     await page.locator('[data-testid="tab-charts"]').click({ force: true });
-    await expect(page.locator('[data-testid="tv-shell"]')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator(TV_SHELL.root)).toBeVisible({ timeout: 10000 });
     // Wait for chart to actually render (canvas sized + data loaded)
     await page.waitForFunction(() => {
       const dump = (window as any).__lwcharts?.dump?.();
@@ -31,36 +33,45 @@ test.describe("ChartsPro TV-1.1 TopBar", () => {
     await gotoChartsPro(page);
   });
 
-  test("TopBar symbol input is visible", async ({ page }) => {
-    const symbolInput = page.locator('[data-testid="topbar-symbol-input"]');
+  test("TopBar symbol chip is visible (click to edit)", async ({ page }) => {
+    // Symbol is displayed as a chip by default, becomes input on click
+    const symbolChip = page.locator('[data-testid="tv-symbol-chip"]');
+    await expect(symbolChip).toBeVisible();
+    // Click to start editing
+    await symbolChip.click();
+    const symbolInput = page.locator(TOPBAR.symbolInput);
     await expect(symbolInput).toBeVisible();
   });
 
   test("TopBar has timeframe selector", async ({ page }) => {
-    const timeframeButton = page.locator('[data-testid="timeframe-button"]');
+    const timeframeButton = page.locator(TOPBAR.timeframeButton);
     await expect(timeframeButton).toBeVisible();
     // Click to open dropdown and verify options are there
     await timeframeButton.click();
-    const dropdown = page.locator('[data-testid="timeframe-dropdown"]');
+    const dropdown = page.locator(TOPBAR.timeframeDropdown);
     await expect(dropdown).toBeVisible();
     // Check a specific known timeframe
-    const dailyItem = page.locator('[data-testid="timeframe-item-1D"]');
+    const dailyItem = page.locator(TOPBAR.timeframeItem("1D"));
     await expect(dailyItem).toBeVisible();
   });
 
-  test("TopBar has reload button", async ({ page }) => {
-    const reloadBtn = page.locator('[data-testid="topbar-reload-btn"]');
+  test("TopBar has utils menu with reload", async ({ page }) => {
+    // Utils menu is now in a dropdown - open it first
+    await page.click('[data-testid="utils-menu-button"]');
+    const reloadBtn = page.locator('[data-testid="utils-reload-btn"]');
     await expect(reloadBtn).toBeVisible();
   });
 
-  test("TopBar has theme controls", async ({ page }) => {
-    const darkBtn = page.locator('[data-testid="topbar-theme-dark"]');
-    await expect(darkBtn).toBeVisible();
+  test("TopBar has theme toggle", async ({ page }) => {
+    const themeToggle = page.locator(TOPBAR.themeToggle);
+    await expect(themeToggle).toBeVisible();
   });
 
-  test("TopBar has magnet and snap buttons", async ({ page }) => {
-    const magnetBtn = page.locator('[data-testid="topbar-magnet"]');
-    const snapBtn = page.locator('[data-testid="topbar-snap"]');
+  test("TopBar has utils menu with magnet and snap", async ({ page }) => {
+    // Open utils menu
+    await page.click('[data-testid="utils-menu-button"]');
+    const magnetBtn = page.locator('[data-testid="utils-magnet-btn"]');
+    const snapBtn = page.locator('[data-testid="utils-snap-btn"]');
     await expect(magnetBtn).toBeVisible();
     await expect(snapBtn).toBeVisible();
   });
