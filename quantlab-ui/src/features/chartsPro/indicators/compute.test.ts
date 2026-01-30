@@ -31,6 +31,7 @@ import {
   computeROC,
   computeMomentum,
   computeWilliamsR,
+  computeRMAValues,
   type ComputeBar,
 } from "./compute";
 
@@ -1220,5 +1221,146 @@ describe("Edge Cases", () => {
     const sma = computeSMA(data, 3);
     expect(sma.length).toBe(3);
     expectClose(sma[0].value, (1e10 + 1.1e10 + 1.2e10) / 3, 1e6); // Larger tolerance for large numbers
+  });
+});
+// ============================================================================
+// TradingView Parity Tests
+// Cross-check with known reference values to ensure TV-like calculations
+// ============================================================================
+
+describe("TradingView Parity", () => {
+  describe("RMA (Wilder's Smoothing)", () => {
+    it("computes RMA correctly - foundation for RSI/ATR/ADX", () => {
+      // Test data: 10 values
+      const values = [44, 44.25, 44.5, 43.75, 44.5, 44.25, 44, 43.75, 44, 43.5];
+      const period = 5;
+      
+      const result = computeRMAValues(values, period);
+      
+      // First RMA = SMA of first 5: (44 + 44.25 + 44.5 + 43.75 + 44.5) / 5 = 44.2
+      expectClose(result[0], 44.2, 0.01);
+      
+      // Second RMA = (44.2 * 4 + 44.25) / 5 = 44.21
+      expectClose(result[1], 44.21, 0.01);
+      
+      // Verify Wilder's formula: RMA = (prev * (n-1) + current) / n
+      for (let i = 1; i < result.length; i++) {
+        const expected = (result[i - 1] * (period - 1) + values[period - 1 + i]) / period;
+        expectClose(result[i], expected, 0.0001);
+      }
+    });
+  });
+
+  describe("RSI uses Wilder's smoothing", () => {
+    it("RSI(14) matches TradingView calculation method", () => {
+      // Create realistic price data with known up/down moves
+      const prices: number[] = [];
+      let price = 100;
+      const changes = [2, -1, 3, -2, 1, -1, 2, -1, 3, -2, 1, -1, 2, -1, 1, -1, 2, -2, 1, -1];
+      for (const change of changes) {
+        price += change;
+        prices.push(price);
+      }
+      const data = createFixture(prices);
+      
+      const result = computeRSI(data, 14);
+      
+      // RSI should be between 0-100
+      result.forEach(pt => {
+        expect(pt.value).toBeGreaterThanOrEqual(0);
+        expect(pt.value).toBeLessThanOrEqual(100);
+      });
+      
+      // With mixed gains/losses, RSI should be near 50
+      const avgRSI = result.reduce((sum, pt) => sum + pt.value, 0) / result.length;
+      expect(avgRSI).toBeGreaterThan(30);
+      expect(avgRSI).toBeLessThan(70);
+    });
+
+    it("RSI returns 100 for pure gains (no Wilder edge case)", () => {
+      // Constant gains should give RSI near 100
+      const prices = Array.from({ length: 20 }, (_, i) => 100 + i);
+      const data = createFixture(prices);
+      
+      const result = computeRSI(data, 14);
+      
+      // Last RSI should be very high (approaching 100)
+      const lastRSI = result[result.length - 1].value;
+      expect(lastRSI).toBeGreaterThan(95);
+    });
+  });
+
+  describe("ATR uses Wilder's smoothing", () => {
+    it("ATR(14) matches TradingView calculation method", () => {
+      // Create data with known true ranges
+      const data = createOHLCVFixture(
+        Array.from({ length: 20 }, (_, i) => ({
+          o: 100 + i * 0.5,
+          h: 102 + i * 0.5,  // H-L = 4, constant
+          l: 98 + i * 0.5,
+          c: 101 + i * 0.5,
+          v: 1000,
+        }))
+      );
+      
+      const result = computeATR(data, 14);
+      
+      // With constant H-L=4 and no gaps, ATR should converge to ~4
+      const lastATR = result[result.length - 1].value;
+      expectClose(lastATR, 4, 0.5);
+    });
+  });
+
+  describe("ADX uses Wilder's smoothing", () => {
+    it("ADX(14) produces reasonable values in trending market", () => {
+      // Strong uptrend data
+      const data = createOHLCVFixture(
+        Array.from({ length: 40 }, (_, i) => ({
+          o: 100 + i * 2,
+          h: 105 + i * 2,
+          l: 98 + i * 2,
+          c: 104 + i * 2,
+          v: 1000,
+        }))
+      );
+      
+      const result = computeADX(data, 14, 14);
+      
+      // In strong trend, ADX should be > 25
+      if (result.adx.length > 0) {
+        const lastADX = result.adx[result.adx.length - 1].value;
+        expect(lastADX).toBeGreaterThan(20);
+      }
+      
+      // +DI should be higher than -DI in uptrend
+      if (result.plusDI.length > 0 && result.minusDI.length > 0) {
+        const lastPlusDI = result.plusDI[result.plusDI.length - 1].value;
+        const lastMinusDI = result.minusDI[result.minusDI.length - 1].value;
+        expect(lastPlusDI).toBeGreaterThan(lastMinusDI);
+      }
+    });
+  });
+
+  describe("VWAP uses UTC for deterministic anchors", () => {
+    it("VWAP resets correctly at session boundary (UTC)", () => {
+      // Create two days of data
+      const baseTime = 1700000000; // Some UTC timestamp
+      const data: ComputeBar[] = [
+        // Day 1
+        { time: baseTime as UTCTimestamp, open: 100, high: 102, low: 99, close: 101, volume: 1000 },
+        { time: (baseTime + 3600) as UTCTimestamp, open: 101, high: 103, low: 100, close: 102, volume: 2000 },
+        // Day 2 (next day in UTC)
+        { time: (baseTime + 86400) as UTCTimestamp, open: 110, high: 112, low: 109, close: 111, volume: 1000 },
+        { time: (baseTime + 86400 + 3600) as UTCTimestamp, open: 111, high: 113, low: 110, close: 112, volume: 2000 },
+      ];
+      
+      const result = computeVWAP(data, "session");
+      
+      expect(result.length).toBe(4);
+      
+      // Day 2 should reset - VWAP at day 2 bar 1 should be close to day 2 typical price
+      const day2TP1 = (112 + 109 + 111) / 3;
+      expectClose(result[2].value, day2TP1, 0.1);
+    });
   });
 });

@@ -41,6 +41,41 @@ function getSource(bar: ComputeBar, source: SourceType): number {
 }
 
 // ============================================================================
+// RMA - Wilder's Smoothing (Running Moving Average)
+// Used by RSI, ATR, ADX for TradingView parity
+// Formula: RMA = (prev * (period - 1) + current) / period
+// ============================================================================
+
+/**
+ * Compute RMA (Wilder's Smoothing) on an array of numbers.
+ * This is the foundation for RSI, ATR, and ADX calculations in TradingView.
+ * @param values - Input values array
+ * @param period - Smoothing period
+ * @returns Smoothed values array
+ */
+export function computeRMAValues(values: number[], period: number): number[] {
+  if (period <= 0 || values.length < period) return [];
+  
+  const result: number[] = [];
+  
+  // First value: simple average of first N values
+  let sum = 0;
+  for (let i = 0; i < period; i++) {
+    sum += values[i];
+  }
+  let rma = sum / period;
+  result.push(rma);
+  
+  // Subsequent values: Wilder's smoothing
+  for (let i = period; i < values.length; i++) {
+    rma = (rma * (period - 1) + values[i]) / period;
+    result.push(rma);
+  }
+  
+  return result;
+}
+
+// ============================================================================
 // SMA - Simple Moving Average
 // ============================================================================
 
@@ -689,21 +724,22 @@ export function computeVWAP(
     const date = new Date(bar.time * 1000);
     let currentAnchor: number;
     
+    // Use UTC methods for deterministic anchor calculations
     switch (anchorPeriod) {
       case "session":
-        // Reset daily
-        currentAnchor = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+        // Reset daily (UTC)
+        currentAnchor = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
         break;
       case "week":
-        // Reset weekly (Sunday = 0)
-        const dayOfWeek = date.getDay();
-        const weekStart = new Date(date);
-        weekStart.setDate(date.getDate() - dayOfWeek);
-        currentAnchor = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate()).getTime();
+        // Reset weekly (UTC, Sunday = 0)
+        const dayOfWeek = date.getUTCDay();
+        const weekStart = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+        weekStart.setUTCDate(date.getUTCDate() - dayOfWeek);
+        currentAnchor = Date.UTC(weekStart.getUTCFullYear(), weekStart.getUTCMonth(), weekStart.getUTCDate());
         break;
       case "month":
-        // Reset monthly
-        currentAnchor = new Date(date.getFullYear(), date.getMonth(), 1).getTime();
+        // Reset monthly (UTC)
+        currentAnchor = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1);
         break;
     }
     
