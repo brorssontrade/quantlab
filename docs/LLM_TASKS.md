@@ -1,29 +1,32 @@
 ### PRIO 3: Indicator Library (2025-01-31)
 
-**Status:** ✅ **COMPLETE** (render pipeline fixed 2025-01-30)
+**Status:** ✅ **COMPLETE** (23 indicators, 71 tests, TV parity verified 2025-01-30)
 
 **Context:** User requested a full TradingView-style indicator system with:
 - Indicator Registry ("single source of truth") with manifest structure
 - Compute pipeline (worker + caching + incremental)
 - TradingView-style modal (search + categories + keyboard nav)
 - Indicators panel (edit/hide/remove)
-- Batch implement core set: SMA, EMA, RSI, MACD, BB, ATR, ADX, VWAP, OBV
-- Playwright tests using selectors.ts
+- Core indicators + Batch expansions
 
 **Implementation Details:**
 
 1. **Indicator Registry (indicatorManifest.ts)**
-   - 9 indicators defined with full metadata
+   - **23 indicators** defined with full metadata
    - Categories: moving-average, momentum, volatility, volume
    - Each manifest has: id, name, shortName, category, tags, description, panePolicy, inputs, outputs
    - TV_COLORS constants for TradingView-style defaults
    - Helper functions: getIndicatorManifest, getAllIndicators, searchIndicators, getDefaultInputs
 
 2. **Compute Pipeline (compute.ts + registryV2.ts)**
-   - Pure compute functions: computeSMA, computeEMA, computeRSI, computeMACD, computeBollingerBands, computeATR, computeADX, computeVWAP, computeOBV
+   - **23 pure compute functions** with TradingView parity:
+     - **Moving Averages (10):** SMA, EMA, SMMA, WMA, DEMA, TEMA, HMA, KAMA, VWMA, McGinley
+     - **Momentum (8):** RSI, MACD, Stochastic, StochRSI, CCI, ROC, Momentum, Williams %R
+     - **Volatility/Other (5):** BB, ATR, ADX, VWAP, OBV
+   - **RMA (Wilder's Smoothing):** Exposed as computeRMAValues() for RSI/ATR/ADX parity
+   - **VWAP:** Fixed to use UTC for deterministic anchor calculations
    - Source helpers for different price types (close, open, high, low, hl2, hlc3, ohlc4)
    - Cache with 50 entries, 5-minute TTL
-   - Cache key: indicatorId + kind + paramsHash + dataHash
    - Unified computeIndicator() function
 
 3. **TradingView-style Modal (IndicatorsModalV2.tsx)**
@@ -39,48 +42,32 @@
    - Hide/Show toggle (eye icon)
    - Inline param editing with proper input types
    - Remove button (trash icon)
-   - **NEW: Compute status display** - Shows pts count, last value, or error badge
-   - **NEW: Pane badge** - Overlay (blue) / Separate (orange)
-   - Premium TV spacing and hover states
+   - **Inputs tab:** All parameters editable
+   - **Style tab:** Color + line width per output
+   - Compute status display - Shows pts count, last value, or error badge
+   - Pane badge - Overlay (blue) / Separate (orange)
 
-5. **Core Indicators (9 total)**
-   - **Moving Averages (overlay):** SMA, EMA
-   - **Momentum (separate):** RSI, MACD, ADX
-   - **Volatility (overlay/separate):** BB (overlay), ATR (separate)
-   - **Volume (overlay/separate):** VWAP (overlay), OBV (separate)
-   - All with proper default params matching TradingView
+5. **Test Suite: compute.test.ts (71 tests)**
+   - **Batch 1 MAs:** 8 indicators × 2-3 tests each
+   - **Batch 2 Momentum:** 6 indicators × 3-4 tests each
+   - **Edge Cases:** Empty data, single bar, period=0, negative prices, large values
+   - **TradingView Parity:** RMA verification, RSI/ATR/ADX Wilder's smoothing, VWAP UTC
 
-6. **Updated types.ts**
-   - Extended IndicatorKind: "sma" | "ema" | "rsi" | "macd" | "bb" | "atr" | "adx" | "vwap" | "obv"
-   - Added param interfaces: BbParams, AtrParams, AdxParams, VwapParams, ObvParams
-   - Updated helper functions for all indicators
-
-7. **Render Pipeline Fixes (2025-01-30)**
-   - **scaleMargins-banding in ChartViewport.tsx** - Gives each "separate" indicator its own vertical section:
-     - Price pane: top 56% (scaleMargins: top 0.02, bottom 0.42)
-     - Separate indicators: zones from 60%-98%, divided equally among them
-     - Each separate scale gets `autoScale: true` and `borderVisible: true`
-   - **onIndicatorResultsChange callback** - Exposes compute results from ChartViewport → ChartsProTab → IndicatorsTabV2
-   - **drawings.ts pane fix** - Uses manifest panePolicy via `getIndicatorManifest()` for all 9 indicators (not just RSI/MACD)
-   - **KNOWN_INDICATOR_KINDS expanded** - Now includes all 9: sma, ema, rsi, macd, bb, atr, adx, vwap, obv
-
-**Test Suite: `chartsPro.prio3.indicators.spec.ts`** (22 tests):
-- Modal UI: Open, categories, search, filter, Escape, keyboard nav
-- Adding Indicators: All 9 types with correct pane assignment
-- Panel Actions: Hide/show, remove, edit params, param update
-- Multi-output: MACD (3 lines), BB (3 lines), ADX (3 lines)
-- Performance: Adding 5 indicators rapidly doesn't freeze UI
+6. **Render Pipeline (ChartViewport.tsx)**
+   - scaleMargins-banding: Each "separate" indicator gets its own vertical section
+   - Price pane: top 56% (scaleMargins: top 0.02, bottom 0.42)
+   - Separate indicators: zones from 60%-98%, divided equally
+   - Each separate scale gets `autoScale: true` and `borderVisible: true`
 
 **Key File Locations:**
-- `indicators/indicatorManifest.ts` - Registry definitions
-- `indicators/compute.ts` - Pure compute functions
+- `indicators/indicatorManifest.ts` - 23 indicator definitions
+- `indicators/compute.ts` - 23 pure compute functions + RMA helper
 - `indicators/registryV2.ts` - Unified compute with caching
+- `indicators/compute.test.ts` - 71 golden tests
 - `components/Modal/IndicatorsModalV2.tsx` - TV-style picker modal
-- `components/RightPanel/IndicatorsTabV2.tsx` - Enhanced panel with status
+- `components/RightPanel/IndicatorsTabV2.tsx` - Inputs/Style tabs
 - `components/ChartViewport.tsx` - scaleMargins effect for separate panes
-- `state/drawings.ts` - pane assignment using manifest
 - `tests/chartsPro.prio3.indicators.spec.ts` - Playwright tests
-- `tests/selectors.ts` - Added INDICATORS_MODAL selectors
 
 ---
 

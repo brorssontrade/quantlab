@@ -6,7 +6,7 @@
 
 ---
 
-## ✅ Already Implemented (17 indicators)
+## ✅ Already Implemented (23 indicators)
 
 | ID | Name | Category | Pane | Status |
 |----|------|----------|------|--------|
@@ -23,61 +23,57 @@
 | rsi | Relative Strength Index | momentum | separate | ✅ Done |
 | macd | MACD | momentum | separate | ✅ Done |
 | adx | Average Directional Index | momentum | separate | ✅ Done |
+| stoch | Stochastic | momentum | separate | ✅ Done (Batch 2) |
+| stochrsi | Stochastic RSI | momentum | separate | ✅ Done (Batch 2) |
+| cci | Commodity Channel Index | momentum | separate | ✅ Done (Batch 2) |
+| roc | Rate of Change | momentum | separate | ✅ Done (Batch 2) |
+| mom | Momentum | momentum | separate | ✅ Done (Batch 2) |
+| willr | Williams %R | momentum | separate | ✅ Done (Batch 2) |
 | bb | Bollinger Bands | volatility | overlay | ✅ Done |
 | atr | Average True Range | volatility | separate | ✅ Done |
 | vwap | Volume Weighted Avg Price | volume | overlay | ✅ Done |
 | obv | On Balance Volume | volume | separate | ✅ Done |
 
+### TradingView Parity Verified ✅
+- **RSI:** Uses Wilder's smoothing (RMA)
+- **ATR:** Uses Wilder's smoothing (RMA)
+- **ADX:** Uses Wilder's smoothing for DI/DX calculations
+- **VWAP:** Uses UTC for deterministic session anchors
+- **Test coverage:** 71 golden tests in compute.test.ts
+
 ---
 
-## 📊 Category A: Indicators (OHLCV Compute)
+## 📊 Category A: Remaining Indicators (OHLCV Compute)
 
-These are true indicators calculated from OHLCV data.
+### ~~Batch 1: Moving Averages (Overlay)~~ ✅ COMPLETE
 
-### Batch 1: Moving Averages (Overlay) - HIGH PRIORITY
+### ~~Batch 2: Momentum (Separate Pane)~~ ✅ COMPLETE
 
-| ID | Name | TV Defaults | Notes |
-|----|------|-------------|-------|
-| smma | Smoothed MA (SMMA/RMA) | Blue #2962FF, width 2 | Wilder's smoothing |
-| wma | Weighted MA | Orange #FF6D00, width 2 | Linear weights |
-| dema | Double EMA | Purple #9C27B0, width 2 | 2*EMA - EMA(EMA) |
-| tema | Triple EMA | Teal #00BCD4, width 2 | 3*EMA - 3*EMA(EMA) + EMA(EMA(EMA)) |
-| hma | Hull MA | Green #26A69A, width 2 | WMA of difference |
-| kama | Kaufman Adaptive MA | Pink #E91E63, width 2 | Efficiency ratio adaptive |
-| vwma | Volume Weighted MA | Purple #9C27B0, width 2 | Volume-weighted SMA |
-| mcginley | McGinley Dynamic | Orange #FF6D00, width 2 | Self-adjusting MA |
+### Batch 3: Momentum Continued (Separate Pane) - NEXT
 
-### Batch 2: Momentum (Separate Pane)
+| ID | Name | TV Defaults | Notes | Status |
+|----|------|-------------|-------|--------|
+| ppo | Percentage Price Osc | Blue line, orange signal | MACD as percentage | 🔲 Todo |
+| trix | TRIX | Teal #00BCD4 | Triple smoothed ROC | 🔲 Todo |
+| tsi | True Strength Index | Blue line, orange signal | Double smoothed momentum | 🔲 Todo |
+| uo | Ultimate Oscillator | Purple #9C27B0 | Weighted multi-period | 🔲 Todo |
+| rvi | Relative Vigor Index | Green line, red signal | Close vs range | 🔲 Todo |
+| chop | Choppiness Index | Teal #00BCD4 | Trend vs sideways | 🔲 Todo |
 
-| ID | Name | TV Defaults | Notes |
-|----|------|-------------|-------|
-| stoch | Stochastic | %K blue, %D orange | Overbought/oversold zones |
-| stochrsi | Stochastic RSI | %K purple, %D orange | RSI into Stoch formula |
-| cci | Commodity Channel Index | Teal #00BCD4 | Mean deviation based |
-| roc | Rate of Change | Blue #2962FF | Percentage change |
-| mom | Momentum | Blue #2962FF | Price difference |
-| willr | Williams %R | Purple #9C27B0 | Inverted stochastic |
-| ppo | Percentage Price Osc | Blue line, orange signal | MACD as percentage |
-| trix | TRIX | Teal #00BCD4 | Triple smoothed ROC |
-| tsi | True Strength Index | Blue line, orange signal | Double smoothed momentum |
-| uo | Ultimate Oscillator | Purple #9C27B0 | Weighted multi-period |
-| rvi | Relative Vigor Index | Green line, red signal | Close vs range |
-| chop | Choppiness Index | Teal #00BCD4 | Trend vs sideways |
+### Batch 4: Volatility/Trend (Mixed Panes)
 
-### Batch 3: Volatility/Trend (Mixed Panes)
+| ID | Name | Pane | TV Defaults | Notes | Status |
+|----|------|------|-------------|-------|--------|
+| dc | Donchian Channels | overlay | Blue upper/lower | Highest high / lowest low | 🔲 Todo |
+| kc | Keltner Channels | overlay | Blue upper/lower | ATR-based bands | 🔲 Todo |
+| env | Envelope | overlay | Blue bands | % deviation from MA | 🔲 Todo |
+| supertrend | SuperTrend | overlay | Green up, red down | ATR-based trend | 🔲 Todo |
+| psar | Parabolic SAR | overlay | Dots green/red | Trailing stop dots | 🔲 Todo |
+| chandelier | Chandelier Exit | overlay | Green long, red short | ATR-based exit | 🔲 Todo |
+| vstop | Volatility Stop | overlay | Green/red dots | ATR trailing stop | 🔲 Todo |
+| ichimoku | Ichimoku Cloud | overlay | Multiple colors | Full cloud system | 🔲 Todo |
 
-| ID | Name | Pane | TV Defaults | Notes |
-|----|------|------|-------------|-------|
-| dc | Donchian Channels | overlay | Blue upper/lower | Highest high / lowest low |
-| kc | Keltner Channels | overlay | Blue upper/lower | ATR-based bands |
-| env | Envelope | overlay | Blue bands | % deviation from MA |
-| supertrend | SuperTrend | overlay | Green up, red down | ATR-based trend |
-| psar | Parabolic SAR | overlay | Dots green/red | Trailing stop dots |
-| chandelier | Chandelier Exit | overlay | Green long, red short | ATR-based exit |
-| vstop | Volatility Stop | overlay | Green/red dots | ATR trailing stop |
-| ichimoku | Ichimoku Cloud | overlay | Multiple colors | Full cloud system |
-
-### Batch 4: Volume (Separate Pane)
+### Batch 5: Volume (Separate Pane)
 
 | ID | Name | TV Defaults | Notes |
 |----|------|-------------|-------|
