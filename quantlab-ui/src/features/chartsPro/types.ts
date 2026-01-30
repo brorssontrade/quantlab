@@ -393,8 +393,12 @@ export interface CompareSeriesConfig {
   hidden?: boolean;
 }
 
-// PRIO 3: Extended indicator kinds
-export type IndicatorKind = "sma" | "ema" | "rsi" | "macd" | "bb" | "atr" | "adx" | "vwap" | "obv";
+// PRIO 3: Extended indicator kinds - ALL 23 indicators
+// Sync with indicatorManifest.ts (single source of truth)
+export type IndicatorKind = 
+  | "sma" | "ema" | "smma" | "wma" | "dema" | "tema" | "hma" | "kama" | "vwma" | "mcginley"
+  | "rsi" | "macd" | "stoch" | "stochrsi" | "cci" | "roc" | "mom" | "willr"
+  | "bb" | "atr" | "adx" | "vwap" | "obv";
 
 export type IndicatorPane = "price" | "separate";
 
@@ -583,37 +587,89 @@ export function slopePercentPerBar(trend: Trend, tf: Tf): number {
 }
 
 export function defaultIndicatorParams(kind: IndicatorKind): Record<string, number | string> {
+  // ALL 23 indicators with TV defaults
   switch (kind) {
-    case "ema":
+    // Moving Averages (10)
     case "sma":
+    case "ema":
+    case "smma":
+    case "wma":
+    case "dema":
+    case "tema":
+    case "hma":
+    case "vwma":
       return { period: 20, source: "close" };
+    case "kama":
+      return { period: 10, fast: 2, slow: 30, source: "close" };
+    case "mcginley":
+      return { period: 14, source: "close" };
+    
+    // Momentum (8)
     case "rsi":
       return { period: 14 };
     case "macd":
       return { fast: 12, slow: 26, signal: 9 };
+    case "stoch":
+      return { kPeriod: 14, kSmooth: 1, dSmooth: 3 };
+    case "stochrsi":
+      return { rsiPeriod: 14, stochPeriod: 14, kSmooth: 3, dSmooth: 3 };
+    case "cci":
+      return { period: 20 };
+    case "roc":
+      return { period: 9, source: "close" };
+    case "mom":
+      return { period: 10, source: "close" };
+    case "willr":
+      return { period: 14 };
+    
+    // Volatility (3)
     case "bb":
       return { period: 20, stdDev: 2, source: "close" };
     case "atr":
       return { period: 14 };
     case "adx":
       return { period: 14, smoothing: 14 };
+    
+    // Volume (2)
     case "vwap":
       return { anchorPeriod: "session" };
     case "obv":
       return {};
+    
     default:
-      return { period: 20 };
+      // NO FALLBACK - unknown kind should error, not silently become SMA
+      console.warn(`[types] Unknown indicator kind: ${kind}`);
+      return {};
   }
 }
 
+// ALL 23 indicator labels
 const INDICATOR_LABELS: Record<IndicatorKind, string> = {
+  // Moving Averages
   sma: "SMA",
   ema: "EMA",
+  smma: "SMMA",
+  wma: "WMA",
+  dema: "DEMA",
+  tema: "TEMA",
+  hma: "HMA",
+  kama: "KAMA",
+  vwma: "VWMA",
+  mcginley: "McGinley",
+  // Momentum
   rsi: "RSI",
   macd: "MACD",
+  stoch: "Stoch",
+  stochrsi: "StochRSI",
+  cci: "CCI",
+  roc: "ROC",
+  mom: "MOM",
+  willr: "%R",
+  // Volatility
   bb: "BB",
   atr: "ATR",
   adx: "ADX",
+  // Volume
   vwap: "VWAP",
   obv: "OBV",
 };
@@ -630,23 +686,47 @@ export function indicatorParamsSummary(indicator: IndicatorInstance): string {
   const name = indicatorDisplayName(indicator.kind);
   const params = indicator.params;
   switch (indicator.kind) {
-    case "ema":
+    // Moving Averages with period
     case "sma":
+    case "ema":
+    case "smma":
+    case "wma":
+    case "dema":
+    case "tema":
+    case "hma":
+    case "vwma":
+    case "mcginley":
       return `${name}(${params.period ?? 20})`;
+    case "kama":
+      return `${name}(${params.period ?? 10},${params.fast ?? 2},${params.slow ?? 30})`;
+    
+    // Momentum
     case "rsi":
+    case "cci":
+    case "roc":
+    case "mom":
+    case "willr":
       return `${name}(${params.period ?? 14})`;
     case "macd":
       return `${name}(${params.fast ?? 12},${params.slow ?? 26},${params.signal ?? 9})`;
+    case "stoch":
+      return `${name}(${params.kPeriod ?? 14},${params.kSmooth ?? 1},${params.dSmooth ?? 3})`;
+    case "stochrsi":
+      return `${name}(${params.rsiPeriod ?? 14},${params.stochPeriod ?? 14})`;
+    
+    // Volatility
     case "bb":
       return `${name}(${params.period ?? 20},${params.stdDev ?? 2})`;
     case "atr":
       return `${name}(${params.period ?? 14})`;
     case "adx":
       return `${name}(${params.period ?? 14})`;
+    
+    // Volume
     case "vwap":
-      return name;
     case "obv":
       return name;
+    
     default:
       return name;
   }

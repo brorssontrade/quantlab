@@ -584,6 +584,19 @@ const manifestMap = new Map<string, IndicatorManifest>(
   INDICATOR_MANIFESTS.map(m => [m.id, m])
 );
 
+/**
+ * All valid indicator kinds - SINGLE SOURCE OF TRUTH
+ * Use this to validate indicator kinds and generate types
+ */
+export const ALL_INDICATOR_KINDS = INDICATOR_MANIFESTS.map(m => m.id) as readonly string[];
+
+/**
+ * Type guard to check if a string is a valid indicator kind
+ */
+export function isValidIndicatorKind(kind: string): boolean {
+  return manifestMap.has(kind);
+}
+
 export function getIndicatorManifest(id: string): IndicatorManifest | undefined {
   return manifestMap.get(id);
 }
