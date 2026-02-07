@@ -80,6 +80,10 @@ export function createBaseSeries(
           upColor: config.upColor,
           downColor: config.downColor,
           thinBars: false,
+          // TV-42: LWC handles last price label + line for TV-parity
+          lastValueVisible: true,
+          priceLineVisible: true,
+          priceLineColor: config.upColor, // Line color matches up candle
         }) as BaseSeriesApi;
       }
 
@@ -91,6 +95,10 @@ export function createBaseSeries(
           borderDownColor: config.borderDownColor ?? config.downColor,
           wickUpColor: config.wickUpColor ?? config.upColor,
           wickDownColor: config.wickDownColor ?? config.downColor,
+          // TV-42: LWC handles last price label + line for TV-parity
+          lastValueVisible: true,
+          priceLineVisible: true,
+          priceLineColor: config.upColor, // Line color matches up candle
         }) as BaseSeriesApi;
       }
 
@@ -102,6 +110,10 @@ export function createBaseSeries(
           borderDownColor: config.downColor,
           wickUpColor: config.upColor,
           wickDownColor: config.downColor,
+          // TV-42: LWC handles last price label + line for TV-parity
+          lastValueVisible: true,
+          priceLineVisible: true,
+          priceLineColor: config.upColor, // Line color matches up candle
         }) as BaseSeriesApi;
       }
 
@@ -109,6 +121,10 @@ export function createBaseSeries(
         return chart.addLineSeries({
           color: config.upColor,
           lineWidth: 2,
+          // TV-42: LWC handles last price label + line for TV-parity
+          lastValueVisible: true,
+          priceLineVisible: true,
+          priceLineColor: config.upColor,
         }) as BaseSeriesApi;
       }
 
@@ -116,6 +132,10 @@ export function createBaseSeries(
         return chart.addLineSeries({
           color: config.upColor,
           lineWidth: 2,
+          // TV-42: LWC handles last price label + line for TV-parity
+          lastValueVisible: true,
+          priceLineVisible: true,
+          priceLineColor: config.upColor,
         }) as BaseSeriesApi;
       }
 
@@ -124,6 +144,10 @@ export function createBaseSeries(
           color: config.upColor,
           lineWidth: 2,
           lineType: 1, // LineType.WithSteps (1 = steps)
+          // TV-42: LWC handles last price label + line for TV-parity
+          lastValueVisible: true,
+          priceLineVisible: true,
+          priceLineColor: config.upColor,
         }) as BaseSeriesApi;
       }
 
@@ -133,6 +157,10 @@ export function createBaseSeries(
           bottomColor: 'rgba(41, 98, 255, 0.05)',
           lineColor: config.upColor,
           lineWidth: 2,
+          // TV-42: LWC handles last price label + line for TV-parity
+          lastValueVisible: true,
+          priceLineVisible: true,
+          priceLineColor: config.upColor,
         }) as BaseSeriesApi;
       }
 
@@ -145,6 +173,10 @@ export function createBaseSeries(
           bottomFillColor1: config.downColor + '80',
           bottomFillColor2: config.downColor + '20',
           baseValue: { type: 'price', price: 0 },
+          // TV-42: LWC handles last price label + line for TV-parity
+          lastValueVisible: true,
+          priceLineVisible: true,
+          priceLineColor: config.upColor,
         }) as BaseSeriesApi;
       }
 
@@ -155,6 +187,10 @@ export function createBaseSeries(
             type: 'price',
           },
           priceScaleId: 'right',
+          // TV-42: LWC handles last price label + line for TV-parity
+          lastValueVisible: true,
+          priceLineVisible: true,
+          priceLineColor: config.upColor,
         }) as BaseSeriesApi;
       }
 
@@ -166,6 +202,10 @@ export function createBaseSeries(
           borderDownColor: config.borderDownColor ?? config.downColor,
           wickUpColor: config.wickUpColor ?? config.upColor,
           wickDownColor: config.wickDownColor ?? config.downColor,
+          // TV-42: LWC handles last price label + line for TV-parity
+          lastValueVisible: true,
+          priceLineVisible: true,
+          priceLineColor: config.upColor, // Line color matches up candle
         }) as BaseSeriesApi;
       }
 
@@ -179,6 +219,10 @@ export function createBaseSeries(
           borderDownColor: config.borderDownColor ?? config.downColor,
           wickUpColor: config.wickUpColor ?? config.upColor,
           wickDownColor: config.wickDownColor ?? config.downColor,
+          // TV-42: LWC handles last price label + line for TV-parity
+          lastValueVisible: true,
+          priceLineVisible: true,
+          priceLineColor: config.upColor, // Line color matches up candle
         }) as BaseSeriesApi;
       }
 

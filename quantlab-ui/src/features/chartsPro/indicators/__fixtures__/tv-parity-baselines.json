@@ -58,12 +58,22 @@
       "exchange": "NASDAQ",
       "timeframe": "1D",
       "indicator": "RSI",
-      "params": { "period": 14, "source": "close" },
-      "dateRange": { "start": "2024-01-02", "end": "2024-03-08" },
+      "params": {
+        "period": 14,
+        "source": "close"
+      },
+      "dateRange": {
+        "start": "2024-01-02",
+        "end": "2024-03-08"
+      },
       "extractionMethod": "TradingView data window",
       "extractionDate": "2026-02-07",
       "values": [
-        { "date": "2024-03-08", "barTime": 1709856000, "value": 67.7527 }
+        {
+          "date": "2024-03-08",
+          "barTime": 1709856000,
+          "value": 67.7527
+        }
       ],
       "status": "ready",
       "verified": true
@@ -75,14 +85,36 @@
       "exchange": "NASDAQ",
       "timeframe": "1D",
       "indicator": "MACD",
-      "params": { "fast": 12, "slow": 26, "signal": 9 },
-      "dateRange": { "start": "2024-01-02", "end": "2024-03-08" },
+      "params": {
+        "fast": 12,
+        "slow": 26,
+        "signal": 9
+      },
+      "dateRange": {
+        "start": "2024-01-02",
+        "end": "2024-03-08"
+      },
       "extractionMethod": "TradingView data window",
       "extractionDate": "2026-02-07",
       "values": [
-        { "date": "2024-03-08", "barTime": 1709856000, "field": "macd", "value": 21.3484 },
-        { "date": "2024-03-08", "barTime": 1709856000, "field": "signal", "value": 22.6365 },
-        { "date": "2024-03-08", "barTime": 1709856000, "field": "histogram", "value": -1.2881 }
+        {
+          "date": "2024-03-08",
+          "barTime": 1709856000,
+          "field": "macd",
+          "value": 21.3484
+        },
+        {
+          "date": "2024-03-08",
+          "barTime": 1709856000,
+          "field": "signal",
+          "value": 22.6365
+        },
+        {
+          "date": "2024-03-08",
+          "barTime": 1709856000,
+          "field": "histogram",
+          "value": -1.2881
+        }
       ],
       "status": "ready",
       "verified": true
@@ -94,14 +126,37 @@
       "exchange": "NASDAQ",
       "timeframe": "1D",
       "indicator": "Bollinger Bands",
-      "params": { "period": 20, "stdDev": 2, "source": "close", "maType": "sma" },
-      "dateRange": { "start": "2024-01-02", "end": "2024-03-08" },
+      "params": {
+        "period": 20,
+        "stdDev": 2,
+        "source": "close",
+        "maType": "sma"
+      },
+      "dateRange": {
+        "start": "2024-01-02",
+        "end": "2024-03-08"
+      },
       "extractionMethod": "TradingView data window",
       "extractionDate": "2026-02-07",
       "values": [
-        { "date": "2024-03-08", "barTime": 1709856000, "field": "upper", "value": 511.6190 },
-        { "date": "2024-03-08", "barTime": 1709856000, "field": "middle", "value": 484.2790 },
-        { "date": "2024-03-08", "barTime": 1709856000, "field": "lower", "value": 456.9389 }
+        {
+          "date": "2024-03-08",
+          "barTime": 1709856000,
+          "field": "upper",
+          "value": 511.619
+        },
+        {
+          "date": "2024-03-08",
+          "barTime": 1709856000,
+          "field": "middle",
+          "value": 484.279
+        },
+        {
+          "date": "2024-03-08",
+          "barTime": 1709856000,
+          "field": "lower",
+          "value": 456.9389
+        }
       ],
       "status": "ready",
       "verified": true
@@ -113,12 +168,22 @@
       "exchange": "NASDAQ",
       "timeframe": "1D",
       "indicator": "ATR",
-      "params": { "period": 14, "smoothing": "rma" },
-      "dateRange": { "start": "2024-01-02", "end": "2024-03-08" },
+      "params": {
+        "period": 14,
+        "smoothing": "rma"
+      },
+      "dateRange": {
+        "start": "2024-01-02",
+        "end": "2024-03-08"
+      },
       "extractionMethod": "TradingView data window",
       "extractionDate": "2026-02-07",
       "values": [
-        { "date": "2024-03-08", "barTime": 1709856000, "value": 13.6094 }
+        {
+          "date": "2024-03-08",
+          "barTime": 1709856000,
+          "value": 13.6094
+        }
       ],
       "status": "ready",
       "verified": true
@@ -130,14 +195,35 @@
       "exchange": "NASDAQ",
       "timeframe": "1D",
       "indicator": "ADX/DMI",
-      "params": { "adxPeriod": 14, "diPeriod": 14 },
-      "dateRange": { "start": "2024-01-02", "end": "2024-03-08" },
+      "params": {
+        "adxPeriod": 14,
+        "diPeriod": 14
+      },
+      "dateRange": {
+        "start": "2024-01-02",
+        "end": "2024-03-08"
+      },
       "extractionMethod": "TradingView data window",
       "extractionDate": "2026-02-07",
       "values": [
-        { "date": "2024-03-08", "barTime": 1709856000, "field": "adx", "value": 52.6643 },
-        { "date": "2024-03-08", "barTime": 1709856000, "field": "plusDI", "value": 42.0943 },
-        { "date": "2024-03-08", "barTime": 1709856000, "field": "minusDI", "value": 10.3795 }
+        {
+          "date": "2024-03-08",
+          "barTime": 1709856000,
+          "field": "adx",
+          "value": 52.6643
+        },
+        {
+          "date": "2024-03-08",
+          "barTime": 1709856000,
+          "field": "plusDI",
+          "value": 42.0943
+        },
+        {
+          "date": "2024-03-08",
+          "barTime": 1709856000,
+          "field": "minusDI",
+          "value": 10.3795
+        }
       ],
       "status": "ready",
       "verified": true
@@ -149,8 +235,14 @@
       "exchange": "AMEX",
       "timeframe": "5m",
       "indicator": "VWAP",
-      "params": { "anchor": "session", "source": "hlc3" },
-      "dateRange": { "start": "2026-02-06 09:30", "end": "2026-02-06 16:00" },
+      "params": {
+        "anchor": "session",
+        "source": "hlc3"
+      },
+      "dateRange": {
+        "start": "2026-02-05 09:30",
+        "end": "2026-02-05 16:00"
+      },
       "extractionMethod": "TradingView data window",
       "extractionDate": null,
       "sessionDetails": {
@@ -159,25 +251,29 @@
         "timezone": "America/New_York",
         "sessionHours": "09:30-16:00 ET"
       },
-      "barTime": 1770411300,
-      "barUtcIso": "2026-02-06T20:55:00Z",
-      "barEtIso": "2026-02-06T15:55:00-05:00",
-      "barHumanReadable": "2026-02-06 15:55 ET (last 5m bar in RTH)",
+      "barTime": 1770310800,
+      "barUtcIso": "2026-02-05T17:00:00Z",
+      "barEtIso": "2026-02-05T12:00:00-05:00",
+      "barHumanReadable": "2026-02-05 12:00 ET (Thursday, mid-day for VWAP)",
       "expectedOHLC": {
-        "open": 691.99,
-        "high": 692.03,
-        "low": 690.58,
-        "close": 690.60,
-        "volume": 5862684
+        "open": 681.22,
+        "high": 681.34,
+        "low": 679.55,
+        "close": 679.96,
+        "volume": 1096906
       },
       "values": [
-        { "date": "2026-02-06 15:55", "barTime": 1770411300, "value": null, "note": "VWAP value at last 5m bar before close" }
+        {
+          "date": "2026-02-05 12:00",
+          "barTime": 1770310800,
+          "value": null,
+          "note": "VWAP at mid-day for meaningful cumulative value"
+        }
       ],
       "status": "pending",
       "verified": false,
       "fixtureAvailable": "spy.us.5m.json"
     },
-
     {
       "_comment": "=== AUDIT-02a: META 1H ===",
       "extractionProtocol": {
@@ -188,18 +284,19 @@
         "timezone": "America/New_York (exchange local)",
         "adjustments": "Adjusted for splits/dividends",
         "dataWindow": "Navigate to exact bar, open Data Window (D key)",
-        "barTime": 1770409800,
-        "barUtcIso": "2026-02-06T20:30:00Z",
-        "barEtIso": "2026-02-06T15:30:00-05:00",
-        "barHumanReadable": "2026-02-06 15:30 ET (last 1H bar in RTH)",
+        "barTime": 1770312600,
+        "barUtcIso": "2026-02-05T17:30:00Z",
+        "barEtIso": "2026-02-05T12:30:00-05:00",
+        "barHumanReadable": "2026-02-05 12:30 ET (Thursday, mid-day 1H bar)",
         "expectedOHLC": {
-          "open": 660.595,
-          "high": 663.65,
-          "low": 659.16,
-          "close": 661.275,
-          "volume": 1102522,
-          "note": "Match these to TV Data Window OHLCV before extracting indicator values"
-        }
+          "open": 678.11,
+          "high": 681.5,
+          "low": 676.5,
+          "close": 677.26,
+          "volume": 907829,
+          "note": "From resampled 5m fixture, session-aligned 1H bars"
+        },
+        "dateStr": "2026-02-05 12:30"
       }
     },
     {
@@ -209,16 +306,26 @@
       "exchange": "NASDAQ",
       "timeframe": "1H",
       "indicator": "RSI",
-      "params": { "period": 14, "source": "close" },
-      "dateRange": { "start": "2025-10-13", "end": "2026-02-07" },
+      "params": {
+        "period": 14,
+        "source": "close"
+      },
+      "dateRange": {
+        "start": "2025-10-13",
+        "end": "2026-02-05"
+      },
       "extractionMethod": "TradingView data window",
       "extractionDate": null,
       "values": [
-        { "date": "2026-02-07 15:30", "barTime": 1770409800, "value": null }
+        {
+          "date": "2026-02-05 12:30",
+          "barTime": 1770312600,
+          "value": null
+        }
       ],
       "status": "pending",
       "verified": false,
-      "fixtureAvailable": "meta.us.1h.json"
+      "fixtureAvailable": "meta.us.1h.resampled.json"
     },
     {
       "id": "META-MACD-1H",
@@ -227,18 +334,40 @@
       "exchange": "NASDAQ",
       "timeframe": "1H",
       "indicator": "MACD",
-      "params": { "fast": 12, "slow": 26, "signal": 9 },
-      "dateRange": { "start": "2025-10-13", "end": "2026-02-07" },
+      "params": {
+        "fast": 12,
+        "slow": 26,
+        "signal": 9
+      },
+      "dateRange": {
+        "start": "2025-10-13",
+        "end": "2026-02-05"
+      },
       "extractionMethod": "TradingView data window",
       "extractionDate": null,
       "values": [
-        { "date": "2026-02-07 15:30", "barTime": 1770409800, "field": "macd", "value": null },
-        { "date": "2026-02-07 15:30", "barTime": 1770409800, "field": "signal", "value": null },
-        { "date": "2026-02-07 15:30", "barTime": 1770409800, "field": "histogram", "value": null }
+        {
+          "date": "2026-02-05 12:30",
+          "barTime": 1770312600,
+          "field": "macd",
+          "value": null
+        },
+        {
+          "date": "2026-02-05 12:30",
+          "barTime": 1770312600,
+          "field": "signal",
+          "value": null
+        },
+        {
+          "date": "2026-02-05 12:30",
+          "barTime": 1770312600,
+          "field": "histogram",
+          "value": null
+        }
       ],
       "status": "pending",
       "verified": false,
-      "fixtureAvailable": "meta.us.1h.json"
+      "fixtureAvailable": "meta.us.1h.resampled.json"
     },
     {
       "id": "META-BB-1H",
@@ -247,18 +376,41 @@
       "exchange": "NASDAQ",
       "timeframe": "1H",
       "indicator": "Bollinger Bands",
-      "params": { "period": 20, "stdDev": 2, "source": "close", "maType": "sma" },
-      "dateRange": { "start": "2025-10-13", "end": "2026-02-07" },
+      "params": {
+        "period": 20,
+        "stdDev": 2,
+        "source": "close",
+        "maType": "sma"
+      },
+      "dateRange": {
+        "start": "2025-10-13",
+        "end": "2026-02-05"
+      },
       "extractionMethod": "TradingView data window",
       "extractionDate": null,
       "values": [
-        { "date": "2026-02-07 15:30", "barTime": 1770409800, "field": "upper", "value": null },
-        { "date": "2026-02-07 15:30", "barTime": 1770409800, "field": "middle", "value": null },
-        { "date": "2026-02-07 15:30", "barTime": 1770409800, "field": "lower", "value": null }
+        {
+          "date": "2026-02-05 12:30",
+          "barTime": 1770312600,
+          "field": "upper",
+          "value": null
+        },
+        {
+          "date": "2026-02-05 12:30",
+          "barTime": 1770312600,
+          "field": "middle",
+          "value": null
+        },
+        {
+          "date": "2026-02-05 12:30",
+          "barTime": 1770312600,
+          "field": "lower",
+          "value": null
+        }
       ],
       "status": "pending",
       "verified": false,
-      "fixtureAvailable": "meta.us.1h.json"
+      "fixtureAvailable": "meta.us.1h.resampled.json"
     },
     {
       "id": "META-ATR14-1H",
@@ -267,16 +419,26 @@
       "exchange": "NASDAQ",
       "timeframe": "1H",
       "indicator": "ATR",
-      "params": { "period": 14, "smoothing": "rma" },
-      "dateRange": { "start": "2025-10-13", "end": "2026-02-07" },
+      "params": {
+        "period": 14,
+        "smoothing": "rma"
+      },
+      "dateRange": {
+        "start": "2025-10-13",
+        "end": "2026-02-05"
+      },
       "extractionMethod": "TradingView data window",
       "extractionDate": null,
       "values": [
-        { "date": "2026-02-07 15:30", "barTime": 1770409800, "value": null }
+        {
+          "date": "2026-02-05 12:30",
+          "barTime": 1770312600,
+          "value": null
+        }
       ],
       "status": "pending",
       "verified": false,
-      "fixtureAvailable": "meta.us.1h.json"
+      "fixtureAvailable": "meta.us.1h.resampled.json"
     },
     {
       "id": "META-ADX14-1H",
@@ -285,20 +447,40 @@
       "exchange": "NASDAQ",
       "timeframe": "1H",
       "indicator": "ADX/DMI",
-      "params": { "adxPeriod": 14, "diPeriod": 14 },
-      "dateRange": { "start": "2025-10-13", "end": "2026-02-07" },
+      "params": {
+        "adxPeriod": 14,
+        "diPeriod": 14
+      },
+      "dateRange": {
+        "start": "2025-10-13",
+        "end": "2026-02-05"
+      },
       "extractionMethod": "TradingView data window",
       "extractionDate": null,
       "values": [
-        { "date": "2026-02-07 15:30", "barTime": 1770409800, "field": "adx", "value": null },
-        { "date": "2026-02-07 15:30", "barTime": 1770409800, "field": "plusDI", "value": null },
-        { "date": "2026-02-07 15:30", "barTime": 1770409800, "field": "minusDI", "value": null }
+        {
+          "date": "2026-02-05 12:30",
+          "barTime": 1770312600,
+          "field": "adx",
+          "value": null
+        },
+        {
+          "date": "2026-02-05 12:30",
+          "barTime": 1770312600,
+          "field": "plusDI",
+          "value": null
+        },
+        {
+          "date": "2026-02-05 12:30",
+          "barTime": 1770312600,
+          "field": "minusDI",
+          "value": null
+        }
       ],
       "status": "pending",
       "verified": false,
-      "fixtureAvailable": "meta.us.1h.json"
+      "fixtureAvailable": "meta.us.1h.resampled.json"
     },
-
     {
       "_comment": "=== AUDIT-02b: META 5m ===",
       "extractionProtocol": {
@@ -309,18 +491,18 @@
         "timezone": "America/New_York (exchange local)",
         "adjustments": "Adjusted for splits/dividends",
         "dataWindow": "Navigate to exact bar, open Data Window (D key)",
-        "barTime": 1770411300,
-        "barUtcIso": "2026-02-06T20:55:00Z",
-        "barEtIso": "2026-02-06T15:55:00-05:00",
-        "barHumanReadable": "2026-02-06 15:55 ET (last 5m bar in RTH)",
+        "barTime": 1770310800,
+        "barUtcIso": "2026-02-05T17:00:00Z",
+        "barEtIso": "2026-02-05T12:00:00-05:00",
+        "barHumanReadable": "2026-02-05 12:00 ET (Thursday, mid-day 5m bar)",
         "expectedOHLC": {
-          "open": 662.12,
-          "high": 662.465,
-          "low": 661.275,
-          "close": 661.275,
-          "volume": 495969,
-          "note": "Match these to TV Data Window OHLCV before extracting indicator values"
-        }
+          "open": 678.48,
+          "high": 678.63,
+          "low": 675.5,
+          "close": 676.34,
+          "volume": 89631
+        },
+        "dateStr": "2026-02-05 12:00"
       }
     },
     {
@@ -330,12 +512,22 @@
       "exchange": "NASDAQ",
       "timeframe": "5m",
       "indicator": "RSI",
-      "params": { "period": 14, "source": "close" },
-      "dateRange": { "start": "2025-10-13", "end": "2026-02-06" },
+      "params": {
+        "period": 14,
+        "source": "close"
+      },
+      "dateRange": {
+        "start": "2025-10-13",
+        "end": "2026-02-05"
+      },
       "extractionMethod": "TradingView data window",
       "extractionDate": null,
       "values": [
-        { "date": "2026-02-06 15:55", "barTime": 1770411300, "value": null }
+        {
+          "date": "2026-02-05 12:00",
+          "barTime": 1770310800,
+          "value": null
+        }
       ],
       "status": "pending",
       "verified": false,
@@ -348,14 +540,36 @@
       "exchange": "NASDAQ",
       "timeframe": "5m",
       "indicator": "MACD",
-      "params": { "fast": 12, "slow": 26, "signal": 9 },
-      "dateRange": { "start": "2025-10-13", "end": "2026-02-06" },
+      "params": {
+        "fast": 12,
+        "slow": 26,
+        "signal": 9
+      },
+      "dateRange": {
+        "start": "2025-10-13",
+        "end": "2026-02-05"
+      },
       "extractionMethod": "TradingView data window",
       "extractionDate": null,
       "values": [
-        { "date": "2026-02-06 15:55", "barTime": 1770411300, "field": "macd", "value": null },
-        { "date": "2026-02-06 15:55", "barTime": 1770411300, "field": "signal", "value": null },
-        { "date": "2026-02-06 15:55", "barTime": 1770411300, "field": "histogram", "value": null }
+        {
+          "date": "2026-02-05 12:00",
+          "barTime": 1770310800,
+          "field": "macd",
+          "value": null
+        },
+        {
+          "date": "2026-02-05 12:00",
+          "barTime": 1770310800,
+          "field": "signal",
+          "value": null
+        },
+        {
+          "date": "2026-02-05 12:00",
+          "barTime": 1770310800,
+          "field": "histogram",
+          "value": null
+        }
       ],
       "status": "pending",
       "verified": false,
@@ -368,14 +582,37 @@
       "exchange": "NASDAQ",
       "timeframe": "5m",
       "indicator": "Bollinger Bands",
-      "params": { "period": 20, "stdDev": 2, "source": "close", "maType": "sma" },
-      "dateRange": { "start": "2025-10-13", "end": "2026-02-06" },
+      "params": {
+        "period": 20,
+        "stdDev": 2,
+        "source": "close",
+        "maType": "sma"
+      },
+      "dateRange": {
+        "start": "2025-10-13",
+        "end": "2026-02-05"
+      },
       "extractionMethod": "TradingView data window",
       "extractionDate": null,
       "values": [
-        { "date": "2026-02-06 15:55", "barTime": 1770411300, "field": "upper", "value": null },
-        { "date": "2026-02-06 15:55", "barTime": 1770411300, "field": "middle", "value": null },
-        { "date": "2026-02-06 15:55", "barTime": 1770411300, "field": "lower", "value": null }
+        {
+          "date": "2026-02-05 12:00",
+          "barTime": 1770310800,
+          "field": "upper",
+          "value": null
+        },
+        {
+          "date": "2026-02-05 12:00",
+          "barTime": 1770310800,
+          "field": "middle",
+          "value": null
+        },
+        {
+          "date": "2026-02-05 12:00",
+          "barTime": 1770310800,
+          "field": "lower",
+          "value": null
+        }
       ],
       "status": "pending",
       "verified": false,
@@ -388,12 +625,22 @@
       "exchange": "NASDAQ",
       "timeframe": "5m",
       "indicator": "ATR",
-      "params": { "period": 14, "smoothing": "rma" },
-      "dateRange": { "start": "2025-10-13", "end": "2026-02-06" },
+      "params": {
+        "period": 14,
+        "smoothing": "rma"
+      },
+      "dateRange": {
+        "start": "2025-10-13",
+        "end": "2026-02-05"
+      },
       "extractionMethod": "TradingView data window",
       "extractionDate": null,
       "values": [
-        { "date": "2026-02-06 15:55", "barTime": 1770411300, "value": null }
+        {
+          "date": "2026-02-05 12:00",
+          "barTime": 1770310800,
+          "value": null
+        }
       ],
       "status": "pending",
       "verified": false,
@@ -406,20 +653,40 @@
       "exchange": "NASDAQ",
       "timeframe": "5m",
       "indicator": "ADX/DMI",
-      "params": { "adxPeriod": 14, "diPeriod": 14 },
-      "dateRange": { "start": "2025-10-13", "end": "2026-02-06" },
+      "params": {
+        "adxPeriod": 14,
+        "diPeriod": 14
+      },
+      "dateRange": {
+        "start": "2025-10-13",
+        "end": "2026-02-05"
+      },
       "extractionMethod": "TradingView data window",
       "extractionDate": null,
       "values": [
-        { "date": "2026-02-06 15:55", "barTime": 1770411300, "field": "adx", "value": null },
-        { "date": "2026-02-06 15:55", "barTime": 1770411300, "field": "plusDI", "value": null },
-        { "date": "2026-02-06 15:55", "barTime": 1770411300, "field": "minusDI", "value": null }
+        {
+          "date": "2026-02-05 12:00",
+          "barTime": 1770310800,
+          "field": "adx",
+          "value": null
+        },
+        {
+          "date": "2026-02-05 12:00",
+          "barTime": 1770310800,
+          "field": "plusDI",
+          "value": null
+        },
+        {
+          "date": "2026-02-05 12:00",
+          "barTime": 1770310800,
+          "field": "minusDI",
+          "value": null
+        }
       ],
       "status": "pending",
       "verified": false,
       "fixtureAvailable": "meta.us.5m.json"
     },
-
     {
       "_comment": "=== AUDIT-02c: BTCUSD 1D ===",
       "extractionProtocol": {
@@ -450,12 +717,22 @@
       "exchange": "CC",
       "timeframe": "1D",
       "indicator": "RSI",
-      "params": { "period": 14, "source": "close" },
-      "dateRange": { "start": "2023-01-01", "end": "2026-02-07" },
+      "params": {
+        "period": 14,
+        "source": "close"
+      },
+      "dateRange": {
+        "start": "2023-01-01",
+        "end": "2026-02-07"
+      },
       "extractionMethod": "TradingView data window",
       "extractionDate": null,
       "values": [
-        { "date": "2026-02-07", "barTime": 1770422400, "value": null }
+        {
+          "date": "2026-02-07",
+          "barTime": 1770422400,
+          "value": null
+        }
       ],
       "status": "pending",
       "verified": false,
@@ -468,14 +745,36 @@
       "exchange": "CC",
       "timeframe": "1D",
       "indicator": "MACD",
-      "params": { "fast": 12, "slow": 26, "signal": 9 },
-      "dateRange": { "start": "2023-01-01", "end": "2026-02-07" },
+      "params": {
+        "fast": 12,
+        "slow": 26,
+        "signal": 9
+      },
+      "dateRange": {
+        "start": "2023-01-01",
+        "end": "2026-02-07"
+      },
       "extractionMethod": "TradingView data window",
       "extractionDate": null,
       "values": [
-        { "date": "2026-02-07", "barTime": 1770422400, "field": "macd", "value": null },
-        { "date": "2026-02-07", "barTime": 1770422400, "field": "signal", "value": null },
-        { "date": "2026-02-07", "barTime": 1770422400, "field": "histogram", "value": null }
+        {
+          "date": "2026-02-07",
+          "barTime": 1770422400,
+          "field": "macd",
+          "value": null
+        },
+        {
+          "date": "2026-02-07",
+          "barTime": 1770422400,
+          "field": "signal",
+          "value": null
+        },
+        {
+          "date": "2026-02-07",
+          "barTime": 1770422400,
+          "field": "histogram",
+          "value": null
+        }
       ],
       "status": "pending",
       "verified": false,
@@ -488,14 +787,37 @@
       "exchange": "CC",
       "timeframe": "1D",
       "indicator": "Bollinger Bands",
-      "params": { "period": 20, "stdDev": 2, "source": "close", "maType": "sma" },
-      "dateRange": { "start": "2023-01-01", "end": "2026-02-07" },
+      "params": {
+        "period": 20,
+        "stdDev": 2,
+        "source": "close",
+        "maType": "sma"
+      },
+      "dateRange": {
+        "start": "2023-01-01",
+        "end": "2026-02-07"
+      },
       "extractionMethod": "TradingView data window",
       "extractionDate": null,
       "values": [
-        { "date": "2026-02-07", "barTime": 1770422400, "field": "upper", "value": null },
-        { "date": "2026-02-07", "barTime": 1770422400, "field": "middle", "value": null },
-        { "date": "2026-02-07", "barTime": 1770422400, "field": "lower", "value": null }
+        {
+          "date": "2026-02-07",
+          "barTime": 1770422400,
+          "field": "upper",
+          "value": null
+        },
+        {
+          "date": "2026-02-07",
+          "barTime": 1770422400,
+          "field": "middle",
+          "value": null
+        },
+        {
+          "date": "2026-02-07",
+          "barTime": 1770422400,
+          "field": "lower",
+          "value": null
+        }
       ],
       "status": "pending",
       "verified": false,
@@ -508,12 +830,22 @@
       "exchange": "CC",
       "timeframe": "1D",
       "indicator": "ATR",
-      "params": { "period": 14, "smoothing": "rma" },
-      "dateRange": { "start": "2023-01-01", "end": "2026-02-07" },
+      "params": {
+        "period": 14,
+        "smoothing": "rma"
+      },
+      "dateRange": {
+        "start": "2023-01-01",
+        "end": "2026-02-07"
+      },
       "extractionMethod": "TradingView data window",
       "extractionDate": null,
       "values": [
-        { "date": "2026-02-07", "barTime": 1770422400, "value": null }
+        {
+          "date": "2026-02-07",
+          "barTime": 1770422400,
+          "value": null
+        }
       ],
       "status": "pending",
       "verified": false,
@@ -526,20 +858,40 @@
       "exchange": "CC",
       "timeframe": "1D",
       "indicator": "ADX/DMI",
-      "params": { "adxPeriod": 14, "diPeriod": 14 },
-      "dateRange": { "start": "2023-01-01", "end": "2026-02-07" },
+      "params": {
+        "adxPeriod": 14,
+        "diPeriod": 14
+      },
+      "dateRange": {
+        "start": "2023-01-01",
+        "end": "2026-02-07"
+      },
       "extractionMethod": "TradingView data window",
       "extractionDate": null,
       "values": [
-        { "date": "2026-02-07", "barTime": 1770422400, "field": "adx", "value": null },
-        { "date": "2026-02-07", "barTime": 1770422400, "field": "plusDI", "value": null },
-        { "date": "2026-02-07", "barTime": 1770422400, "field": "minusDI", "value": null }
+        {
+          "date": "2026-02-07",
+          "barTime": 1770422400,
+          "field": "adx",
+          "value": null
+        },
+        {
+          "date": "2026-02-07",
+          "barTime": 1770422400,
+          "field": "plusDI",
+          "value": null
+        },
+        {
+          "date": "2026-02-07",
+          "barTime": 1770422400,
+          "field": "minusDI",
+          "value": null
+        }
       ],
       "status": "pending",
       "verified": false,
       "fixtureAvailable": "btc-usd.1d.json"
     },
-
     {
       "_comment": "=== AUDIT-02d: EURUSD 1D ===",
       "extractionProtocol": {
@@ -570,12 +922,22 @@
       "exchange": "FOREX",
       "timeframe": "1D",
       "indicator": "RSI",
-      "params": { "period": 14, "source": "close" },
-      "dateRange": { "start": "2023-01-01", "end": "2026-02-06" },
+      "params": {
+        "period": 14,
+        "source": "close"
+      },
+      "dateRange": {
+        "start": "2023-01-01",
+        "end": "2026-02-06"
+      },
       "extractionMethod": "TradingView data window",
       "extractionDate": null,
       "values": [
-        { "date": "2026-02-06", "barTime": 1770336000, "value": null }
+        {
+          "date": "2026-02-06",
+          "barTime": 1770336000,
+          "value": null
+        }
       ],
       "status": "pending",
       "verified": false,
@@ -588,14 +950,36 @@
       "exchange": "FOREX",
       "timeframe": "1D",
       "indicator": "MACD",
-      "params": { "fast": 12, "slow": 26, "signal": 9 },
-      "dateRange": { "start": "2023-01-01", "end": "2026-02-06" },
+      "params": {
+        "fast": 12,
+        "slow": 26,
+        "signal": 9
+      },
+      "dateRange": {
+        "start": "2023-01-01",
+        "end": "2026-02-06"
+      },
       "extractionMethod": "TradingView data window",
       "extractionDate": null,
       "values": [
-        { "date": "2026-02-06", "barTime": 1770336000, "field": "macd", "value": null },
-        { "date": "2026-02-06", "barTime": 1770336000, "field": "signal", "value": null },
-        { "date": "2026-02-06", "barTime": 1770336000, "field": "histogram", "value": null }
+        {
+          "date": "2026-02-06",
+          "barTime": 1770336000,
+          "field": "macd",
+          "value": null
+        },
+        {
+          "date": "2026-02-06",
+          "barTime": 1770336000,
+          "field": "signal",
+          "value": null
+        },
+        {
+          "date": "2026-02-06",
+          "barTime": 1770336000,
+          "field": "histogram",
+          "value": null
+        }
       ],
       "status": "pending",
       "verified": false,
@@ -608,14 +992,37 @@
       "exchange": "FOREX",
       "timeframe": "1D",
       "indicator": "Bollinger Bands",
-      "params": { "period": 20, "stdDev": 2, "source": "close", "maType": "sma" },
-      "dateRange": { "start": "2023-01-01", "end": "2026-02-06" },
+      "params": {
+        "period": 20,
+        "stdDev": 2,
+        "source": "close",
+        "maType": "sma"
+      },
+      "dateRange": {
+        "start": "2023-01-01",
+        "end": "2026-02-06"
+      },
       "extractionMethod": "TradingView data window",
       "extractionDate": null,
       "values": [
-        { "date": "2026-02-06", "barTime": 1770336000, "field": "upper", "value": null },
-        { "date": "2026-02-06", "barTime": 1770336000, "field": "middle", "value": null },
-        { "date": "2026-02-06", "barTime": 1770336000, "field": "lower", "value": null }
+        {
+          "date": "2026-02-06",
+          "barTime": 1770336000,
+          "field": "upper",
+          "value": null
+        },
+        {
+          "date": "2026-02-06",
+          "barTime": 1770336000,
+          "field": "middle",
+          "value": null
+        },
+        {
+          "date": "2026-02-06",
+          "barTime": 1770336000,
+          "field": "lower",
+          "value": null
+        }
       ],
       "status": "pending",
       "verified": false,
@@ -628,12 +1035,22 @@
       "exchange": "FOREX",
       "timeframe": "1D",
       "indicator": "ATR",
-      "params": { "period": 14, "smoothing": "rma" },
-      "dateRange": { "start": "2023-01-01", "end": "2026-02-06" },
+      "params": {
+        "period": 14,
+        "smoothing": "rma"
+      },
+      "dateRange": {
+        "start": "2023-01-01",
+        "end": "2026-02-06"
+      },
       "extractionMethod": "TradingView data window",
       "extractionDate": null,
       "values": [
-        { "date": "2026-02-06", "barTime": 1770336000, "value": null }
+        {
+          "date": "2026-02-06",
+          "barTime": 1770336000,
+          "value": null
+        }
       ],
       "status": "pending",
       "verified": false,
@@ -646,14 +1063,35 @@
       "exchange": "FOREX",
       "timeframe": "1D",
       "indicator": "ADX/DMI",
-      "params": { "adxPeriod": 14, "diPeriod": 14 },
-      "dateRange": { "start": "2023-01-01", "end": "2026-02-06" },
+      "params": {
+        "adxPeriod": 14,
+        "diPeriod": 14
+      },
+      "dateRange": {
+        "start": "2023-01-01",
+        "end": "2026-02-06"
+      },
       "extractionMethod": "TradingView data window",
       "extractionDate": null,
       "values": [
-        { "date": "2026-02-06", "barTime": 1770336000, "field": "adx", "value": null },
-        { "date": "2026-02-06", "barTime": 1770336000, "field": "plusDI", "value": null },
-        { "date": "2026-02-06", "barTime": 1770336000, "field": "minusDI", "value": null }
+        {
+          "date": "2026-02-06",
+          "barTime": 1770336000,
+          "field": "adx",
+          "value": null
+        },
+        {
+          "date": "2026-02-06",
+          "barTime": 1770336000,
+          "field": "plusDI",
+          "value": null
+        },
+        {
+          "date": "2026-02-06",
+          "barTime": 1770336000,
+          "field": "minusDI",
+          "value": null
+        }
       ],
       "status": "pending",
       "verified": false,

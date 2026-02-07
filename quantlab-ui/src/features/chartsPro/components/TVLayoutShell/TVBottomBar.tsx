@@ -81,11 +81,11 @@ function RangeButton({
         "px-2 py-1 text-[11px] font-medium transition-colors",
         "bg-transparent border-b-2 border-transparent",
         // Active: white text with blue underline (exact TV behavior)
-        active && !disabled && "text-[#d1d4dc] border-[#2962ff]",
+        active && !disabled && "text-[var(--tv-text)] border-[var(--tv-blue)]",
         // Inactive: muted gray text, no underline
-        !active && !disabled && "text-[#787b86] hover:text-[#d1d4dc]",
+        !active && !disabled && "text-[var(--tv-text-muted)] hover:text-[var(--tv-text)]",
         // Disabled: very muted
-        disabled && "text-[#5d606b] cursor-not-allowed"
+        disabled && "text-[var(--tv-text-dim)] cursor-not-allowed"
       )}
       data-active={active}
     >
@@ -121,9 +121,9 @@ function ScaleButton({
         "px-2 py-1 text-[11px] font-medium transition-colors flex items-center gap-1",
         "bg-transparent border-b-2 border-transparent",
         // Active: white text with blue underline
-        active && "text-[#d1d4dc] border-[#2962ff]",
+        active && "text-[var(--tv-text)] border-[var(--tv-blue)]",
         // Inactive: muted gray text
-        !active && "text-[#787b86] hover:text-[#d1d4dc]"
+        !active && "text-[var(--tv-text-muted)] hover:text-[var(--tv-text)]"
       )}
       data-active={active}
     >
@@ -135,10 +135,10 @@ function ScaleButton({
 /** Market status badge */
 function MarketStatusBadge({ status }: { status: MarketStatus }) {
   const config: Record<MarketStatus, { color: string; label: string }> = {
-    LIVE: { color: "bg-[#26a69a]", label: "LIVE" },
-    DEMO: { color: "bg-[#ff9800]", label: "DEMO" },
-    OFFLINE: { color: "bg-[#f44336]", label: "OFF" },
-    LOADING: { color: "bg-[#2962ff] animate-pulse", label: "..." },
+    LIVE: { color: "bg-[var(--tv-green)]", label: "LIVE" },
+    DEMO: { color: "bg-[var(--tv-yellow)]", label: "DEMO" },
+    OFFLINE: { color: "bg-[var(--tv-red)]", label: "OFF" },
+    LOADING: { color: "bg-[var(--tv-blue)] animate-pulse", label: "..." },
   };
   
   const { color, label } = config[status];
@@ -149,14 +149,14 @@ function MarketStatusBadge({ status }: { status: MarketStatus }) {
       className="flex items-center gap-1 px-1.5 py-0.5 text-[11px]"
     >
       <span className={cn("w-1.5 h-1.5 rounded-full", color)} />
-      <span className="text-[#787b86] font-medium">{label}</span>
+      <span className="text-[var(--tv-text-muted)] font-medium">{label}</span>
     </div>
   );
 }
 
 /** Separator */
 function Separator() {
-  return <div className="h-3 w-px bg-[#363a45] mx-1" aria-hidden="true" />;
+  return <div className="h-3 w-px bg-[var(--tv-border)] mx-1" aria-hidden="true" />;
 }
 
 export const TVBottomBar = memo(function TVBottomBar({
@@ -240,7 +240,7 @@ export const TVBottomBar = memo(function TVBottomBar({
         type="button"
         onClick={onTimezoneClick}
         data-testid="tv-timezone-btn"
-        className="flex items-center gap-1 px-1.5 py-0.5 text-[11px] text-[#787b86] hover:text-[#d1d4dc] transition-colors"
+        className="flex items-center gap-1 px-1.5 py-0.5 text-[11px] text-[var(--tv-text-muted)] hover:text-[var(--tv-text)] transition-colors"
       >
         <Globe className="w-2.5 h-2.5" />
         <span>{timezone}</span>
@@ -248,7 +248,7 @@ export const TVBottomBar = memo(function TVBottomBar({
       
       {/* Current time */}
       {currentTime && (
-        <div className="flex items-center gap-1 px-1.5 text-[11px] text-[#5d606b]">
+        <div className="flex items-center gap-1 px-1.5 text-[11px] text-[var(--tv-text-dim)]">
           <Clock className="w-2.5 h-2.5" />
           <span>{currentTime}</span>
         </div>

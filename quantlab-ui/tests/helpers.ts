@@ -26,7 +26,8 @@ export async function gotoChartsPro(page: Page, testInfo: TestInfo, opts: GotoOp
       await selector.first().click();
       // Wait for LW dump to be available and price canvas visible
       await page.waitForFunction(() => typeof (window as any).__lwcharts?.dump === "function");
-      const canvas = page.locator(".tv-lightweight-charts canvas").first();
+      // Wait for canvas inside the chartspro-price container (lightweight-charts mount point)
+      const canvas = page.locator(".chartspro-price canvas").first();
       await canvas.waitFor({ state: "visible" });
       await canvas.scrollIntoViewIfNeeded();
       // Sanity: hover should update hover state

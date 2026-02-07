@@ -89,14 +89,11 @@ export const CrosshairOverlay = memo(function CrosshairOverlay({
       data-visible="true"
       style={{ position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden" }}
     >
-      {/* Price pill on right axis */}
-      {position.price != null && (
-        <div data-testid="chartspro-crosshair-price" style={pricePillStyle}>
-          {formatPrice(position.price)}
-        </div>
-      )}
+      {/* TV-42: Price pill REMOVED - LWC native crosshair shows correct Y-coordinate price.
+          Custom overlay was showing bar.close which caused price mismatch with tick labels.
+          Native LWC crosshair has labelVisible: true and shows actual price at Y position. */}
       
-      {/* Time pill on bottom axis */}
+      {/* Time pill on bottom axis - kept for data-testid accessibility in tests */}
       {position.time != null && (
         <div data-testid="chartspro-crosshair-time" style={timePillStyle}>
           {position.time}

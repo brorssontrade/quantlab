@@ -9,6 +9,8 @@ export interface LastPriceLineProps {
   yPosition: number | null; // px from top
   theme: ChartsTheme;
   containerWidth: number;
+  /** Dynamic color for the label (green for up, red for down) */
+  labelColor?: string;
   className?: string;
 }
 
@@ -50,7 +52,7 @@ function formatPrice(value: number): string {
 
 /**
  * Last price line with countdown timer to next bar close.
- * Displays as a horizontal dashed line with price label and countdown.
+ * Displays the price label with countdown (line is drawn by LWC priceLineVisible).
  */
 export function LastPriceLine({
   lastPrice,
@@ -59,6 +61,7 @@ export function LastPriceLine({
   yPosition,
   theme,
   containerWidth,
+  labelColor,
   className = "",
 }: LastPriceLineProps) {
   const [countdown, setCountdown] = useState<string>("--:--");
@@ -87,6 +90,9 @@ export function LastPriceLine({
     return null;
   }
 
+  // Use provided labelColor or fall back to theme.priceLine
+  const bgColor = labelColor ?? theme.priceLine;
+
   return (
     <div
       data-testid="chartspro-last-price-line"
@@ -96,21 +102,17 @@ export function LastPriceLine({
         width: `${containerWidth}px`,
       }}
     >
-      {/* Dashed line */}
-      <div
-        className="chartspro-last-price-line__line"
-        style={{
-          borderColor: theme.priceLine,
-        }}
-      />
+      {/* TV-42: Line removed - LWC handles the price line via priceLineVisible: true.
+          This component only provides the custom label with countdown timer. */}
       
-      {/* Price label with countdown */}
+      {/* Price label with countdown - positioned at right edge */}
       <div
         className="chartspro-last-price-line__label"
         style={{
-          backgroundColor: theme.crosshairLabelBg,
-          borderColor: theme.priceLine,
-          color: theme.axisText,
+          marginLeft: 'auto', // Push label to right edge
+          backgroundColor: bgColor, // Dynamic up/down color for TV-style
+          borderColor: bgColor,
+          color: '#ffffff', // White text on colored background
         }}
       >
         <span className="chartspro-last-price-line__price">

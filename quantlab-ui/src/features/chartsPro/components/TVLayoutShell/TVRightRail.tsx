@@ -77,8 +77,8 @@ const RailButton = memo(function RailButton({
         w-full h-9
         transition-colors duration-75
         ${active 
-          ? "bg-[#2a2e39] text-[#2962ff] border-r-2 border-[#2962ff]" 
-          : "text-[#787b86] hover:text-[#d1d4dc] hover:bg-[#2a2e39]/50"
+          ? "bg-[var(--tv-panel-hover)] text-[var(--tv-blue)] border-r-2 border-[var(--tv-blue)]" 
+          : "text-[var(--tv-text-muted)] hover:text-[var(--tv-text)] hover:bg-[var(--tv-panel-hover)]/50"
         }
       `}
     >
@@ -118,8 +118,8 @@ export const TVRightRail = memo(function TVRightRail({
       className="
         flex flex-col
         h-full
-        bg-[#1e222d]
-        border-l border-[#363a45]
+        bg-[var(--tv-panel)]
+        border-l border-[var(--tv-border)]
       "
       style={{
         width: `${TV_LAYOUT.RIGHT_ICON_RAIL}px`,
@@ -139,7 +139,7 @@ export const TVRightRail = memo(function TVRightRail({
       />
 
       {/* Separator */}
-      <div className="h-px bg-[#363a45] mx-2" />
+      <div className="h-px bg-[var(--tv-border)] mx-2" />
 
       {/* Tab buttons */}
       <div className="flex-1 flex flex-col py-0.5">
@@ -157,7 +157,7 @@ export const TVRightRail = memo(function TVRightRail({
 
       {/* Bottom section: Settings + Help */}
       <div className="mt-auto">
-        <div className="h-px bg-[#363a45] mx-2" />
+        <div className="h-px bg-[var(--tv-border)] mx-2" />
         
         {showSettings && (
           <RailButton

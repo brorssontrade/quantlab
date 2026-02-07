@@ -27,7 +27,8 @@ import { useSettingsStore } from "./state/settings";
 import { LayoutManager, type SavedLayout } from "./components/TopBar/LayoutManager";
 import { ApiStatusBadge } from "./components/ApiStatusBadge";
 import { ModalPortal } from "./components/Modal/ModalPortal";
-import { IndicatorsModalV2 } from "./components/Modal/IndicatorsModalV2";
+import { IndicatorsModalV3 } from "./components/Modal/IndicatorsModalV3";
+import { IndicatorSettingsModal } from "./components/Modal/IndicatorSettingsModal";
 import { TextModal } from "./components/Modal/TextModal";
 import { RenkoSettingsModal } from "./components/Modal/RenkoSettingsModal";
 import { useOhlcvQuery, fetchOhlcvSeries } from "./hooks/useOhlcv";
@@ -44,13 +45,16 @@ import {
   DEFAULT_THEME,
   DEFAULT_TIMEFRAME,
   TIMEFRAME_OPTIONS,
+  MAX_POINT_COUNT,
+  EXTENDED_POINT_COUNT_BY_TF,
   type ChartTimeframe,
   useChartControls,
 } from "./state/controls";
 import { VALID_TOOL_IDS } from "./components/LeftToolbar/toolRegistry";
 import type { ChartThemeName, NormalizedBar, Tf } from "./types";
 import { getChartTheme } from "./theme";
-import { useDrawingsStore } from "./state/drawings";
+import { useDrawingsStore, getStoredIndicatorKinds } from "./state/drawings";
+import { indicatorNeedsExtendedHistory } from "./indicators/indicatorManifest";
 import { createDataBounds } from "./utils/rangePresets";
 import type { BackfillRequest } from "./components/BottomBar";
 
@@ -334,6 +338,8 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
   const [modalState, setModalState] = useState<{ open: boolean; kind: string | null }>({ open: false, kind: null });
   // TV-20.3: Text editing modal state (stores drawing ID being edited)
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
+  // Indicator settings modal state (stores indicator ID being edited)
+  const [editingIndicatorId, setEditingIndicatorId] = useState<string | null>(null);
   // PRIO 3: Indicator compute results (from ChartViewport)
   const [indicatorResults, setIndicatorResults] = useState<Record<string, any>>({});
   const [workspaceMode, setWorkspaceMode] = useState(() => loadWorkspaceLayout().mode);
@@ -404,6 +410,13 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
       }));
     } catch { /* ignore */ }
   }, [drawingsLocked, drawingsHidden]);
+
+  // Light theme parity: Sync data-tv-theme attribute on root whenever themeName changes
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      document.documentElement.dataset.tvTheme = themeName;
+    }
+  }, [themeName]);
 
   // TV-20.14: Toggle callbacks
   const handleToggleDrawingsLocked = useCallback(() => {
@@ -545,6 +558,10 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
     (next: ChartThemeName) => {
       setThemeNameState(next);
       persistLayout({ symbol, timeframe, theme: next });
+      // Set data-tv-theme on root to trigger CSS variable switch
+      if (typeof document !== "undefined") {
+        document.documentElement.dataset.tvTheme = next;
+      }
     },
     [symbol, timeframe],
   );
@@ -651,10 +668,27 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
     }
   }, [exposeQa, mockMode]);
 
+  // OBV-parity: Compute dynamic limit based on active indicators
+  // Check localStorage directly before hook initialization (C-light approach)
+  const initialNeedsExtended = useMemo(() => {
+    const kinds = getStoredIndicatorKinds(symbol, timeframe);
+    return kinds.some(indicatorNeedsExtendedHistory);
+  }, [symbol, timeframe]);
+  
+  // State to track if extended history is needed (updated when indicators change)
+  const [needsExtendedHistory, setNeedsExtendedHistory] = useState(initialNeedsExtended);
+  
+  // Compute dynamic limit based on needsExtendedHistory flag
+  const dynamicLimit = useMemo(() => {
+    if (!needsExtendedHistory) return MAX_POINT_COUNT;
+    return EXTENDED_POINT_COUNT_BY_TF[timeframe] ?? MAX_POINT_COUNT;
+  }, [needsExtendedHistory, timeframe]);
+
   const { data, loading, error, meta, mode, reload } = useOhlcvQuery({
     apiBase,
     symbol,
     timeframe,
+    limit: dynamicLimit,
     mock: mockMode,
   });
 
@@ -730,6 +764,21 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
   const theme = useMemo(() => getChartTheme(themeName), [themeName]);
   const drawingsStore = useDrawingsStore(symbol, timeframe as Tf);
   const { undo, redo } = drawingsStore;
+
+  // OBV-parity: Update needsExtendedHistory when indicators change
+  useEffect(() => {
+    const hasExtendedIndicator = drawingsStore.indicators.some(
+      (ind) => indicatorNeedsExtendedHistory(ind.kind)
+    );
+    if (hasExtendedIndicator !== needsExtendedHistory) {
+      setNeedsExtendedHistory(hasExtendedIndicator);
+      // Trigger reload to fetch more/less data
+      if (import.meta.env.DEV) {
+        console.log(`[OBV-parity] Extended history ${hasExtendedIndicator ? "enabled" : "disabled"}, reloading data...`);
+      }
+      // Note: The useOhlcvQuery hook will automatically re-fetch when limit changes
+    }
+  }, [drawingsStore.indicators, needsExtendedHistory]);
 
   // TV-20.14: Remove all drawings callback (must be after drawingsStore init)
   const handleRemoveAllDrawings = useCallback(() => {
@@ -1301,6 +1350,8 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
                 onToggleLock={drawingsStore.toggleLock}
                 onToggleHide={drawingsStore.toggleHidden}
                 onUpdateIndicator={drawingsStore.updateIndicator}
+                onRemoveIndicator={drawingsStore.removeIndicator}
+                onOpenIndicatorSettings={(id) => setEditingIndicatorId(id)}
                 onIndicatorResultsChange={setIndicatorResults}
                 onTextCreated={(drawingId) => setEditingTextId(drawingId)}
                 onTextEdit={(drawingId) => setEditingTextId(drawingId)}
@@ -1471,7 +1522,7 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
         kind="indicators"
         onClose={() => setModalState({ open: false, kind: null })}
       >
-        <IndicatorsModalV2
+        <IndicatorsModalV3
           onAdd={drawingsStore.addIndicator}
           onClose={() => setModalState({ open: false, kind: null })}
         />
@@ -1576,6 +1627,27 @@ export default function ChartsProTab({ apiBase }: ChartsProTabProps) {
           }}
           onCancel={() => setModalState({ open: false, kind: null })}
         />
+      </ModalPortal>
+
+      {/* Indicator Settings Modal */}
+      <ModalPortal
+        open={editingIndicatorId !== null}
+        kind="indicatorSettings"
+        onClose={() => setEditingIndicatorId(null)}
+      >
+        {editingIndicatorId && (() => {
+          const indicator = drawingsStore.indicators.find((i) => i.id === editingIndicatorId);
+          if (!indicator) return null;
+          return (
+            <IndicatorSettingsModal
+              indicator={indicator}
+              onApply={(patch) => {
+                drawingsStore.updateIndicator(editingIndicatorId, patch);
+              }}
+              onClose={() => setEditingIndicatorId(null)}
+            />
+          );
+        })()}
       </ModalPortal>
 
       {/* TV-23.1: Chart Settings Dialog */}

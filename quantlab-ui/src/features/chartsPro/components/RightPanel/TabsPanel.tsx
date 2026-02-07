@@ -162,8 +162,8 @@ export function TabsPanel({
             onClick={() => handleTabClick(tab)}
             className={`px-2 py-1 text-[11px] font-medium rounded-sm transition border-b-2 ${
               currentTab === tab 
-                ? "border-[#2962ff] bg-transparent" 
-                : "border-transparent hover:bg-[#2a2e39]/40"
+                ? "border-[var(--tv-blue)] bg-transparent" 
+                : "border-transparent hover:bg-[var(--tv-panel-hover)]/40"
             }`}
             style={{
               color: currentTab === tab ? "var(--tv-blue, #2962ff)" : "var(--tv-text-muted, #787b86)",

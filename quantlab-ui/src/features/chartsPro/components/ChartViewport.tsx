@@ -3,6 +3,9 @@ import {
   ColorType,
   CrosshairMode,
   LineStyle,
+  LineType,
+  // LineStyle mapping helper for indicator styleByLineId
+  // Maps our "solid"|"dashed"|"dotted" to LWC's numeric enum
   PriceScaleMode,
   createChart,
   type SeriesType,
@@ -54,6 +57,31 @@ import { OverlayCanvasLayer } from "./OverlayCanvas";
 import { DrawingLayer } from "./DrawingLayer";
 import { AlertMarkersLayer } from "./AlertMarkersLayer";
 import { FloatingToolbar } from "./FloatingToolbar";
+import { IndicatorLegend } from "./IndicatorLegend";
+import { PaneStack, getSyncController, resetSyncController } from "./PaneStack";
+import { SupertrendFillOverlay } from "./SupertrendFillOverlay";
+import { IchimokuCloudOverlay } from "./IchimokuCloudOverlay";
+import { PivotPointsOverlay } from "./PivotPointsOverlay";
+import { PivotPointsHLOverlay } from "./PivotPointsHLOverlay";
+import { ZigZagOverlay } from "./ZigZagOverlay";
+import { AutoFibOverlay } from "./AutoFibOverlay";
+import { AlligatorOverlay } from "./AlligatorOverlay";
+import { FractalsOverlay } from "./FractalsOverlay";
+import { KnoxvilleOverlay } from "./KnoxvilleOverlay";
+import { VolumeProfileOverlay, VPErrorBoundary } from "./VolumeProfileOverlay";
+import { VPDebugBanner, type VPDebugEntry } from "./VPDebugBanner";
+import { BollingerBandsFillOverlay } from "./BollingerBandsFillOverlay";
+import { DcFillOverlay } from "./DcFillOverlay";
+import { KcFillOverlay } from "./KcFillOverlay";
+import { EmaBbFillOverlay } from "./EmaBbFillOverlay";
+import { SmaBbFillOverlay } from "./SmaBbFillOverlay";
+import { VwapBandsFillOverlay } from "./VwapBandsFillOverlay";
+import { AvwapBandsFillOverlay } from "./AvwapBandsFillOverlay";
+import { UlcerFillOverlay } from "./UlcerFillOverlay";
+import { EnvFillOverlay } from "./EnvFillOverlay";
+import { MedianCloudOverlay } from "./MedianCloudOverlay";
+import { LinRegFillOverlay } from "./LinRegFillOverlay";
+import { SarMarkersOverlay } from "./SarMarkersOverlay";
 import { ObjectSettingsModal } from "./Modal/ObjectSettingsModal";
 import { CreateAlertModal } from "./Modal/CreateAlertModal";
 import { LabelModal } from "./Modal/LabelModal";
@@ -65,7 +93,18 @@ import { CrosshairOverlayLayer, getCrosshairPerfMetrics, resetCrosshairPerfMetri
 import { Watermark } from "./Watermark";
 import { LastPriceLine } from "./LastPriceLine";
 import { type ChartsTheme, getThemeCssVars } from "../theme";
-import type { IndicatorWorkerResponse } from "../indicators/registryV2";
+import type { IndicatorWorkerResponse, IntrabarMap } from "../indicators/registryV2";
+import { getComputeCount, resetComputeCount, computeIndicator } from "../indicators/registryV2";
+import { useIntrabarData } from "../hooks/useIntrabarData";
+import { useBreadthData, alignBreadthToChartBars, type BreadthBarData } from "../hooks/useBreadthData";
+import { useVRVP, type VRVPConfig } from "../hooks/useVRVP";
+import { useVPFR, type VPFRConfig } from "../hooks/useVPFR";
+import { useAAVP, type AAVPConfig } from "../hooks/useAAVP";
+import { useSVP, type SVPConfig } from "../hooks/useSVP";
+import { useSVPHD, type SVPHDConfig } from "../hooks/useSVPHD";
+import { usePVP, type PVPConfig } from "../hooks/usePVP";
+import type { VPBar } from "../indicators/volumeProfileEngine";
+import { normalizeTime, validateBars } from "../utils/vpTimeUtils";
 import { useSettingsStore } from "../state/settings";
 import { useToolbarStore, type CompareScaleMode } from "../state/toolbar";
 import {
@@ -672,6 +711,10 @@ interface ChartViewportProps {
   registerExports?: (handlers: ExportHandlers) => void;
   onChartReady?: (chart: IChartApi) => void;
   onUpdateIndicator?: (id: string, patch: Partial<IndicatorInstance>) => void;
+  /** Callback to remove an indicator */
+  onRemoveIndicator?: (id: string) => void;
+  /** Callback to open indicator settings modal */
+  onOpenIndicatorSettings?: (id: string) => void;
   /** PRIO 3: Callback when indicator compute results change */
   onIndicatorResultsChange?: (results: Record<string, IndicatorWorkerResponse>) => void;
   /** TV-20.3: Callback when text drawing is created (opens modal) */
@@ -737,6 +780,8 @@ export function ChartViewport({
   registerExports,
   onChartReady,
   onUpdateIndicator,
+  onRemoveIndicator,
+  onOpenIndicatorSettings,
   onIndicatorResultsChange,
   onTextCreated,
   onTextEdit,
@@ -805,6 +850,12 @@ export function ChartViewport({
   const anchorStateRef = useRef<{ time: number; baseClose: number } | null>(null);
   const hoverStateRef = useRef<HoverSnapshot | null>(null);
   const legendStateRef = useRef<LegendSnapshot>({ base: { value: null, color: null }, compares: {} });
+  
+  // Crosshair values for overlay indicators - keyed by indicatorId, then lineId
+  const [overlayCrosshairValues, setOverlayCrosshairValues] = useState<
+    Record<string, Record<string, { value: number; color: string } | null>>
+  >({});
+  
   const scaleInfoRef = useRef<ScaleSnapshot>({
     mode: "price",
     baseMode: describePriceScaleMode(PriceScaleMode.Normal),
@@ -1036,6 +1087,10 @@ export function ChartViewport({
   const compareSeriesMap = compareLineSeriesRef.current;
   const indicatorSeriesMap = indicatorSeriesRef.current;
   const [chartReady, setChartReady] = useState(false);
+  // chartApi as state so hooks re-run when chart becomes ready (refs don't trigger re-renders)
+  const [chartApi, setChartApi] = useState<IChartApi | null>(null);
+  // TV-PANE: Track number of indicator panes to control price chart timeScale visibility
+  const [indicatorPaneCount, setIndicatorPaneCount] = useState(0);
   const [baseLoading, setBaseLoading] = useState(false);
   const lastErrorRef = useRef<string | null>(null);
   const [compareVersion, setCompareVersion] = useState(0);
@@ -1352,6 +1407,561 @@ const overlayCanvasClassName = "chartspro-overlay__canvas absolute inset-0";
     }
   }, [setTool]);
   const visibleIndicators = useMemo(() => indicators.filter((indicator) => !indicator.hidden), [indicators]);
+  
+  // Intrabar data for Volume Delta/CVD parity
+  // Only fetch when these indicators are active
+  const needsIntrabars = useMemo(() => 
+    visibleIndicators.some((ind) => ind.kind === "volumeDelta" || ind.kind === "cvd"),
+    [visibleIndicators]
+  );
+  
+  const {
+    intrabars,
+    loading: intrabarLoading,
+    error: intrabarError,
+    intrabarTf,
+  } = useIntrabarData({
+    apiBase,
+    symbol,
+    chartTimeframe: timeframe,
+    chartBars: data,
+    enabled: needsIntrabars,
+  });
+  
+  // Debug logging for intrabar status
+  useEffect(() => {
+    if (needsIntrabars && intrabars.size > 0) {
+      console.debug(`[Intrabar] Using REAL intrabars for ${symbol} ${timeframe}: ${intrabars.size} chart bars with intrabar data (tf=${intrabarTf})`);
+    } else if (needsIntrabars && !intrabarLoading && intrabars.size === 0) {
+      console.debug(`[Intrabar] FALLBACK mode for ${symbol} ${timeframe}: no intrabars available, using chart-bar approximation`);
+    }
+  }, [needsIntrabars, intrabars.size, symbol, timeframe, intrabarTf, intrabarLoading]);
+  
+  // Breadth data for ADR/ADL parity
+  // Only fetch when these indicators are active
+  const needsBreadth = useMemo(() => 
+    visibleIndicators.some((ind) => ind.kind === "adr" || ind.kind === "adl"),
+    [visibleIndicators]
+  );
+  
+  const {
+    breadthData,
+    adlSeed,
+    marketKey,
+    loading: breadthLoading,
+    error: breadthError,
+  } = useBreadthData({
+    apiBase,
+    symbol,
+    chartBars: data,
+    enabled: needsBreadth,
+  });
+  
+  // Build breadth map for indicator compute
+  const breadthMap = useMemo(() => {
+    if (!needsBreadth || !breadthData.length) return new Map<number, BreadthBarData>();
+    return alignBreadthToChartBars(breadthData, data);
+  }, [needsBreadth, breadthData, data]);
+  
+  // Debug logging for breadth status
+  useEffect(() => {
+    if (needsBreadth && breadthMap.size > 0) {
+      console.debug(`[Breadth] Using REAL breadth for ${symbol}: ${breadthMap.size} days (market=${marketKey}, adlSeed=${adlSeed})`);
+    } else if (needsBreadth && !breadthLoading && breadthMap.size === 0) {
+      console.debug(`[Breadth] FALLBACK mode for ${symbol}: no breadth available, using mock data`);
+    }
+  }, [needsBreadth, breadthMap.size, symbol, marketKey, adlSeed, breadthLoading]);
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // VRVP (Visible Range Volume Profile)
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  // Find VRVP indicator if present
+  const vrvpIndicator = useMemo(() => 
+    visibleIndicators.find(ind => ind.kind === "vrvp" && !ind.hidden),
+    [visibleIndicators]
+  );
+  
+  // Get VRVP config from indicator params or _vrvpData
+  const vrvpConfig = useMemo<Partial<VRVPConfig> | null>(() => {
+    if (!vrvpIndicator) return null;
+    
+    // Check indicatorResults for _vrvpData
+    const result = indicatorResults[vrvpIndicator.id];
+    if (result?._vrvpData?.style) {
+      const s = result._vrvpData.style;
+      return {
+        enabled: true,
+        rowsLayout: s.rowsLayout || "Number of Rows",
+        numRows: s.numRows || 24,
+        valueAreaPercent: s.valueAreaPercent || 70,
+        volumeMode: s.volumeMode || "Up/Down",
+        placement: s.placement || "Left",
+        widthPercent: s.widthPercent || 70,
+        showHistogram: s.showHistogram ?? true,
+        showPOC: s.showPOC ?? true,
+        showVALines: s.showVALines ?? true,
+        showValueArea: s.showValueArea ?? true,
+        extendPOC: s.extendPOC ?? false,
+        extendVA: s.extendVA ?? false,
+        upColor: s.upColor || "#26A69A",
+        downColor: s.downColor || "#EF5350",
+        pocColor: s.pocColor || "#FFEB3B",
+        vaColor: s.vaColor || "#2962FF",
+        valueAreaColor: s.valueAreaColor || "#2962FF",
+      };
+    }
+    return { enabled: true };
+  }, [vrvpIndicator, indicatorResults]);
+  
+  // Use VRVP hook (pass chart bars for logical range mapping)
+  const vrvpResult = useVRVP(
+    chartApi,
+    apiBase,
+    symbol,
+    timeframe,
+    data,  // chartBars for logical range→bar.time mapping
+    vrvpConfig ?? { enabled: false }
+  );
+  
+  // Debug logging for VRVP
+  useEffect(() => {
+    if (vrvpIndicator) {
+      console.debug(`[VRVP] Result: bars=${vrvpResult.debug.ltfBars}, profiles=${vrvpResult.debug.profilesCount}, range=${vrvpResult.debug.rangeStart}-${vrvpResult.debug.rangeEnd}`);
+    }
+  }, [vrvpIndicator, vrvpResult.debug]);
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // VPFR (Fixed Range Volume Profile)
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  const vpfrIndicator = useMemo(() => 
+    visibleIndicators.find(ind => ind.kind === "vpfr" && !ind.hidden),
+    [visibleIndicators]
+  );
+  
+  const vpfrConfig = useMemo<Partial<VPFRConfig> | null>(() => {
+    if (!vpfrIndicator) return null;
+    const result = indicatorResults[vpfrIndicator.id];
+    if (result?._vrvpData?.style) {
+      const s = result._vrvpData.style;
+      return {
+        enabled: true,
+        anchorStart: s.anchorStart || 0,
+        anchorEnd: s.anchorEnd || 0,
+        rowsLayout: s.rowsLayout || "Number of Rows",
+        numRows: s.numRows || 24,
+        valueAreaPercent: s.valueAreaPercent || 70,
+        volumeMode: s.volumeMode || "Up/Down",
+        placement: s.placement || "Left",
+        widthPercent: s.widthPercent || 70,
+        showHistogram: s.showHistogram ?? true,
+        showPOC: s.showPOC ?? true,
+        showVALines: s.showVALines ?? true,
+        showValueArea: s.showValueArea ?? true,
+        extendPOC: s.extendPOC ?? true,
+        extendVA: s.extendVA ?? true,
+        upColor: s.upColor || "#26A69A",
+        downColor: s.downColor || "#EF5350",
+        pocColor: s.pocColor || "#FFEB3B",
+        vaColor: s.vaColor || "#2962FF",
+        valueAreaColor: s.valueAreaColor || "#2962FF",
+      };
+    }
+    return { enabled: true };
+  }, [vpfrIndicator, indicatorResults]);
+  
+  const vpfrResult = useVPFR(
+    chartApi,
+    apiBase,
+    symbol,
+    timeframe,
+    data,  // chartBars for time mapping
+    vpfrConfig ?? { enabled: false }
+  );
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // AAVP (Auto Anchored Volume Profile)
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  const aavpIndicator = useMemo(() => 
+    visibleIndicators.find(ind => ind.kind === "aavp" && !ind.hidden),
+    [visibleIndicators]
+  );
+  
+  // Convert chart data to VPBar format for AAVP HH/LL anchor calculation
+  const chartBarsForAAVP = useMemo<VPBar[]>(() => {
+    return data.map(bar => ({
+      time: normalizeTime(bar.time),
+      open: bar.open,
+      high: bar.high,
+      low: bar.low,
+      close: bar.close,
+      volume: 0, // Chart bars may not have volume, but time/price is enough for HH/LL
+    }));
+  }, [data]);
+  
+  const aavpConfig = useMemo<Partial<AAVPConfig> | null>(() => {
+    if (!aavpIndicator) return null;
+    const result = indicatorResults[aavpIndicator.id];
+    if (result?._vrvpData?.style) {
+      const s = result._vrvpData.style;
+      return {
+        enabled: true,
+        anchorMode: s.anchorMode || "Auto",
+        length: s.length || 20,
+        rowsLayout: s.rowsLayout || "Number of Rows",
+        numRows: s.numRows || 24,
+        valueAreaPercent: s.valueAreaPercent || 70,
+        volumeMode: s.volumeMode || "Up/Down",
+        placement: s.placement || "Left",
+        widthPercent: s.widthPercent || 70,
+        showHistogram: s.showHistogram ?? true,
+        showPOC: s.showPOC ?? true,
+        showVALines: s.showVALines ?? true,
+        showValueArea: s.showValueArea ?? true,
+        extendPOC: s.extendPOC ?? false,
+        extendVA: s.extendVA ?? false,
+        upColor: s.upColor || "#26A69A",
+        downColor: s.downColor || "#EF5350",
+        pocColor: s.pocColor || "#FFEB3B",
+        vaColor: s.vaColor || "#2962FF",
+        valueAreaColor: s.valueAreaColor || "#2962FF",
+      };
+    }
+    return { enabled: true };
+  }, [aavpIndicator, indicatorResults]);
+  
+  const aavpResult = useAAVP(
+    chartApi,
+    apiBase,
+    symbol,
+    timeframe,
+    chartBarsForAAVP,
+    aavpConfig ?? { enabled: false }
+  );
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // SVP (Session Volume Profile)
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  const svpIndicator = useMemo(() => 
+    visibleIndicators.find(ind => ind.kind === "svp" && !ind.hidden),
+    [visibleIndicators]
+  );
+  
+  const svpConfig = useMemo<Partial<SVPConfig> | null>(() => {
+    if (!svpIndicator) return null;
+    const result = indicatorResults[svpIndicator.id];
+    if (result?._vrvpData?.style) {
+      const s = result._vrvpData.style;
+      return {
+        enabled: true,
+        sessionMode: s.sessionMode || "RTH",
+        exchange: s.exchange,
+        rowsLayout: s.rowsLayout || "Number of Rows",
+        numRows: s.numRows || 24,
+        valueAreaPercent: s.valueAreaPercent || 70,
+        maxTotalRows: s.maxTotalRows || 6000,
+        volumeMode: s.volumeMode || "Up/Down",
+        placement: s.placement || "Left",
+        widthPercent: s.widthPercent || 70,
+        showHistogram: s.showHistogram ?? true,
+        showPOC: s.showPOC ?? true,
+        showVALines: s.showVALines ?? true,
+        showValueArea: s.showValueArea ?? true,
+        extendPOC: s.extendPOC ?? false,
+        extendVA: s.extendVA ?? false,
+        upColor: s.upColor || "#26A69A",
+        downColor: s.downColor || "#EF5350",
+        pocColor: s.pocColor || "#FFEB3B",
+        vaColor: s.vaColor || "#2962FF",
+        valueAreaColor: s.valueAreaColor || "#2962FF",
+      };
+    }
+    return { enabled: true };
+  }, [svpIndicator, indicatorResults]);
+  
+  const svpResult = useSVP(
+    chartApi,
+    apiBase,
+    symbol,
+    timeframe,
+    data,
+    svpConfig ?? { enabled: false }
+  );
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // SVP HD (Session Volume Profile HD)
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  const svphdIndicator = useMemo(() => 
+    visibleIndicators.find(ind => ind.kind === "svphd" && !ind.hidden),
+    [visibleIndicators]
+  );
+  
+  const svphdConfig = useMemo<Partial<SVPHDConfig> | null>(() => {
+    if (!svphdIndicator) return null;
+    const result = indicatorResults[svphdIndicator.id];
+    if (result?._vrvpData?.style) {
+      const s = result._vrvpData.style;
+      return {
+        enabled: true,
+        sessionMode: s.sessionMode || "RTH",
+        exchange: s.exchange,
+        rowsLayout: s.rowsLayout || "Number of Rows",
+        coarseRows: s.coarseRows || 12,
+        detailedRows: s.detailedRows || 48,
+        valueAreaPercent: s.valueAreaPercent || 70,
+        maxTotalRows: s.maxTotalRows || 6000,
+        volumeMode: s.volumeMode || "Up/Down",
+        placement: s.placement || "Left",
+        widthPercent: s.widthPercent || 70,
+        showHistogram: s.showHistogram ?? true,
+        showPOC: s.showPOC ?? true,
+        showVALines: s.showVALines ?? true,
+        showValueArea: s.showValueArea ?? true,
+        extendPOC: s.extendPOC ?? false,
+        extendVA: s.extendVA ?? false,
+        upColor: s.upColor || "#26A69A",
+        downColor: s.downColor || "#EF5350",
+        pocColor: s.pocColor || "#FFEB3B",
+        vaColor: s.vaColor || "#2962FF",
+        valueAreaColor: s.valueAreaColor || "#2962FF",
+      };
+    }
+    return { enabled: true };
+  }, [svphdIndicator, indicatorResults]);
+  
+  const svphdResult = useSVPHD(
+    chartApi,
+    apiBase,
+    symbol,
+    timeframe,
+    data,
+    svphdConfig ?? { enabled: false }
+  );
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // PVP (Periodic Volume Profile)
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  const pvpIndicator = useMemo(() => 
+    visibleIndicators.find(ind => ind.kind === "pvp" && !ind.hidden),
+    [visibleIndicators]
+  );
+  
+  const pvpConfig = useMemo<Partial<PVPConfig> | null>(() => {
+    if (!pvpIndicator) return null;
+    const result = indicatorResults[pvpIndicator.id];
+    if (result?._vrvpData?.style) {
+      const s = result._vrvpData.style;
+      return {
+        enabled: true,
+        periodType: s.periodType || "Week",
+        rowsLayout: s.rowsLayout || "Number of Rows",
+        numRows: s.numRows || 24,
+        valueAreaPercent: s.valueAreaPercent || 70,
+        maxTotalRows: s.maxTotalRows || 6000,
+        volumeMode: s.volumeMode || "Up/Down",
+        placement: s.placement || "Left",
+        widthPercent: s.widthPercent || 70,
+        showHistogram: s.showHistogram ?? true,
+        showPOC: s.showPOC ?? true,
+        showVALines: s.showVALines ?? true,
+        showValueArea: s.showValueArea ?? true,
+        extendPOC: s.extendPOC ?? false,
+        extendVA: s.extendVA ?? false,
+        upColor: s.upColor || "#26A69A",
+        downColor: s.downColor || "#EF5350",
+        pocColor: s.pocColor || "#FFEB3B",
+        vaColor: s.vaColor || "#2962FF",
+        valueAreaColor: s.valueAreaColor || "#2962FF",
+      };
+    }
+    return { enabled: true };
+  }, [pvpIndicator, indicatorResults]);
+  
+  const pvpResult = usePVP(
+    chartApi,
+    apiBase,
+    symbol,
+    timeframe,
+    data,
+    pvpConfig ?? { enabled: false }
+  );
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // VP Debug Banner Data
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  // Validate bar array for debugging
+  const barsValidation = useMemo(() => validateBars(data), [data]);
+  
+  const vpDebugEntries = useMemo<VPDebugEntry[]>(() => {
+    const entries: VPDebugEntry[] = [];
+    
+    // VRVP
+    if (vrvpIndicator) {
+      entries.push({
+        name: "VRVP",
+        enabled: vrvpConfig?.enabled ?? false,
+        rangeStart: vrvpResult.debug.rangeStart,
+        rangeEnd: vrvpResult.debug.rangeEnd,
+        ltfBars: vrvpResult.debug.ltfBars,
+        chartBarsTotal: vrvpResult.debug.chartBarsTotal,
+        profilesCount: vrvpResult.profiles.length,
+        error: vrvpResult.error,
+        loading: vrvpResult.loading,
+        usingFallback: vrvpResult.debug.usingFallback,
+        priceMin: (vrvpResult.debug as { priceMin?: number }).priceMin,
+        priceMax: (vrvpResult.debug as { priceMax?: number }).priceMax,
+      });
+    }
+    
+    // VPFR
+    if (vpfrIndicator) {
+      entries.push({
+        name: "VPFR",
+        enabled: vpfrConfig?.enabled ?? false,
+        rangeStart: vpfrResult.debug.anchorStart,  // VPFR uses anchor for range
+        rangeEnd: vpfrResult.debug.anchorEnd,
+        ltfBars: vpfrResult.debug.ltfBars,
+        profilesCount: vpfrResult.profiles.length,
+        anchorStart: vpfrResult.debug.anchorStart,
+        anchorEnd: vpfrResult.debug.anchorEnd,
+        error: vpfrResult.error,
+        loading: vpfrResult.loading,
+      });
+    }
+    
+    // AAVP
+    if (aavpIndicator) {
+      entries.push({
+        name: "AAVP",
+        enabled: aavpConfig?.enabled ?? false,
+        rangeStart: aavpResult.debug.visibleStart ?? 0,  // AAVP uses visible range
+        rangeEnd: aavpResult.debug.visibleEnd ?? 0,
+        ltfBars: aavpResult.debug.ltfBars,
+        profilesCount: aavpResult.profiles.length,
+        anchorStart: aavpResult.debug.anchorStart,
+        anchorEnd: aavpResult.debug.visibleEnd ?? 0,
+        error: aavpResult.error,
+        loading: aavpResult.loading,
+      });
+    }
+    
+    // SVP
+    if (svpIndicator) {
+      entries.push({
+        name: "SVP",
+        enabled: svpConfig?.enabled ?? false,
+        rangeStart: 0,  // SVP doesn't expose range in debug - uses internal rangeStart/rangeEnd
+        rangeEnd: 0,
+        ltfBars: svpResult.debug.totalRows,
+        profilesCount: svpResult.profiles.length,
+        error: svpResult.error,
+        loading: svpResult.loading,
+      });
+    }
+    
+    // SVP HD
+    if (svphdIndicator) {
+      entries.push({
+        name: "SVP HD",
+        enabled: svphdConfig?.enabled ?? false,
+        rangeStart: 0,  // SVP HD doesn't expose range in debug
+        rangeEnd: 0,
+        ltfBars: svphdResult.debug.coarseCount + svphdResult.debug.detailedCount,
+        profilesCount: svphdResult.profiles.length,
+        error: svphdResult.error,
+        loading: svphdResult.loading,
+      });
+    }
+    
+    // PVP
+    if (pvpIndicator) {
+      entries.push({
+        name: "PVP",
+        enabled: pvpConfig?.enabled ?? false,
+        rangeStart: 0,  // PVP doesn't expose range in debug
+        rangeEnd: 0,
+        ltfBars: pvpResult.debug.periodCount,
+        profilesCount: pvpResult.profiles.length,
+        error: pvpResult.error,
+        loading: pvpResult.loading,
+      });
+    }
+    
+    return entries;
+  }, [
+    vrvpIndicator, vrvpConfig, vrvpResult,
+    vpfrIndicator, vpfrConfig, vpfrResult,
+    aavpIndicator, aavpConfig, aavpResult,
+    svpIndicator, svpConfig, svpResult,
+    svphdIndicator, svphdConfig, svphdResult,
+    pvpIndicator, pvpConfig, pvpResult,
+  ]);
+
+  // Debug logging for all VP indicators
+  useEffect(() => {
+    if (vpfrIndicator && vpfrResult.debug.ltfBars > 0) {
+      console.debug(`[VPFR] Profile: ${vpfrResult.debug.ltfBars} LTF bars, POC=${vpfrResult.debug.pocPrice?.toFixed(2)}`);
+    }
+    if (aavpIndicator && aavpResult.debug.ltfBars > 0) {
+      console.debug(`[AAVP] ${aavpResult.debug.anchorMode} (${aavpResult.debug.anchorPeriod || 'HH/LL'}): ${aavpResult.debug.ltfBars} bars, POC=${aavpResult.debug.pocPrice?.toFixed(2)}`);
+    }
+    if (svpIndicator && svpResult.debug.sessionCount > 0) {
+      console.debug(`[SVP] ${svpResult.debug.sessionCount} sessions, ${svpResult.debug.totalRows} rows`);
+    }
+    if (svphdIndicator && svphdResult.debug.detailedCount > 0) {
+      console.debug(`[SVP HD] coarse=${svphdResult.debug.coarseCount}, detailed=${svphdResult.debug.detailedCount}`);
+    }
+    if (pvpIndicator && pvpResult.debug.periodCount > 0) {
+      console.debug(`[PVP] ${pvpResult.debug.periodType}: ${pvpResult.debug.periodCount} periods`);
+    }
+  }, [
+    vpfrIndicator, vpfrResult.debug,
+    aavpIndicator, aavpResult.debug,
+    svpIndicator, svpResult.debug,
+    svphdIndicator, svphdResult.debug,
+    pvpIndicator, pvpResult.debug,
+  ]);
+  
+  // ─────────────────────────────────────────────────────────────────────────
+  // VPFR Click Subscription (for two-click anchor placement)
+  // ─────────────────────────────────────────────────────────────────────────
+  
+  useEffect(() => {
+    if (!chartApi) {
+      console.debug("[VPFR Click] No chart");
+      return;
+    }
+    if (!vpfrIndicator) {
+      console.debug("[VPFR Click] No VPFR indicator active");
+      return;
+    }
+    // Only subscribe when in anchor placement mode
+    if (vpfrResult.anchorState !== 'awaiting_first' && vpfrResult.anchorState !== 'awaiting_second') {
+      console.debug(`[VPFR Click] Not in placement mode: ${vpfrResult.anchorState}`);
+      return;
+    }
+    
+    const handleClick = (params: MouseEventParams) => {
+      console.debug("[VPFR Click] Raw click event:", params.time, params.point);
+      // Pass time directly to hook - it handles normalization internally
+      vpfrResult.handleChartClick(params.time);
+    };
+    
+    chartApi.subscribeClick(handleClick);
+    console.debug(`[VPFR Click] Handler subscribed, state: ${vpfrResult.anchorState}`);
+    
+    return () => {
+      chartApi.unsubscribeClick(handleClick);
+      console.debug('[VPFR Click] Handler unsubscribed');
+    };
+  }, [chartApi, vpfrIndicator, vpfrResult.anchorState, vpfrResult.handleChartClick]);
+  
   const safeApiBase = useMemo(() => apiBase.replace(/\/$/, ""), [apiBase]);
   const isLoading = Boolean(loading || baseLoading);
   const mockModeActive = Boolean(mockMode);
@@ -2054,6 +2664,7 @@ const fitToContent = useCallback(() => {
         setDataWindowRows([]);
         setHoverBar(null);
         setHoverPrevClose(null);
+        setOverlayCrosshairValues({});
         return null;
       }
       const bar = mainBarByTime.get(timeKey);
@@ -2063,6 +2674,7 @@ const fitToContent = useCallback(() => {
         setDataWindowRows([]);
         setHoverBar(null);
         setHoverPrevClose(null);
+        setOverlayCrosshairValues({});
         return null;
       }
       
@@ -2163,6 +2775,30 @@ const fitToContent = useCallback(() => {
           });
         });
       });
+      
+      // Build overlay crosshair values for IndicatorLegend
+      const newOverlayCrosshairValues: Record<string, Record<string, { value: number; color: string } | null>> = {};
+      Object.values(indicatorResults).forEach((result) => {
+        const owner = indicators.find((indicator) => indicator.id === result.id);
+        if (!owner || owner.hidden || owner.pane !== "price") return;
+        
+        newOverlayCrosshairValues[result.id] = {};
+        result.lines.forEach((line) => {
+          const key = `${result.id}:${line.id}`;
+          const map = indicatorValueByTime.get(key);
+          const value = map?.get(timeKey);
+          if (value != null) {
+            newOverlayCrosshairValues[result.id][line.id] = { 
+              value, 
+              color: line.color ?? owner.color 
+            };
+          } else {
+            newOverlayCrosshairValues[result.id][line.id] = null;
+          }
+        });
+      });
+      setOverlayCrosshairValues(newOverlayCrosshairValues);
+      
       setDataWindowRows([...changeRows, ...infoRows]);
       changeRows
         .filter((row) => row.symbol && row.id !== "change-base")
@@ -2937,13 +3573,23 @@ const fitToContent = useCallback(() => {
               count: Array.isArray(indicators) ? indicators.length : 0,
               names: Array.isArray(indicators) ? indicators.map((i) => i.kind) : [],
               items: Array.isArray(indicators)
-                ? indicators.map((i) => ({
-                    id: i.id,
-                    name: i.kind.toUpperCase(),
-                    pane: i.pane,
-                    visible: !i.hidden,
-                    paramsSummary: indicatorParamsSummary(i),
-                  }))
+                ? indicators.map((i) => {
+                    // Check if Supertrend has fill overlay active
+                    const hasFill = i.kind === "supertrend" && !i.hidden && 
+                      Object.values(indicatorResults).some(r => r.id === i.id && r.kind === "supertrend");
+                    return {
+                      id: i.id,
+                      kind: i.kind,
+                      name: i.kind.toUpperCase(),
+                      pane: i.pane,
+                      visible: !i.hidden,
+                      paramsSummary: indicatorParamsSummary(i),
+                      // Expose styleByLineId for testing
+                      styleByLineId: i.styleByLineId ?? null,
+                      // Expose render state for visual parity testing
+                      render: i.kind === "supertrend" ? { hasFill } : undefined,
+                    };
+                  })
                 : [],
               addOpen: (() => {
                 try {
@@ -2953,6 +3599,8 @@ const fitToContent = useCallback(() => {
                   return false;
                 }
               })(),
+              // Compute counter for testing that style changes don't trigger recompute
+              computeCount: getComputeCount(),
             },
             alerts: {
               count: alerts.length,
@@ -3373,6 +4021,89 @@ const fitToContent = useCallback(() => {
           alerts: {
             count: 0, // Populated by AlertsPanel via refetch
           },
+          // TV-PANE: Top-level indicators contract for Playwright tests
+          // Provides id, kind, pane, hidden, params, lines[] with actual values for each indicator
+          indicators: Array.isArray(indicators)
+            ? indicators.map((ind) => {
+                const result = indicatorResults[ind.id];
+                return {
+                  id: ind.id,
+                  kind: ind.kind,
+                  pane: ind.pane,
+                  hidden: ind.hidden ?? false,
+                  params: ind.params ?? {},
+                  color: ind.color ?? null,
+                  // Include line data with actual values for tests
+                  lines: result?.lines?.map((line) => ({
+                    id: line.id,
+                    label: line.label,
+                    color: line.color,
+                    style: line.style,
+                    lineWidth: line.lineWidth,
+                    lineStyle: (line as any).lineStyle,
+                    valuesCount: line.values?.length ?? 0,
+                    // Include last N values for test verification (slice to avoid huge payloads)
+                    // Use WhitespaceData format: only include value if finite (TV-parity)
+                    values: (line.values ?? []).slice(-100).map((pt) => {
+                      if ('value' in pt && Number.isFinite(pt.value)) {
+                        return { time: pt.time, value: pt.value };
+                      }
+                      return { time: pt.time }; // WhitespaceData
+                    }),
+                  })) ?? [],
+                };
+              })
+            : [],
+          // TV-PANE: Raw indicatorResults for tests that need _rsiFill, _willrFill, etc.
+          indicatorResults: Object.fromEntries(
+            Object.entries(indicatorResults).map(([id, result]) => [
+              id,
+              {
+                id: result.id,
+                kind: result.kind,
+                lines: result.lines?.map((line) => ({
+                  id: line.id,
+                  label: line.label,
+                  pane: line.pane,
+                  color: line.color,
+                  style: line.style,
+                  lineWidth: line.lineWidth,
+                  lineStyle: (line as any).lineStyle,
+                  lastValueVisible: (line as any).lastValueVisible,
+                  valuesCount: line.values?.length ?? 0,
+                  values: (line.values ?? []).slice(-100).map((pt) => {
+                    if ('value' in pt && Number.isFinite(pt.value)) {
+                      return { time: pt.time, value: pt.value };
+                    }
+                    return { time: pt.time };
+                  }),
+                })) ?? [],
+                // Pass through special overlay configs
+                _rsiFill: (result as any)._rsiFill ?? null,
+                _willrFill: (result as any)._willrFill ?? null,
+                _supertrendFill: (result as any)._supertrendFill ?? null,
+                _stochrsiFill: (result as any)._stochrsiFill ?? null,
+                _stochFill: (result as any)._stochFill ?? null,
+                _mfiFill: (result as any)._mfiFill ?? null,
+                _chopFill: (result as any)._chopFill ?? null,
+                _vwapFill: (result as any)._vwapFill ?? null,
+                _avwapFill: (result as any)._avwapFill ?? null,
+                _obvFill: (result as any)._obvFill ?? null,
+                _dcFill: (result as any)._dcFill ?? null,
+                _kcFill: (result as any)._kcFill ?? null,
+                _vstopData: (result as any)._vstopData ?? null,
+                _compactFormatter: (result as any)._compactFormatter ?? null,
+                _pivotPointsData: (result as any)._pivotPointsData ?? null,
+                _pivotPointsHLData: (result as any)._pivotPointsHLData ?? null,
+                _zigzagData: (result as any)._zigzagData ?? null,
+                _autoFibData: (result as any)._autoFibData ?? null,
+                _alligatorData: (result as any)._alligatorData ?? null,
+                _fractalsData: (result as any)._fractalsData ?? null,
+                _rsiDivData: (result as any)._rsiDivData ?? null,
+                _knoxvilleData: (result as any)._knoxvilleData ?? null,
+              },
+            ])
+          ),
         };
       },
       compare: {
@@ -3494,6 +4225,11 @@ const fitToContent = useCallback(() => {
               onAutoScaleChangeRef.current?.(false); // TV-37.2: Sync UI state via ref
             }
           }
+        }
+        // Task 1A: Reset indicator compute counter (for testing style changes don't trigger recompute)
+        if ("resetComputeCount" in patch && patch.resetComputeCount === true) {
+          resetComputeCount();
+          if (import.meta.env.DEV) console.log("[set resetComputeCount] counter reset");
         }
         // Update window.__lwcharts directly with merged properties
         if (typeof window !== "undefined" && window.__lwcharts) {
@@ -4421,6 +5157,7 @@ const fitToContent = useCallback(() => {
       chartRef.current = chart;
       ensureBaseSeriesRef.current();
       setChartReady(true);
+      setChartApi(chart);  // Expose as state so hooks re-run
       if (onChartReady) onChartReady(chart);
       rebindTestApiWithSample();
     };
@@ -4449,12 +5186,25 @@ const fitToContent = useCallback(() => {
       candleSeriesRef.current = null;
       volumeSeriesRef.current = null;
       setChartReady(false);
+      setChartApi(null);
     };
   }, [compareSeriesMap, indicatorSeriesMap, rebindTestApiWithSample]);
 
   useEffect(() => {
     ensureBaseSeries();
   }, [ensureBaseSeries]);
+
+  // TV-PANE: Hide/show price chart timeScale based on indicator pane count
+  // When panes exist, only the bottom-most pane shows the timeScale
+  useEffect(() => {
+    if (!chartRef.current) return;
+    const shouldShowTimeAxis = indicatorPaneCount === 0;
+    try {
+      chartRef.current.timeScale().applyOptions({ visible: shouldShowTimeAxis });
+    } catch {
+      // Chart may be disposed
+    }
+  }, [indicatorPaneCount, chartReady]);
 
   useEffect(() => {
     updateLastValueLabelsRef.current();
@@ -4531,6 +5281,7 @@ const fitToContent = useCallback(() => {
     });
   }, [chartReady, compareItems]);
 
+  // TV-35.2 + TV-40: Apply theme to chart when theme changes
   useEffect(() => {
     const chart = chartRef.current;
     if (!chart) return;
@@ -4577,6 +5328,28 @@ const fitToContent = useCallback(() => {
         borderColor: theme.canvas.grid,
       },
     });
+    
+    // TV-40: Update candle series colors with theme
+    const candleSeries = candleSeriesRef.current;
+    if (candleSeries) {
+      candleSeries.applyOptions({
+        upColor: theme.candle.upColor,
+        downColor: theme.candle.downColor,
+        borderUpColor: theme.candle.borderUp,
+        borderDownColor: theme.candle.borderDown,
+        wickUpColor: theme.candle.wickUp,
+        wickDownColor: theme.candle.wickDown,
+      } as any);
+    }
+    
+    // TV-40: Update volume series color with theme
+    const volumeSeries = volumeSeriesRef.current;
+    if (volumeSeries) {
+      volumeSeries.applyOptions({
+        color: theme.volumeNeutral,
+      });
+    }
+    
     enforceBasePriceScale();
     syncZeroLine();
     queueAfterNextPaint(() => {
@@ -4604,7 +5377,7 @@ const fitToContent = useCallback(() => {
     });
   }, [chartSettings, chartType, theme, rebindTestApiWithSample]);
 
-  // TV-23.2 + TV-35.2: Apply Zustand settings store appearance to chart when settings change
+  // TV-23.2 + TV-35.2 + TV-40: Apply Zustand settings store appearance to chart when settings change
   useEffect(() => {
     const chart = chartRef.current;
     const series = candleSeriesRef.current;
@@ -4614,13 +5387,13 @@ const fitToContent = useCallback(() => {
     const unsubscribe = useSettingsStore.subscribe(
       (state) => state.settings.appearance,
       (appearance) => {
-        // Apply chart-level appearance with full theme tokens (TV-35.2)
+        // Apply chart-level appearance with full theme tokens (TV-35.2/TV-40)
         applyAppearanceToChart(chart, appearance, theme);
 
-        // Apply series-level appearance if series exists
+        // Apply series-level appearance if series exists (TV-40: theme-first)
         const currentSeries = candleSeriesRef.current;
         if (currentSeries) {
-          applyAppearanceToSeries(currentSeries, chartType, appearance);
+          applyAppearanceToSeries(currentSeries, chartType, appearance, theme);
         }
 
         // Update snapshot for dump()
@@ -4752,21 +5525,94 @@ const fitToContent = useCallback(() => {
 
   useEffect(() => {
     if (!indicatorWorkerRef.current) return;
+    
     visibleIndicators.forEach((indicator) => {
-      indicatorWorkerRef.current?.postMessage({
-        type: "compute",
-        payload: {
-          id: indicator.id,
-          kind: indicator.kind,
-          params: indicator.params,
-          color: indicator.color,
-          pane: indicator.pane,
-          timeframe,
-          data,
-        },
-      });
+      // For volumeDelta and cvd with intrabars: compute on main thread
+      // This enables TV parity using real intrabar data
+      const useIntrabarCompute = 
+        (indicator.kind === "volumeDelta" || indicator.kind === "cvd") && 
+        intrabars.size > 0;
+      
+      // For adr and adl: compute on main thread with breadth data
+      // This enables TV parity using real market breadth data
+      const useBreadthCompute = 
+        (indicator.kind === "adr" || indicator.kind === "adl") && 
+        breadthMap.size > 0;
+      
+      if (useIntrabarCompute) {
+        // Main thread computation with intrabars for TV parity
+        try {
+          const result = computeIndicator({
+            indicator: {
+              id: indicator.id,
+              kind: indicator.kind,
+              pane: indicator.pane,
+              color: indicator.color,
+              params: indicator.params,
+            },
+            data: data as any,
+            intrabars,
+          });
+          setIndicatorResults((prev) => ({ ...prev, [indicator.id]: result }));
+          console.debug(`[Intrabar] Computed ${indicator.kind} with ${intrabars.size} intrabar buckets`);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Main thread compute failed";
+          setIndicatorResults((prev) => ({
+            ...prev,
+            [indicator.id]: {
+              id: indicator.id,
+              kind: indicator.kind,
+              lines: [],
+              error: message,
+            },
+          }));
+        }
+      } else if (useBreadthCompute) {
+        // Main thread computation with breadth data for TV parity
+        try {
+          const result = computeIndicator({
+            indicator: {
+              id: indicator.id,
+              kind: indicator.kind,
+              pane: indicator.pane,
+              color: indicator.color,
+              params: indicator.params,
+            },
+            data: data as any,
+            breadthData: breadthMap,
+            adlSeed,
+          });
+          setIndicatorResults((prev) => ({ ...prev, [indicator.id]: result }));
+          console.debug(`[Breadth] Computed ${indicator.kind} with ${breadthMap.size} breadth data points`);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Main thread compute failed";
+          setIndicatorResults((prev) => ({
+            ...prev,
+            [indicator.id]: {
+              id: indicator.id,
+              kind: indicator.kind,
+              lines: [],
+              error: message,
+            },
+          }));
+        }
+      } else {
+        // Worker computation for all other indicators
+        indicatorWorkerRef.current?.postMessage({
+          type: "compute",
+          payload: {
+            id: indicator.id,
+            kind: indicator.kind,
+            params: indicator.params,
+            color: indicator.color,
+            pane: indicator.pane,
+            timeframe,
+            data,
+          },
+        });
+      }
     });
-  }, [visibleIndicators, data, timeframe]);
+  }, [visibleIndicators, data, timeframe, intrabars, breadthMap, adlSeed]);
 
   useEffect(() => {
     if (!registerExports) return;
@@ -4828,70 +5674,23 @@ const fitToContent = useCallback(() => {
     registerExports({ png, csv });
   }, [registerExports, drawings, chartReady, buildVisibleRows]);
 
-  // PRIO 3: Configure scaleMargins for "separate" indicator panes
-  // This gives each oscillator (RSI, MACD, ADX, etc.) its own vertical section
-  // TV-style: Price takes ~60%, indicators share remaining ~40% with min-height guarantees
+  // TV-PANE: scaleMargins for separate indicators REMOVED
+  // Separate-pane indicators are now rendered in PaneStack with their own IChartApi instances.
+  // We no longer need to reserve space in the main chart for them.
+  // Keep price scale at full height.
   useEffect(() => {
     const chart = chartRef.current;
     if (!chartReady || !chart) return;
     
-    // Collect unique separate indicator IDs
-    const separateIndicators = indicators
-      .filter(ind => !ind.hidden && ind.pane === "separate")
-      .map(ind => ind.id);
-    
-    if (separateIndicators.length === 0) {
-      // Reset price scale to use full height when no separate indicators
-      chart.priceScale("right").applyOptions({
-        scaleMargins: { top: 0.02, bottom: 0.08 },
-      });
-      return;
-    }
-    
-    // Calculate vertical sections with min-height guarantees:
-    // - Price pane: minimum 50% of chart, up to 65% if few indicators
-    // - Each indicator: minimum 10% of chart height
-    const MIN_INDICATOR_HEIGHT = 0.10; // 10% minimum per indicator
-    const MAX_INDICATORS_ZONE = 0.45; // Indicators can take up to 45%
-    const indicatorCount = separateIndicators.length;
-    
-    // Calculate ideal indicator zone
-    const idealIndicatorZone = Math.min(
-      indicatorCount * MIN_INDICATOR_HEIGHT + 0.02, // 10% per + 2% buffer
-      MAX_INDICATORS_ZONE
-    );
-    
-    // Price zone is the rest
-    const priceZoneHeight = 1 - idealIndicatorZone - 0.03; // 3% gap between price and indicators
-    const priceTop = 0.02;
-    const priceBottom = 1 - priceZoneHeight - priceTop;
-    
-    // Indicator zone starts after price + gap
-    const indicatorZoneStart = 1 - idealIndicatorZone;
-    const indicatorZoneEnd = 0.98;
-    const indicatorZoneHeight = indicatorZoneEnd - indicatorZoneStart;
-    const perIndicatorHeight = indicatorZoneHeight / indicatorCount;
-    
-    // Configure price scale margins
+    // Always use full height for price scale - separate indicators have own charts now
     chart.priceScale("right").applyOptions({
-      scaleMargins: { top: priceTop, bottom: priceBottom },
+      scaleMargins: { top: 0.02, bottom: 0.08 },
     });
-    
-    // Configure each separate indicator scale
-    separateIndicators.forEach((indId, index) => {
-      const scaleId = `ind_${indId}`;
-      const top = indicatorZoneStart + (index * perIndicatorHeight);
-      const bottom = 1 - (indicatorZoneStart + ((index + 1) * perIndicatorHeight));
-      
-      chart.priceScale(scaleId).applyOptions({
-        scaleMargins: { top, bottom: Math.max(0.01, bottom) },
-        autoScale: true,
-        borderVisible: true,
-        borderColor: "rgba(54, 58, 69, 0.8)",
-      });
-    });
-  }, [chartReady, indicators]);
+  }, [chartReady]);
 
+  // TV-PANE: Only render price-pane indicators in the main chart
+  // Separate-pane indicators are handled by PaneStack/IndicatorPane
+  // Style changes (color, lineWidth, visibility) use applyOptions() - NO recompute
   useEffect(() => {
     const chart = chartRef.current;
     if (!chartReady || !chart) return;
@@ -4900,30 +5699,114 @@ const fitToContent = useCallback(() => {
     Object.values(indicatorResults).forEach((result) => {
       const owner = indicators.find((indicator) => indicator.id === result.id);
       if (!owner || owner.hidden) return;
+      
+      // TV-PANE: Skip separate-pane indicators - they're handled by PaneStack
+      if (owner.pane === "separate") return;
+      
+      // Supertrend special handling: determine which line is active (has a value, not WhitespaceData)
+      // Only the active line should show lastValueVisible for TV-parity
+      const isSupertrend = result.kind === "supertrend";
+      let supertrendActiveLine: string | null = null;
+      if (isSupertrend && result.lines.length === 2) {
+        const upLine = result.lines.find(l => l.id === "supertrend_up");
+        const downLine = result.lines.find(l => l.id === "supertrend_down");
+        // Check which line has a VALUE (not WhitespaceData) at the last bar
+        // Both arrays should be the same length, check index-aligned
+        if (upLine && downLine && upLine.values.length > 0) {
+          const lastIdx = upLine.values.length - 1;
+          const upLast = upLine.values[lastIdx];
+          const downLast = downLine.values[lastIdx];
+          // A point has a value if "value" property exists and is finite
+          const upHasValue = upLast && "value" in upLast && Number.isFinite(upLast.value);
+          const downHasValue = downLast && "value" in downLast && Number.isFinite(downLast.value);
+          if (upHasValue && !downHasValue) {
+            supertrendActiveLine = "supertrend_up";
+          } else if (!upHasValue && downHasValue) {
+            supertrendActiveLine = "supertrend_down";
+          }
+        }
+      }
+      
       result.lines.forEach((line) => {
         const key = `${result.id}:${line.id}`;
+        
+        // Get style from styleByLineId if available, otherwise use computed defaults
+        // No hardcoded fallback - color should always come from manifest or instance
+        const styleOverride = owner.styleByLineId?.[line.id];
+        const effectiveColor = styleOverride?.color ?? line.color ?? owner.color;
+        const effectiveLineWidth = styleOverride?.lineWidth ?? line.lineWidth ?? 2;
+        const isVisible = styleOverride?.visible ?? true;
+        // Map lineStyle string to LWC LineStyle enum
+        const effectiveLineStyle = styleOverride?.lineStyle === "dashed" ? LineStyle.Dashed
+          : styleOverride?.lineStyle === "dotted" ? LineStyle.Dotted
+          : LineStyle.Solid;
+        
+        // Supertrend: show lastValueVisible only for active line (TV-parity)
+        const showLastValue = isSupertrend ? (line.id === supertrendActiveLine) : false;
+        
+        // SUPERTREND: LWC series are now HIDDEN - line is drawn by canvas overlay
+        // This avoids LWC's diagonal bridging artifacts between non-consecutive points
+        // The series is still created for:
+        // 1. dump() / test verification
+        // 2. priceToCoordinate() coordinate mapping
+        // 3. y-axis scale contribution
+        const supertrendSeriesVisible = false; // Line drawn by SupertrendFillOverlay
+        
+        // Supertrend: Sanitize data to ensure pure WhitespaceData for inactive bars
+        // Even though series is hidden, we still need proper data for tests/dump
+        let finalValues = line.values;
+        if (isSupertrend) {
+          finalValues = line.values.map((pt: any) => {
+            // If value property exists and is finite, keep the point
+            if ('value' in pt && Number.isFinite(pt.value)) {
+              return { time: pt.time, value: pt.value };
+            }
+            // Otherwise, pure WhitespaceData - NO value property at all
+            return { time: pt.time };
+          });
+        }
+        
         let series = indicatorMap.get(key);
         if (!series) {
           series =
             line.style === "histogram"
               ? chart.addHistogramSeries({
-                  color: line.color ?? "#f97316",
+                  color: effectiveColor,
                   priceLineVisible: false,
                   lastValueVisible: false,
-                  priceScaleId: line.pane === "price" ? "right" : `ind_${result.id}`,
+                  priceScaleId: "right", // TV-PANE: Always use right scale for price-pane indicators
+                  visible: isVisible,
                 })
               : chart.addLineSeries({
-                  color: line.color ?? "#0ea5e9",
-                  lineWidth: (line.lineWidth ?? 2) as LineWidth,
-                  priceLineVisible: false,
-                  lastValueVisible: false,
-                  priceScaleId: line.pane === "price" ? "right" : `ind_${result.id}`,
+                  color: effectiveColor,
+                  lineWidth: effectiveLineWidth as LineWidth,
+                  lineStyle: effectiveLineStyle,
+                  lineType: LineType.Simple,
+                  priceLineVisible: showLastValue,
+                  lastValueVisible: showLastValue,
+                  priceScaleId: "right",
+                  // SUPERTREND: Hide LWC series - canvas overlay draws the line
+                  visible: isSupertrend ? supertrendSeriesVisible : isVisible,
+                  crosshairMarkerVisible: !isSupertrend,
                 });
           indicatorMap.set(key, series);
         } else {
-          series.applyOptions({ color: line.color ?? "#0ea5e9" });
+          // Style change: applyOptions only (NO recompute) - preserves separation of concerns
+          series.applyOptions({
+            color: effectiveColor,
+            lineWidth: effectiveLineWidth as LineWidth,
+            lineStyle: effectiveLineStyle,
+            lineType: LineType.Simple,
+            // SUPERTREND: Keep hidden - canvas overlay draws the line
+            visible: isSupertrend ? supertrendSeriesVisible : isVisible,
+            priceLineVisible: showLastValue,
+            lastValueVisible: showLastValue,
+            crosshairMarkerVisible: !isSupertrend,
+          } as any); // Type cast needed for histogram series which doesn't have lineWidth/lineStyle
         }
-        series.setData(line.values);
+        
+        // CRITICAL: Always set fresh data - needed for tests/dump even if hidden
+        series.setData(finalValues);
         active.add(key);
       });
     });
@@ -4960,33 +5843,6 @@ const fitToContent = useCallback(() => {
   // - Isolates crosshair updates from ChartViewport render cycle
   // - Provides RAF-throttling and bail-early optimization
   // - Tracks activeCrosshairHandlers for double-subscription detection
-
-  const indicatorLegendItems = useMemo(
-    () =>
-      indicators.map((indicator) => {
-        const result = indicatorResults[indicator.id];
-        const primaryLine = result?.lines?.[0];
-        const values = primaryLine?.values ?? [];
-        const lastValue = values.length ? values[values.length - 1]?.value : null;
-        const status = result?.error
-          ? result.error
-          : lastValue != null
-            ? formatPrice(lastValue)
-            : result
-              ? "…"
-              : "Pending";
-        return {
-          id: indicator.id,
-          label: indicatorDisplayName(indicator.kind),
-          pane: indicator.pane,
-          color: indicator.color,
-          hidden: Boolean(indicator.hidden),
-          status,
-          error: result?.error ?? null,
-        };
-      }),
-    [indicators, indicatorResults],
-  );
 
   const groupedDataRows = useMemo(() => {
     const groups = new Map<string, DataWindowRow[]>();
@@ -5070,7 +5926,7 @@ const fitToContent = useCallback(() => {
       </div>
       )}
         <div ref={containerRef} className="chartspro-surface relative flex-1 min-h-0 overflow-hidden" onContextMenu={handleContextMenu} style={{ display: 'grid', gridTemplateRows: inspectorOpen ? '1fr auto' : '1fr 0px' }}>
-          <div className="min-h-0 min-w-0 relative" style={{ display: 'flex' }}>
+          <div className="min-h-0 min-w-0 relative" style={{ display: 'flex', flexDirection: 'column' }}>
             <div
               ref={chartRootRef}
               className="chartspro-price"
@@ -5102,7 +5958,549 @@ const fitToContent = useCallback(() => {
           onHoverSnapshot={applyHoverSnapshot}
         />
         
-        {/* Last price line with countdown */}
+        {/* Supertrend fill overlay - TV-style translucent trend fill */}
+        <SupertrendFillOverlay
+          chartRef={chartRef}
+          seriesRef={candleSeriesRef}
+          containerRef={chartRootRef}
+          supertrendResult={(() => {
+            const stResult = Object.values(indicatorResults).find(r => r.kind === "supertrend");
+            if (!stResult) return null;
+            const owner = indicators.find(i => i.id === stResult.id);
+            if (!owner || owner.hidden) return null;
+            return stResult;
+          })()}
+          ohlcData={data.map(bar => ({ time: Number(bar.time), open: bar.open, high: bar.high, low: bar.low, close: bar.close }))}
+          enabled={chartReady}
+          highlight={(() => {
+            const stResult = Object.values(indicatorResults).find(r => r.kind === "supertrend");
+            if (!stResult) return false;
+            const owner = indicators.find(i => i.id === stResult.id);
+            // Check highlight param (defaults to true if not set)
+            return owner?.params?.highlight !== false;
+          })()}
+        />
+        
+        {/* Ichimoku Cloud overlay - TV-style Kumo fill between Senkou Span A/B */}
+        <IchimokuCloudOverlay
+          chartRef={chartRef}
+          seriesRef={candleSeriesRef}
+          containerRef={chartRootRef}
+          ichimokuResult={(() => {
+            const ichResult = Object.values(indicatorResults).find(r => r.kind === "ichimoku");
+            if (!ichResult) return null;
+            const owner = indicators.find(i => i.id === ichResult.id);
+            if (!owner || owner.hidden) return null;
+            // Create a synthetic result with cloud data for overlay
+            if (ichResult._cloudData) {
+              return {
+                ...ichResult,
+                lines: [
+                  { id: "senkouA", label: "A", pane: "price" as const, color: "#43A047", style: "line" as const, lineWidth: 1, values: ichResult._cloudData.senkouA },
+                  { id: "senkouB", label: "B", pane: "price" as const, color: "#FF5252", style: "line" as const, lineWidth: 1, values: ichResult._cloudData.senkouB },
+                ],
+              };
+            }
+            return ichResult;
+          })()}
+          showCloudFill={(() => {
+            const ichResult = Object.values(indicatorResults).find(r => r.kind === "ichimoku");
+            if (!ichResult) return false;
+            const owner = indicators.find(i => i.id === ichResult.id);
+            // Check showCloudFill param (defaults to true if not set)
+            return owner?.params?.showCloudFill !== false;
+          })()}
+        />
+        
+        {/* Bollinger Bands fill overlay - TV-style background between upper/lower bands */}
+        <BollingerBandsFillOverlay
+          chartRef={chartRef}
+          seriesRef={candleSeriesRef}
+          containerRef={chartRootRef}
+          bbResult={(() => {
+            const bbResult = Object.values(indicatorResults).find(r => r.kind === "bb");
+            if (!bbResult) return null;
+            const owner = indicators.find(i => i.id === bbResult.id);
+            if (!owner || owner.hidden) return null;
+            // Only return if _bbData exists (showBackground enabled)
+            if (!bbResult._bbData) return null;
+            return bbResult;
+          })()}
+          enabled={chartReady}
+        />
+        
+        {/* Donchian Channels fill overlay - TV-style background between upper/lower channels */}
+        <DcFillOverlay
+          chartRef={chartRef}
+          seriesRef={candleSeriesRef}
+          containerRef={chartRootRef}
+          dcResult={(() => {
+            const dcResult = Object.values(indicatorResults).find(r => r.kind === "dc");
+            if (!dcResult) return null;
+            const owner = indicators.find(i => i.id === dcResult.id);
+            if (!owner || owner.hidden) return null;
+            // Only return if _dcFill exists (showBackground enabled)
+            if (!dcResult._dcFill) return null;
+            return dcResult;
+          })()}
+          enabled={chartReady}
+        />
+        
+        {/* Keltner Channels fill overlay - TV-style background between upper/lower channels */}
+        <KcFillOverlay
+          chartRef={chartRef}
+          seriesRef={candleSeriesRef}
+          containerRef={chartRootRef}
+          kcResult={(() => {
+            const kcResult = Object.values(indicatorResults).find(r => r.kind === "kc");
+            if (!kcResult) return null;
+            const owner = indicators.find(i => i.id === kcResult.id);
+            if (!owner || owner.hidden) return null;
+            // Only return if _kcFill exists (showBackground enabled)
+            if (!kcResult._kcFill) return null;
+            return kcResult;
+          })()}
+          enabled={chartReady}
+        />
+        
+        {/* EMA BB fill overlay - TV-style background between upper/lower BB when smoothingType=sma_bb */}
+        <EmaBbFillOverlay
+          chartRef={chartRef}
+          seriesRef={candleSeriesRef}
+          containerRef={chartRootRef}
+          emaResult={(() => {
+            const emaResult = Object.values(indicatorResults).find(r => r.kind === "ema");
+            if (!emaResult) return null;
+            const owner = indicators.find(i => i.id === emaResult.id);
+            if (!owner || owner.hidden) return null;
+            // Only return if _emaFill exists (smoothingType=sma_bb + showBBFill enabled)
+            if (!emaResult._emaFill) return null;
+            return emaResult;
+          })()}
+          enabled={chartReady}
+        />
+        
+        {/* SMA BB fill overlay - TV-style background between upper/lower BB when smoothingType=sma_bb */}
+        <SmaBbFillOverlay
+          chartRef={chartRef}
+          seriesRef={candleSeriesRef}
+          containerRef={chartRootRef}
+          smaResult={(() => {
+            const smaResult = Object.values(indicatorResults).find(r => r.kind === "sma");
+            if (!smaResult) return null;
+            const owner = indicators.find(i => i.id === smaResult.id);
+            if (!owner || owner.hidden) return null;
+            // Only return if _smaFill exists (smoothingType=sma_bb + showBBFill enabled)
+            if (!smaResult._smaFill) return null;
+            return smaResult;
+          })()}
+          enabled={chartReady}
+        />
+        
+        {/* VWAP bands fill overlay - TV-style background between upper/lower bands for each band pair */}
+        <VwapBandsFillOverlay
+          chartRef={chartRef}
+          seriesRef={candleSeriesRef}
+          containerRef={chartRootRef}
+          vwapResult={(() => {
+            const vwapResult = Object.values(indicatorResults).find(r => r.kind === "vwap");
+            if (!vwapResult) return null;
+            const owner = indicators.find(i => i.id === vwapResult.id);
+            if (!owner || owner.hidden) return null;
+            // Only return if _vwapFill exists (has enabled fills)
+            if (!vwapResult._vwapFill) return null;
+            return vwapResult;
+          })()}
+          enabled={chartReady}
+        />
+        
+        {/* AVWAP bands fill overlay - TV-style background between upper/lower bands for each band pair */}
+        <AvwapBandsFillOverlay
+          chartRef={chartRef}
+          seriesRef={candleSeriesRef}
+          containerRef={chartRootRef}
+          avwapResult={(() => {
+            const avwapResult = Object.values(indicatorResults).find(r => r.kind === "avwap");
+            if (!avwapResult) return null;
+            const owner = indicators.find(i => i.id === avwapResult.id);
+            if (!owner || owner.hidden) return null;
+            // Only return if _avwapFill exists (has enabled fills)
+            if (!avwapResult._avwapFill) return null;
+            return avwapResult;
+          })()}
+          enabled={chartReady}
+        />
+        
+        {/* Envelope fill overlay - TV-style background between upper/lower envelope bands */}
+        <EnvFillOverlay
+          chartRef={chartRef}
+          seriesRef={candleSeriesRef}
+          containerRef={chartRootRef}
+          envResult={(() => {
+            const envResult = Object.values(indicatorResults).find(r => r.kind === "env");
+            if (!envResult) return null;
+            const owner = indicators.find(i => i.id === envResult.id);
+            if (!owner || owner.hidden) return null;
+            // Only return if _envFill exists (showBackground enabled)
+            if (!(envResult as any)._envFill) return null;
+            return envResult;
+          })()}
+          enabled={chartReady}
+        />
+        
+        {/* Median cloud overlay - direction-aware fill between Median and Median EMA */}
+        <MedianCloudOverlay
+          chartRef={chartRef}
+          seriesRef={candleSeriesRef}
+          containerRef={chartRootRef}
+          medianResult={(() => {
+            const medianResult = Object.values(indicatorResults).find(r => r.kind === "median");
+            if (!medianResult) return null;
+            const owner = indicators.find(i => i.id === medianResult.id);
+            if (!owner || owner.hidden) return null;
+            // Only return if _medianCloud exists (showCloud enabled)
+            if (!(medianResult as any)._medianCloud) return null;
+            return medianResult;
+          })()}
+          enabled={chartReady}
+        />
+        
+        {/* LinReg fill overlay - channel fill between upper and lower deviation bands */}
+        <LinRegFillOverlay
+          chartRef={chartRef}
+          seriesRef={candleSeriesRef}
+          containerRef={chartRootRef}
+          linregResult={(() => {
+            const linregResult = Object.values(indicatorResults).find(r => r.kind === "linreg");
+            if (!linregResult) return null;
+            const owner = indicators.find(i => i.id === linregResult.id);
+            if (!owner || owner.hidden) return null;
+            // Only return if _linregFill exists (showFill enabled)
+            if (!(linregResult as any)._linregFill) return null;
+            return linregResult;
+          })()}
+          enabled={chartReady}
+        />
+        
+        {/* SAR markers overlay - TV-style circles/cross for Parabolic SAR */}
+        <SarMarkersOverlay
+          chartRef={chartRef}
+          seriesRef={candleSeriesRef}
+          containerRef={chartRootRef}
+          sarResult={(() => {
+            const sarResult = Object.values(indicatorResults).find(r => r.kind === "sar");
+            if (!sarResult) return null;
+            const owner = indicators.find(i => i.id === sarResult.id);
+            if (!owner || owner.hidden) return null;
+            // Only return if _sarData exists (plotStyle=circles/cross)
+            if (!sarResult._sarData) return null;
+            return sarResult;
+          })()}
+          enabled={chartReady}
+        />
+        
+        {/* Pivot Points Standard overlay - horizontal pivot levels with labels */}
+        {(() => {
+          const pivotResult = Object.values(indicatorResults).find(r => r.kind === "pivotPointsStandard");
+          if (!pivotResult || !pivotResult._pivotPointsData) return null;
+          const owner = indicators.find(i => i.id === pivotResult.id);
+          if (!owner || owner.hidden) return null;
+          const ppData = pivotResult._pivotPointsData;
+          // Extract bar times for period boundary snapping (sorted ascending)
+          const barTimes = data.map(bar => bar.time as number);
+          return (
+            <PivotPointsOverlay
+              chartRef={chartRef}
+              seriesRef={candleSeriesRef}
+              containerRef={chartRootRef}
+              periods={ppData.periods}
+              validLevels={ppData.validLevels}
+              showLabels={ppData.showLabels}
+              showPrices={ppData.showPrices}
+              labelsPosition={ppData.labelsPosition}
+              lineWidth={ppData.lineWidth}
+              levelVisibility={ppData.levelVisibility}
+              levelColors={ppData.levelColors}
+              barTimes={barTimes}
+            />
+          );
+        })()}
+        
+        {/* Pivot Points High Low overlay - H/L markers at swing points */}
+        {(() => {
+          const ppHLResult = Object.values(indicatorResults).find(r => r.kind === "pivotPointsHighLow");
+          if (!ppHLResult || !ppHLResult._pivotPointsHLData) return null;
+          const owner = indicators.find(i => i.id === ppHLResult.id);
+          if (!owner || owner.hidden) return null;
+          const hlData = ppHLResult._pivotPointsHLData;
+          return (
+            <PivotPointsHLOverlay
+              chartRef={chartRef}
+              seriesRef={candleSeriesRef}
+              containerRef={chartRootRef}
+              pivots={hlData.pivots}
+              showPrices={hlData.showPrices}
+              highColor={hlData.highColor}
+              lowColor={hlData.lowColor}
+            />
+          );
+        })()}
+        
+        {/* Zig Zag overlay - line segments connecting swing highs/lows */}
+        {(() => {
+          const zzResult = Object.values(indicatorResults).find(r => r.kind === "zigzag");
+          if (process.env.NODE_ENV === "development") {
+            console.log(`[ChartViewport:ZigZag] zzResult=${!!zzResult}, _zigzagData=${!!zzResult?._zigzagData}`);
+          }
+          if (!zzResult || !zzResult._zigzagData) return null;
+          const owner = indicators.find(i => i.id === zzResult.id);
+          if (!owner || owner.hidden) return null;
+          const zzData = zzResult._zigzagData;
+          return (
+            <ZigZagOverlay
+              chartRef={chartRef}
+              seriesRef={candleSeriesRef}
+              containerRef={chartRootRef}
+              swings={zzData.swings}
+              lineSegments={zzData.lineSegments}
+              lineColor={zzData.lineColor}
+              lineWidth={zzData.lineWidth}
+              showPrice={zzData.showPrice}
+              showVolume={zzData.showVolume}
+              priceChangeMode={zzData.priceChangeMode}
+              upColor={zzData.upColor}
+              downColor={zzData.downColor}
+            />
+          );
+        })()}
+        
+        {/* Auto Fib Retracement overlay - Fibonacci levels from swing detection */}
+        {(() => {
+          const fibResult = Object.values(indicatorResults).find(r => r.kind === "autoFib");
+          if (!fibResult || !fibResult._autoFibData) return null;
+          const owner = indicators.find(i => i.id === fibResult.id);
+          if (!owner || owner.hidden) return null;
+          const fibData = fibResult._autoFibData;
+          return (
+            <AutoFibOverlay
+              chartRef={chartRef}
+              seriesRef={candleSeriesRef}
+              containerRef={chartRootRef}
+              startPoint={fibData.startPoint}
+              endPoint={fibData.endPoint}
+              levels={fibData.levels}
+              isUpward={fibData.isUpward}
+              extendLeft={fibData.extendLeft}
+              extendRight={fibData.extendRight}
+              showPrices={fibData.showPrices}
+              showLevels={fibData.showLevels}
+              labelsPosition={fibData.labelsPosition}
+              backgroundTransparency={fibData.backgroundTransparency}
+              lineWidth={fibData.lineWidth}
+            />
+          );
+        })()}
+        
+        {/* Williams Alligator overlay - forward-shifted SMMA lines */}
+        {(() => {
+          const alligatorResult = Object.values(indicatorResults).find(r => r.kind === "williamsAlligator");
+          if (!alligatorResult || !alligatorResult._alligatorData) return null;
+          const owner = indicators.find(i => i.id === alligatorResult.id);
+          if (!owner || owner.hidden) return null;
+          const aData = alligatorResult._alligatorData;
+          return (
+            <AlligatorOverlay
+              chartRef={chartRef}
+              seriesRef={candleSeriesRef}
+              containerRef={chartRootRef}
+              jaw={aData.jaw}
+              teeth={aData.teeth}
+              lips={aData.lips}
+              showJaw={aData.showJaw}
+              showTeeth={aData.showTeeth}
+              showLips={aData.showLips}
+              jawColor={aData.jawColor}
+              teethColor={aData.teethColor}
+              lipsColor={aData.lipsColor}
+              jawLineWidth={aData.jawLineWidth}
+              teethLineWidth={aData.teethLineWidth}
+              lipsLineWidth={aData.lipsLineWidth}
+            />
+          );
+        })()}
+        
+        {/* Williams Fractals overlay - pivot high/low markers */}
+        {(() => {
+          const fractalsResult = Object.values(indicatorResults).find(r => r.kind === "williamsFractals");
+          if (!fractalsResult || !fractalsResult._fractalsData) return null;
+          const owner = indicators.find(i => i.id === fractalsResult.id);
+          if (!owner || owner.hidden) return null;
+          const fData = fractalsResult._fractalsData;
+          return (
+            <FractalsOverlay
+              chartRef={chartRef}
+              seriesRef={candleSeriesRef}
+              containerRef={chartRootRef}
+              highs={fData.highs}
+              lows={fData.lows}
+              showUpFractals={fData.showUpFractals}
+              showDownFractals={fData.showDownFractals}
+              upColor={fData.upColor}
+              downColor={fData.downColor}
+            />
+          );
+        })()}
+        
+        {/* Knoxville Divergence overlay - +KD/-KD markers */}
+        {(() => {
+          const kdResult = Object.values(indicatorResults).find(r => r.kind === "knoxvilleDivergence");
+          if (!kdResult || !kdResult._knoxvilleData) return null;
+          const owner = indicators.find(i => i.id === kdResult.id);
+          if (!owner || owner.hidden) return null;
+          const kdData = kdResult._knoxvilleData;
+          return (
+            <KnoxvilleOverlay
+              chartRef={chartRef}
+              seriesRef={candleSeriesRef}
+              containerRef={chartRootRef}
+              bullish={kdData.bullish}
+              bearish={kdData.bearish}
+              showBullish={kdData.showBullish}
+              showBearish={kdData.showBearish}
+              showLines={kdData.showLines}
+              bullColor={kdData.bullColor}
+              bearColor={kdData.bearColor}
+            />
+          );
+        })()}
+        
+        {/* VP Debug Banner - shows in dev or with ?vpDebug=1 */}
+        <VPDebugBanner
+          entries={vpDebugEntries}
+          chartApiReady={chartApi !== null}
+          chartBarsCount={data.length}
+          barsFirstTime={barsValidation.firstTime}
+          barsLastTime={barsValidation.lastTime}
+          barsFirstDate={barsValidation.firstDate}
+          barsLastDate={barsValidation.lastDate}
+          barsIsAscending={barsValidation.isAscending}
+          barsPriceMin={barsValidation.priceMin}
+          barsPriceMax={barsValidation.priceMax}
+          barsIssues={barsValidation.issues}
+        />
+        
+        {/* VRVP (Visible Range Volume Profile) overlay */}
+        {vrvpIndicator && vrvpResult.profiles.length > 0 && (
+          <VPErrorBoundary>
+            <VolumeProfileOverlay
+              chartRef={chartRef}
+              priceSeriesRef={candleSeriesRef}
+              containerRef={chartRootRef}
+              profiles={vrvpResult.profiles}
+              style={vrvpResult.style}
+              enabled={true}
+            />
+          </VPErrorBoundary>
+        )}
+        
+        {/* VPFR (Fixed Range Volume Profile) overlay */}
+        {vpfrIndicator && vpfrResult.profiles.length > 0 && (
+          <VPErrorBoundary>
+            <VolumeProfileOverlay
+              chartRef={chartRef}
+              priceSeriesRef={candleSeriesRef}
+              containerRef={chartRootRef}
+              profiles={vpfrResult.profiles}
+              style={vpfrResult.style}
+              enabled={true}
+            />
+          </VPErrorBoundary>
+        )}
+        
+        {/* VPFR anchor placement feedback */}
+        {vpfrIndicator && vpfrResult.anchorState !== 'anchored' && vpfrResult.anchorState !== 'none' && (
+          <div 
+            style={{
+              position: 'absolute',
+              top: 8,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              padding: '8px 16px',
+              backgroundColor: 'rgba(41, 98, 255, 0.9)',
+              color: 'white',
+              borderRadius: 4,
+              fontSize: 13,
+              fontWeight: 500,
+              zIndex: 100,
+              pointerEvents: 'none',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+            }}
+          >
+            {vpfrResult.anchorState === 'awaiting_first' 
+              ? 'Click to set start anchor' 
+              : 'Click to set end anchor'}
+          </div>
+        )}
+        
+        {/* AAVP (Auto Anchored Volume Profile) overlay */}
+        {aavpIndicator && aavpResult.profiles.length > 0 && (
+          <VPErrorBoundary>
+            <VolumeProfileOverlay
+              chartRef={chartRef}
+              priceSeriesRef={candleSeriesRef}
+              containerRef={chartRootRef}
+              profiles={aavpResult.profiles}
+              style={aavpResult.style}
+              enabled={true}
+            />
+          </VPErrorBoundary>
+        )}
+        
+        {/* SVP (Session Volume Profile) overlay */}
+        {svpIndicator && svpResult.profiles.length > 0 && (
+          <VPErrorBoundary>
+            <VolumeProfileOverlay
+              chartRef={chartRef}
+              priceSeriesRef={candleSeriesRef}
+              containerRef={chartRootRef}
+              profiles={svpResult.profiles}
+              style={svpResult.style}
+              enabled={true}
+            />
+          </VPErrorBoundary>
+        )}
+        
+        {/* SVP HD (Session Volume Profile HD) overlay */}
+        {svphdIndicator && svphdResult.profiles.length > 0 && (
+          <VPErrorBoundary>
+            <VolumeProfileOverlay
+              chartRef={chartRef}
+              priceSeriesRef={candleSeriesRef}
+              containerRef={chartRootRef}
+              profiles={svphdResult.profiles}
+              style={svphdResult.style}
+              enabled={true}
+            />
+          </VPErrorBoundary>
+        )}
+        
+        {/* PVP (Periodic Volume Profile) overlay */}
+        {pvpIndicator && pvpResult.profiles.length > 0 && (
+          <VPErrorBoundary>
+            <VolumeProfileOverlay
+              chartRef={chartRef}
+              priceSeriesRef={candleSeriesRef}
+              containerRef={chartRootRef}
+              profiles={pvpResult.profiles}
+              style={pvpResult.style}
+              enabled={true}
+            />
+          </VPErrorBoundary>
+        )}
+        
+        {/* TV-42: LastPriceLine with countdown DISABLED for TV-parity.
+            LWC native lastValueVisible handles the last price label.
+            Re-enable this if countdown feature is needed in the future.
         <LastPriceLine
           lastPrice={data.length ? data[data.length - 1].close : null}
           lastTime={data.length ? Number(data[data.length - 1].time) : null}
@@ -5110,7 +6508,15 @@ const fitToContent = useCallback(() => {
           yPosition={lastPriceY}
           theme={theme}
           containerWidth={containerRef.current?.clientWidth ?? 0}
+          labelColor={
+            data.length >= 1
+              ? data[data.length - 1].close >= data[data.length - 1].open
+                ? theme.candleUp
+                : theme.candleDown
+              : undefined
+          }
         />
+        */}
         {debugModeActive && debugSummary ? (
           <div className="absolute right-2 top-2 z-40 w-64 rounded border border-slate-700/70 bg-slate-900/90 p-2 text-[11px] text-slate-100 shadow-lg">
             <div className="flex items-center justify-between gap-2">
@@ -5289,20 +6695,10 @@ const fitToContent = useCallback(() => {
             })()}
           </div>
         ) : null}
-        {lastValueLabels.base || lastValueLabels.compares.length ? (
+        {/* TV-42: Only render compare labels - base label handled by LWC native lastValueVisible */}
+        {lastValueLabels.compares.length ? (
           <div className="chartspro-last-labels pointer-events-none">
-            {lastValueLabels.base ? (
-              <div
-                className="chartspro-last-label chartspro-last-label--base"
-                style={{
-                  top: `${lastValueLabels.base.y - 10}px`,
-                  backgroundColor: lastValueLabels.base.background,
-                  color: lastValueLabels.base.color,
-                }}
-              >
-                {lastValueLabels.base.text}
-              </div>
-            ) : null}
+            {/* TV-42: base label removed - LWC handles it via lastValueVisible: true */}
             {lastValueLabels.compares.map((label) => (
               <div
                 key={`compare-last-${label.key}`}
@@ -5355,28 +6751,18 @@ const fitToContent = useCallback(() => {
             ))}
           </div>
         ) : null}
-        {indicatorLegendItems.length ? (
-          <div className="chartspro-legend chartspro-legend--indicator">
-            {indicatorLegendItems.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className={`chartspro-legend__item ${item.hidden ? "is-muted" : ""}`}
-                onClick={() => onUpdateIndicator?.(item.id, { hidden: !item.hidden })}
-                disabled={!onUpdateIndicator}
-              >
-                <span className="chartspro-legend__dot" style={{ backgroundColor: item.color }} />
-                <div className="chartspro-legend__text">
-                  <span className="chartspro-legend__label">
-                    {item.label} · {item.pane === "price" ? "Overlay" : "Pane"}
-                  </span>
-                  <span className="chartspro-legend__value">{item.status}</span>
-                </div>
-                {item.hidden ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-              </button>
-            ))}
-          </div>
-        ) : null}
+        {/* TV-PANE: Only show IndicatorLegend for price-pane indicators.
+            Separate-pane indicators have their own legends in PaneStack */}
+        {indicators.filter(ind => ind.pane !== "separate").length > 0 && (
+          <IndicatorLegend
+            indicators={indicators.filter(ind => ind.pane !== "separate")}
+            indicatorResults={indicatorResults}
+            crosshairValues={overlayCrosshairValues}
+            onUpdateIndicator={onUpdateIndicator}
+            onRemoveIndicator={onRemoveIndicator}
+            onOpenSettings={onOpenIndicatorSettings}
+          />
+        )}
         {metaItems.length ? (
           <div className="absolute bottom-2 left-2 flex flex-wrap gap-2 text-[11px] font-medium text-slate-300 opacity-80">
             {metaItems.map((item) => (
@@ -5387,7 +6773,19 @@ const fitToContent = useCallback(() => {
           </div>
         ) : null}
             </div>
-            <div ref={panesContainerRef} style={{ height: 0, overflow: 'hidden' }} />
+            {/* TV-PANE: PaneStack for separate-pane indicators */}
+            <PaneStack
+              width={containerRef.current?.clientWidth ?? 0}
+              maxHeight={300}
+              theme={theme}
+              indicators={indicators}
+              indicatorResults={indicatorResults}
+              priceChartRef={chartRef}
+              onUpdateIndicator={onUpdateIndicator}
+              onRemoveIndicator={onRemoveIndicator}
+              onOpenIndicatorSettings={onOpenIndicatorSettings}
+              onPaneCountChange={setIndicatorPaneCount}
+            />
         </div>
         <div data-testid="inspector-root" className="overflow-hidden" style={{ minHeight: 0 }}>
           <InspectorSidebar

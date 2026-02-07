@@ -52,6 +52,7 @@ export function IndicatorPaneLegend({
     <div
       className="absolute left-2 z-10 flex flex-col gap-0.5 pointer-events-none"
       style={{ top: pane === "price" ? 40 : paneTop + 4 }}
+      data-testid="indicator-pane-legend"
     >
       {paneIndicators.map((indicator) => {
         const result = indicatorResults[indicator.id];
@@ -60,9 +61,12 @@ export function IndicatorPaneLegend({
         return (
           <div
             key={indicator.id}
-            className="flex items-center gap-1.5 text-[11px] pointer-events-auto 
+            className="group flex items-center gap-1.5 text-[11px] pointer-events-auto 
                        bg-[var(--tv-bg-secondary,#1e222d)]/80 rounded px-1.5 py-0.5
                        hover:bg-[var(--tv-bg-secondary,#1e222d)] transition-colors"
+            data-testid={`indicator-legend-${indicator.kind}-${indicator.id}`}
+            data-indicator-kind={indicator.kind}
+            title={`${indicatorDisplayName(indicator.kind)} - Kind: ${indicator.kind}`}
           >
             {/* Color dot */}
             <span
@@ -71,10 +75,18 @@ export function IndicatorPaneLegend({
             />
             
             {/* Name + params */}
-            <span className="font-medium" style={{ color: "var(--tv-text, #d1d4dc)" }}>
+            <span 
+              className="font-medium" 
+              style={{ color: "var(--tv-text, #d1d4dc)" }}
+              data-testid={`indicator-legend-name-${indicator.id}`}
+            >
               {indicatorDisplayName(indicator.kind)}
             </span>
-            <span className="text-[10px]" style={{ color: "var(--tv-text-muted, #787b86)" }}>
+            <span 
+              className="text-[10px]" 
+              style={{ color: "var(--tv-text-muted, #787b86)" }}
+              data-testid={`indicator-legend-params-${indicator.id}`}
+            >
               {indicatorParamsSummary(indicator)}
             </span>
             

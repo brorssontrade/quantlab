@@ -228,7 +228,9 @@ export function IndicatorsTabV2({
                       {(() => {
                         const status = getComputeStatus(ind, indicatorResults);
                         const manifest = getIndicatorManifest(ind.kind);
-                        const paneType = manifest?.outputs?.[0]?.pane ?? "price";
+                        // Use manifest.panePolicy as single source of truth (not outputs[0].pane which doesn't exist)
+                        const paneType = manifest?.panePolicy ?? "overlay";
+                        const isSeparate = paneType === "separate";
                         
                         return (
                           <div className="flex items-center gap-2 mt-0.5">
@@ -246,19 +248,21 @@ export function IndicatorsTabV2({
                                 {status.points} pts • Last: {formatValue(status.lastValue)}
                               </span>
                             )}
-                            {/* Pane badge */}
+                            {/* Pane badge - reads from manifest.panePolicy */}
                             <span 
                               className="text-[9px] px-1 py-0.5 rounded"
                               style={{ 
-                                backgroundColor: paneType === "separate" 
+                                backgroundColor: isSeparate 
                                   ? "rgba(255, 152, 0, 0.15)" 
                                   : "rgba(41, 98, 255, 0.15)",
-                                color: paneType === "separate" 
+                                color: isSeparate 
                                   ? "#ff9800" 
                                   : "var(--tv-blue, #2962ff)"
                               }}
+                              data-testid={`indicator-pane-${ind.id}`}
+                              title={`Pane: ${paneType} (from manifest.panePolicy)`}
                             >
-                              {paneType === "separate" ? "Separate" : "Overlay"}
+                              {isSeparate ? "Separate" : "Overlay"}
                             </span>
                           </div>
                         );

@@ -165,26 +165,30 @@ export const RIGHT_PANEL = {
 } as const;
 
 // ============================================================================
-// Indicators Modal V2 (PRIO 3)
+// Indicators Modal V3 (PRIO 3)
 // ============================================================================
 export const INDICATORS_MODAL = {
-  root: '[data-testid="indicators-modal-v2"]',
+  root: '[data-testid="indicators-modal"]', // V3 uses "indicators-modal"
   search: '[data-testid="indicators-modal-search"]',
   close: '[data-testid="indicators-modal-close"]',
   
-  // Categories
+  // Categories (V3 uses kebab-case)
   categoryAll: '[data-testid="category-all"]',
   categoryMovingAverage: '[data-testid="category-moving-average"]',
   categoryMomentum: '[data-testid="category-momentum"]',
   categoryVolatility: '[data-testid="category-volatility"]',
   categoryVolume: '[data-testid="category-volume"]',
+  categoryTrend: '[data-testid="category-trend"]',
+  categoryFavorites: '[data-testid="category-favorites"]',
+  categoryRecent: '[data-testid="category-recent"]',
   category: (cat: string) => `[data-testid="category-${cat}"]`,
   
-  // Indicator items
-  indicatorItem: (id: string) => `[data-testid="indicator-item-${id}"]`,
+  // Indicator items (V3: click row or use add button)
+  indicatorItem: (id: string) => `[data-testid="indicator-add-btn-${id}"]`,
+  indicatorRow: (id: string) => `[data-testid="indicators-modal-add-${id}"]`,
   
   // Indicator IDs for quick reference
-  INDICATOR_IDS: ["sma", "ema", "rsi", "macd", "bb", "atr", "adx", "vwap", "obv"] as const,
+  INDICATOR_IDS: ["sma", "ema", "rsi", "macd", "bb", "atr", "adx", "vwap", "avwap", "obv"] as const,
 } as const;
 
 // ============================================================================
@@ -369,6 +373,50 @@ export async function getDump(page: Page) {
  */
 export async function chartSet(page: Page, patch: Record<string, unknown>) {
   return page.evaluate((p) => (window as any).__lwcharts?.set?.(p), patch);
+}
+
+/**
+ * Open indicators modal via TopBar button (always visible, deterministic)
+ * This is the preferred method over RightPanel button which may not be visible
+ */
+export async function openIndicatorsModal(page: Page) {
+  const indicatorsBtn = page.locator(TOPBAR.indicatorsBtn);
+  await indicatorsBtn.click();
+  // Wait for modal to be visible
+  await page.locator(INDICATORS_MODAL.root).waitFor({ state: "visible", timeout: 5000 });
+}
+
+/**
+ * Add an indicator via the indicators modal
+ * Opens modal via TopBar, searches for indicator, clicks to add
+ */
+export async function addIndicatorViaModal(page: Page, kind: string) {
+  await openIndicatorsModal(page);
+  // Search for the indicator
+  const search = page.locator(INDICATORS_MODAL.search);
+  await search.fill(kind);
+  // Click the indicator item (use indicatorRow which matches actual modal testid)
+  await page.locator(INDICATORS_MODAL.indicatorRow(kind.toLowerCase())).click();
+  // Wait for modal to close
+  await page.locator(INDICATORS_MODAL.root).waitFor({ state: "hidden", timeout: 5000 });
+}
+
+/**
+ * Wait for an indicator to be computed and have values
+ */
+export async function waitForIndicator(page: Page, kind: string, opts: { timeout?: number } = {}) {
+  await page.waitForFunction(
+    (k) => {
+      const dump = (window as any).__lwcharts?.dump?.();
+      const indicators = dump?.indicators ?? [];
+      return indicators.some((ind: any) => 
+        ind.kind === k && 
+        ind.lines?.some((line: any) => (line.valuesCount ?? line.values?.length ?? 0) > 0)
+      );
+    },
+    kind,
+    { timeout: opts.timeout ?? 10000 }
+  );
 }
 
 /**

@@ -1,110 +1,169 @@
 # Indicator Library Backlog
 
-> TradingView-style indicators split into implementable batches
+> Complete 82-indicator backlog: one row per manifest entry  
+> Auto-sync against `indicatorManifest.ts` via `scripts/indicatorInventory.ts`
 > 
-> **Last updated:** 2026-01-30
+> **Last updated:** 2025-02-07
 
 ---
 
-## ✅ Already Implemented (23 indicators)
+## 📊 Complete Indicator Inventory (82 total)
 
-| ID | Name | Category | Pane | Status |
-|----|------|----------|------|--------|
-| sma | Simple Moving Average | moving-average | overlay | ✅ Done |
-| ema | Exponential Moving Average | moving-average | overlay | ✅ Done |
-| smma | Smoothed Moving Average | moving-average | overlay | ✅ Done |
-| wma | Weighted Moving Average | moving-average | overlay | ✅ Done |
-| dema | Double EMA | moving-average | overlay | ✅ Done |
-| tema | Triple EMA | moving-average | overlay | ✅ Done |
-| hma | Hull Moving Average | moving-average | overlay | ✅ Done |
-| kama | Kaufman Adaptive MA | moving-average | overlay | ✅ Done |
-| vwma | Volume Weighted MA | moving-average | overlay | ✅ Done |
-| mcginley | McGinley Dynamic | moving-average | overlay | ✅ Done |
-| rsi | Relative Strength Index | momentum | separate | ✅ Done |
-| macd | MACD | momentum | separate | ✅ Done |
-| adx | Average Directional Index | momentum | separate | ✅ Done |
-| stoch | Stochastic | momentum | separate | ✅ Done (Batch 2) |
-| stochrsi | Stochastic RSI | momentum | separate | ✅ Done (Batch 2) |
-| cci | Commodity Channel Index | momentum | separate | ✅ Done (Batch 2) |
-| roc | Rate of Change | momentum | separate | ✅ Done (Batch 2) |
-| mom | Momentum | momentum | separate | ✅ Done (Batch 2) |
-| willr | Williams %R | momentum | separate | ✅ Done (Batch 2) |
-| bb | Bollinger Bands | volatility | overlay | ✅ Done |
-| atr | Average True Range | volatility | separate | ✅ Done |
-| vwap | Volume Weighted Avg Price | volume | overlay | ✅ Done |
-| obv | On Balance Volume | volume | separate | ✅ Done |
-
-### TradingView Parity Verified ✅
-- **RSI:** Uses Wilder's smoothing (RMA)
-- **ATR:** Uses Wilder's smoothing (RMA)
-- **ADX:** Uses Wilder's smoothing for DI/DX calculations
-- **VWAP:** Uses UTC for deterministic session anchors
-- **Test coverage:** 71 golden tests in compute.test.ts
+| # | ID | Name | Category | Pane | Status | Notes |
+|---|-----|------|----------|------|--------|-------|
+| 1 | sma | Simple Moving Average | moving-average | overlay | ✅ Done | |
+| 2 | ema | Exponential Moving Average | moving-average | overlay | ✅ Done | |
+| 3 | smma | Smoothed Moving Average | moving-average | overlay | ✅ Done | RMA/Wilder |
+| 4 | wma | Weighted Moving Average | moving-average | overlay | ✅ Done | |
+| 5 | dema | Double EMA | moving-average | overlay | ✅ Done | |
+| 6 | tema | Triple EMA | moving-average | overlay | ✅ Done | |
+| 7 | hma | Hull Moving Average | moving-average | overlay | ✅ Done | |
+| 8 | kama | Kaufman Adaptive MA | moving-average | overlay | ✅ Done | |
+| 9 | vwma | Volume Weighted MA | moving-average | overlay | ✅ Done | |
+| 10 | mcginley | McGinley Dynamic | moving-average | overlay | ✅ Done | |
+| 11 | alma | Arnaud Legoux MA | moving-average | overlay | ✅ Done | |
+| 12 | lsma | Least Squares MA | moving-average | overlay | ✅ Done | Linear Regression |
+| 13 | maribbon | MA Ribbon (8) | moving-average | overlay | ✅ Done | 8 EMAs |
+| 14 | maribbon4 | MA Ribbon (4) | moving-average | overlay | ✅ Done | 4 MAs |
+| 15 | median | Median Line | moving-average | overlay | ✅ Done | |
+| 16 | linreg | Linear Regression | moving-average | overlay | ✅ Done | |
+| 17 | sar | Parabolic SAR | trend | overlay | ✅ Done | Dots |
+| 18 | supertrend | SuperTrend | trend | overlay | ✅ Done | ATR-based |
+| 19 | ichimoku | Ichimoku Cloud | trend | overlay | ✅ Done | Full cloud |
+| 20 | zigzag | ZigZag | trend | overlay | ✅ Done | Swing detection |
+| 21 | williamsAlligator | Williams Alligator | trend | overlay | ✅ Done | 3 SMAs |
+| 22 | williamsFractals | Williams Fractals | trend | overlay | ✅ Done | Up/down markers |
+| 23 | rsi | Relative Strength Index | momentum | separate | ✅ Done | Wilder smoothing |
+| 24 | macd | MACD | momentum | separate | ✅ Done | EMA-based |
+| 25 | ao | Awesome Oscillator | momentum | separate | ✅ Done | Histogram |
+| 26 | adx | Average Directional Index | momentum | separate | ✅ Done | Wilder smoothing |
+| 27 | dmi | Directional Movement Index | momentum | separate | ✅ Done | +DI/-DI |
+| 28 | vortex | Vortex Indicator | momentum | separate | ✅ Done | VI+/VI- |
+| 29 | aroon | Aroon | momentum | separate | ✅ Done | Up/Down |
+| 30 | aroonosc | Aroon Oscillator | momentum | separate | ✅ Done | Difference |
+| 31 | trix | TRIX | momentum | separate | ✅ Done | Triple smoothed |
+| 32 | tsi | True Strength Index | momentum | separate | ✅ Done | Double smoothed |
+| 33 | smii | SMI Ergodic Indicator | momentum | separate | ✅ Done | |
+| 34 | smio | SMI Ergodic Oscillator | momentum | separate | ✅ Done | |
+| 35 | coppock | Coppock Curve | momentum | separate | ✅ Done | |
+| 36 | cmo | Chande Momentum Osc | momentum | separate | ✅ Done | |
+| 37 | uo | Ultimate Oscillator | momentum | separate | ✅ Done | Multi-period |
+| 38 | stoch | Stochastic | momentum | separate | ✅ Done | %K/%D |
+| 39 | stochrsi | Stochastic RSI | momentum | separate | ✅ Done | RSI + Stoch |
+| 40 | cci | Commodity Channel Index | momentum | separate | ✅ Done | |
+| 41 | roc | Rate of Change | momentum | separate | ✅ Done | |
+| 42 | mom | Momentum | momentum | separate | ✅ Done | |
+| 43 | willr | Williams %R | momentum | separate | ✅ Done | Inverted scale |
+| 44 | fisher | Fisher Transform | momentum | separate | ✅ Done | |
+| 45 | bb | Bollinger Bands | volatility | overlay | ✅ Done | ±2σ bands |
+| 46 | atr | Average True Range | volatility | separate | ✅ Done | Wilder smoothing |
+| 47 | dc | Donchian Channels | volatility | overlay | ✅ Done | High/Low channels |
+| 48 | kc | Keltner Channels | volatility | overlay | ✅ Done | ATR-based bands |
+| 49 | vstop | Volatility Stop | volatility | overlay | ✅ Done | Trailing stop |
+| 50 | chop | Choppiness Index | volatility | separate | ✅ Done | Trend/chop |
+| 51 | hv | Historical Volatility | volatility | separate | ✅ Done | Annualized σ |
+| 52 | bbw | Bollinger Bands Width | volatility | separate | ✅ Done | |
+| 53 | bbtrend | BB Trend Indicator | volatility | separate | ✅ Done | |
+| 54 | ulcer | Ulcer Index | volatility | separate | ✅ Done | Drawdown |
+| 55 | cvi | Chaikin Volatility | volatility | separate | ✅ Done | EMA of HL range |
+| 56 | env | Envelope | volatility | overlay | ✅ Done | % bands |
+| 57 | vwap | VWAP | volume | overlay | ✅ Done | UTC anchored |
+| 58 | avwap | Anchored VWAP | volume | overlay | ✅ Done | Manual anchor |
+| 59 | obv | On Balance Volume | volume | separate | ✅ Done | Cumulative |
+| 60 | mfi | Money Flow Index | volume | separate | ✅ Done | Volume-weighted RSI |
+| 61 | cmf | Chaikin Money Flow | volume | separate | ✅ Done | |
+| 62 | pvt | Price Volume Trend | volume | separate | ✅ Done | |
+| 63 | pvi | Positive Volume Index | volume | separate | ✅ Done | |
+| 64 | nvi | Negative Volume Index | volume | separate | ✅ Done | |
+| 65 | relvol | Relative Volume | volume | separate | ✅ Done | Lookback ratio |
+| 66 | klinger | Klinger Oscillator | volume | separate | ✅ Done | |
+| 67 | volumeDelta | Volume Delta | volume | separate | ✅ Done | Intraday only |
+| 68 | cvd | Cumulative Volume Delta | volume | separate | ✅ Done | |
+| 69 | rsiDivergence | RSI Divergence | divergence | separate+overlay | ✅ Done | Markers + RSI |
+| 70 | knoxvilleDivergence | Knoxville Divergence | divergence | separate+overlay | ✅ Done | MOM + histogram |
+| 71 | pivotPointsStandard | Standard Pivot Points | pivot | overlay | ✅ Done | PP/R1-3/S1-3 |
+| 72 | pivotPointsHighLow | High/Low Pivot Points | pivot | overlay | ✅ Done | Swing pivots |
+| 73 | autoFib | Auto Fibonacci | pivot | overlay | ✅ Done | Auto levels |
+| 74 | adrb | Advance/Decline Ratio Bars | breadth | separate | ✅ Done | close > close[1] |
+| 75 | adr | Advance/Decline Ratio | breadth | separate | ⚠️ Needs data | Breadth provider |
+| 76 | adl | Advance/Decline Line | breadth | separate | ⚠️ Needs data | Breadth provider |
+| 77 | vrvp | Visible Range Vol Profile | volume-profile | overlay | 🚧 WIP | EPIC-VP |
+| 78 | vpfr | Fixed Range Vol Profile | volume-profile | overlay | 🚧 WIP | EPIC-VP |
+| 79 | aavp | Auto Anchored Vol Profile | volume-profile | overlay | 🚧 WIP | EPIC-VP |
+| 80 | svp | Session Volume Profile | volume-profile | overlay | 🚧 WIP | EPIC-VP |
+| 81 | svphd | Session Volume Profile HD | volume-profile | overlay | 🚧 WIP | EPIC-VP |
+| 82 | pvp | Periodic Volume Profile | volume-profile | overlay | 🚧 WIP | EPIC-VP |
 
 ---
 
-## 📊 Category A: Remaining Indicators (OHLCV Compute)
+## 📈 Progress Summary
 
-### ~~Batch 1: Moving Averages (Overlay)~~ ✅ COMPLETE
-
-### ~~Batch 2: Momentum (Separate Pane)~~ ✅ COMPLETE
-
-### Batch 3: Momentum Continued (Separate Pane) - NEXT
-
-| ID | Name | TV Defaults | Notes | Status |
-|----|------|-------------|-------|--------|
-| ppo | Percentage Price Osc | Blue line, orange signal | MACD as percentage | 🔲 Todo |
-| trix | TRIX | Teal #00BCD4 | Triple smoothed ROC | 🔲 Todo |
-| tsi | True Strength Index | Blue line, orange signal | Double smoothed momentum | 🔲 Todo |
-| uo | Ultimate Oscillator | Purple #9C27B0 | Weighted multi-period | 🔲 Todo |
-| rvi | Relative Vigor Index | Green line, red signal | Close vs range | 🔲 Todo |
-| chop | Choppiness Index | Teal #00BCD4 | Trend vs sideways | 🔲 Todo |
-
-### Batch 4: Volatility/Trend (Mixed Panes)
-
-| ID | Name | Pane | TV Defaults | Notes | Status |
-|----|------|------|-------------|-------|--------|
-| dc | Donchian Channels | overlay | Blue upper/lower | Highest high / lowest low | 🔲 Todo |
-| kc | Keltner Channels | overlay | Blue upper/lower | ATR-based bands | 🔲 Todo |
-| env | Envelope | overlay | Blue bands | % deviation from MA | 🔲 Todo |
-| supertrend | SuperTrend | overlay | Green up, red down | ATR-based trend | 🔲 Todo |
-| psar | Parabolic SAR | overlay | Dots green/red | Trailing stop dots | 🔲 Todo |
-| chandelier | Chandelier Exit | overlay | Green long, red short | ATR-based exit | 🔲 Todo |
-| vstop | Volatility Stop | overlay | Green/red dots | ATR trailing stop | 🔲 Todo |
-| ichimoku | Ichimoku Cloud | overlay | Multiple colors | Full cloud system | 🔲 Todo |
-
-### Batch 5: Volume (Separate Pane)
-
-| ID | Name | TV Defaults | Notes |
-|----|------|-------------|-------|
-| ad | Accumulation/Distribution | Teal line | Close location value |
-| cmf | Chaikin Money Flow | Teal line | AD in fixed period |
-| cho | Chaikin Oscillator | Blue line, red zones | EMA difference of AD |
-| efi | Elder Force Index | Blue histogram | Price * volume change |
-| emv | Ease of Movement | Teal line | Volume-normalized move |
-| pvt | Price Volume Trend | Teal line | % change * volume |
-| nvi | Negative Volume Index | Blue line | Down-volume tracking |
-| pvi | Positive Volume Index | Orange line | Up-volume tracking |
-| updown | Up/Down Volume | Green/red histogram | Directional volume |
-| netvol | Net Volume | Green/red histogram | Up - down volume |
+| Status | Count | % |
+|--------|-------|---|
+| ✅ Done | 74 | 90.2% |
+| ⚠️ Needs data | 2 | 2.4% |
+| 🚧 WIP (VP suite) | 6 | 7.3% |
+| **Total** | **82** | **100%** |
 
 ---
 
-## 🎨 Category B: Drawing / Auto Tools (DEFERRED)
+## 🚧 Volume Profile Suite (WIP — Paused)
 
-> These require different render paths (annotations, shapes, not line series).
-> Will be implemented in a separate PRIO after indicator library is complete.
+> **Status:** Under development, paused for parity audit.  
+> **Epic:** EPIC-VP in LLM_TASKS.md  
+> **Remaining work:** VP-1 through VP-13 in LLM_TASKS.md
 
-| Tool | Type | Notes |
-|------|------|-------|
-| Auto Fib Extension | drawing | Requires swing detection |
-| Auto Fib Retracement | drawing | Requires swing detection |
-| Auto Pitchfork | drawing | Requires 3 pivot points |
-| Auto Trendline | drawing | Line regression / pivots |
-| Linear Regression Channel | drawing | Band around regression |
-| Pivot Points (Standard/Fib/etc) | levels | Daily/weekly pivots |
-| Volume Profile | special | Horizontal histogram |
-| VWAP Bands | indicator | Can do after VWAP ✅ |
+| ID | Status | Blocker |
+|----|--------|---------|
+| vrvp | 🚧 WIP | LTF data aggregation, histogram alignment |
+| vpfr | 🚧 WIP | Same as VRVP + range selection |
+| aavp | 🚧 WIP | Same as VRVP + auto-anchor detection |
+| svp | 🚧 WIP | Session boundary detection |
+| svphd | 🚧 WIP | Session boundaries + HD resolution |
+| pvp | 🚧 WIP | Periodic boundaries |
+
+---
+
+## ⚠️ Needs External Data Provider
+
+| ID | Name | Required Data | Status |
+|----|------|---------------|--------|
+| adr | Advance/Decline Ratio | Market breadth (advances/declines) | ⚠️ Deferred |
+| adl | Advance/Decline Line | Market breadth (advances/declines) | ⚠️ Deferred |
+
+> These indicators require a breadth data source (e.g., NYSE advance/decline counts).  
+> Currently not available via EODHD or OpenBB. Will revisit when provider is added.
+
+---
+
+## ✅ Category Breakdown
+
+### Moving Averages (16 indicators)
+sma, ema, smma, wma, dema, tema, hma, kama, vwma, mcginley, alma, lsma, maribbon, maribbon4, median, linreg
+
+### Trend/Direction (6 indicators)
+sar, supertrend, ichimoku, zigzag, williamsAlligator, williamsFractals
+
+### Momentum (22 indicators)
+rsi, macd, ao, adx, dmi, vortex, aroon, aroonosc, trix, tsi, smii, smio, coppock, cmo, uo, stoch, stochrsi, cci, roc, mom, willr, fisher
+
+### Volatility (12 indicators)
+bb, atr, dc, kc, vstop, chop, hv, bbw, bbtrend, ulcer, cvi, env
+
+### Volume (12 indicators)
+vwap, avwap, obv, mfi, cmf, pvt, pvi, nvi, relvol, klinger, volumeDelta, cvd
+
+### Divergence (2 indicators)
+rsiDivergence, knoxvilleDivergence
+
+### Pivot/Levels (3 indicators)
+pivotPointsStandard, pivotPointsHighLow, autoFib
+
+### Market Breadth (3 indicators)
+adrb (✅), adr (⚠️), adl (⚠️)
+
+### Volume Profile (6 indicators — WIP)
+vrvp, vpfr, aavp, svp, svphd, pvp
 
 ---
 
@@ -116,8 +175,8 @@
 - [ ] All inputs defined with proper min/max/step
 - [ ] All outputs defined with style (line/histogram/area/band)
 - [ ] Compute function in compute.ts
-- [ ] Worker integration (indicatorWorker.ts)
-- [ ] Golden test in compute.test.ts
+- [ ] Registry entry in registryV2.ts (82 cases)
+- [ ] Golden test in compute.test.ts or compute.golden.test.ts
 - [ ] Renders correctly with mock data
 - [ ] Style tab allows per-output customization
 - [ ] Legend shows name + params + live values
@@ -125,22 +184,26 @@
 
 ---
 
-## 🎯 Implementation Order
+## 🔗 Related Documentation
 
-1. **Batch 1 (NOW):** Moving Averages - Easy to validate, overlay on price
-2. **Batch 2 (NEXT):** Momentum - Most popular oscillators
-3. **Batch 3 (THEN):** Volatility/Trend - Channels and trend-following
-4. **Batch 4 (LAST):** Volume - Requires volume data validation
+- [INDICATOR_PARITY_MATRIX.md](./INDICATOR_PARITY_MATRIX.md) — TradingView parity audit status
+- [LLM_TASKS.md](./LLM_TASKS.md) — EPIC-VP task breakdown (VP-1 to VP-13)
+- [LLM.md](./LLM.md) — Section 3: Compute Engine Architecture
 
 ---
 
-## 📈 Progress Tracker
+## 📦 Inventory Validation
 
-| Batch | Total | Done | Progress |
-|-------|-------|------|----------|
-| Already Implemented | 17 | 17 | ✅ 100% |
-| Batch 1: Moving Averages | 8 | 8 | ✅ 100% |
-| Batch 2: Momentum | 12 | 0 | ⏳ 0% |
-| Batch 3: Volatility/Trend | 8 | 0 | ⏳ 0% |
-| Batch 4: Volume | 10 | 0 | ⏳ 0% |
-| **Total Indicators** | **47** | **17** | **36%** |
+Run the inventory check to validate sync with manifest:
+
+```powershell
+cd quantlab-ui
+npx tsx scripts/indicatorInventory.ts
+```
+
+Expected output:
+```
+✅ Manifest: 82 indicators
+✅ Registry: 82 cases  
+✅ Docs synced
+```

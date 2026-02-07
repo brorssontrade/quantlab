@@ -33,3 +33,116 @@ jobs:
       - name: Run tests
         run: |
           pytest -q --maxfail=1 --disable-warnings --cov=. --cov-report=xml
+
+  frontend-build:
+    name: Frontend Build & Lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: quantlab-ui
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: quantlab-ui/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+  frontend-compute-tests:
+    name: Indicator Compute Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: quantlab-ui
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: quantlab-ui/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run compute tests
+        run: |
+          echo "Running indicator compute tests..."
+          # Only run compute-related tests (golden and unit tests), exclude UI component tests
+          npm test -- --run compute 2>&1 | tee test-output.txt
+          if [ ${PIPESTATUS[0]} -ne 0 ]; then
+            echo "❌ Compute tests failed!"
+            exit 1
+          fi
+          echo "✅ All compute tests passed"
+
+  indicator-inventory:
+    name: Indicator Inventory Check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: quantlab-ui
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: quantlab-ui/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate indicator inventory
+        run: |
+          echo "Running indicator inventory check..."
+          npx tsx scripts/indicatorInventory.ts --ci
+          if [ $? -ne 0 ]; then
+            echo "❌ Indicator inventory check failed!"
+            echo "   Manifest, registry, and/or docs are out of sync."
+            echo "   Run: npx tsx scripts/indicatorInventory.ts"
+            echo "   Then fix discrepancies before committing."
+            exit 1
+          fi
+          echo "✅ Indicator inventory in sync (82 indicators)"
+
+  parity-baselines:
+    name: Parity Baselines Validation
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: quantlab-ui
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: quantlab-ui/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate parity baselines
+        run: |
+          echo "Running parity baselines validation..."
+          npx tsx scripts/validateParityBaselines.ts --ci
+          if [ $? -ne 0 ]; then
+            echo "❌ Parity baselines validation failed!"
+            echo "   Run: npx tsx scripts/validateParityBaselines.ts"
+            exit 1
+          fi
+          echo "✅ All parity baselines are schema-clean"

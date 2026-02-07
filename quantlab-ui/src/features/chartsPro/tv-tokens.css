@@ -3,14 +3,21 @@
  * 
  * Single source of truth for all TV-parity colors, borders, and dimensions.
  * Import this file in ChartsPro components or apply via CSS custom properties.
+ * 
+ * THEME SWITCHING: Use data-tv-theme="dark" or data-tv-theme="light" on :root
+ * to switch the entire UI between themes.
  */
 
-:root {
-  /* ========== COLORS ========== */
-  /* Background hierarchy (dark theme) */
+/* ========== DARK THEME (default) ========== */
+:root,
+:root[data-tv-theme="dark"] {
+  /* Background hierarchy */
   --tv-bg: #131722;           /* Main background (chart area) */
   --tv-panel: #1e222d;        /* Panels, headers, toolbars */
   --tv-panel-hover: #2a2e39;  /* Panel hover state */
+  --tv-panel-transparent: rgba(30, 34, 45, 0.85); /* Semi-transparent panel */
+  --tv-panel-2: #2a2e39;      /* Secondary panel fill */
+  --tv-bg-secondary: #2a2e39; /* Secondary background for inputs/chips */
   
   /* Borders */
   --tv-border: #363a45;       /* Primary border color */
@@ -35,9 +42,61 @@
   --tv-candle-up: #089981;
   --tv-candle-down: #f23645;
   --tv-grid: #1e222d;         /* Grid lines (very subtle) */
+  --tv-grid-strong: #2a2e39;  /* Major grid lines */
   --tv-crosshair: #758696;    /* Crosshair lines */
+  --tv-crosshair-label-bg: #131722; /* Crosshair label background (dark) */
   
-  /* ========== DIMENSIONS ========== */
+  /* Inputs/chips */
+  --tv-input-bg: #2a2e39;
+  --tv-chip-bg: #2a2e39;
+  --tv-chip-hover: #363a45;
+}
+
+/* ========== LIGHT THEME ========== */
+:root[data-tv-theme="light"] {
+  /* Background hierarchy - TradingView Paper */
+  --tv-bg: #ffffff;           /* Main background (chart area) */
+  --tv-panel: #ffffff;        /* Panels, headers, toolbars */
+  --tv-panel-hover: #f0f3fa;  /* Panel hover state */
+  --tv-panel-transparent: rgba(255, 255, 255, 0.92); /* Semi-transparent panel */
+  --tv-panel-2: #f8f9fd;      /* Secondary panel fill */
+  --tv-bg-secondary: #f0f3fa; /* Secondary background for inputs/chips */
+  
+  /* Borders */
+  --tv-border: #e0e3eb;       /* Primary border color */
+  --tv-border-subtle: #f0f3fa; /* Subtle/secondary borders */
+  
+  /* Text */
+  --tv-text: #131722;         /* Primary text */
+  --tv-text-muted: #787b86;   /* Muted/inactive text */
+  --tv-text-dim: #9598a1;     /* Very dim text */
+  
+  /* Accent colors (same in both themes) */
+  --tv-blue: #2962ff;
+  --tv-blue-hover: #1e53e5;
+  --tv-blue-subtle: rgba(41, 98, 255, 0.12);
+  
+  /* Status colors - TradingView light palette */
+  --tv-green: #089981;
+  --tv-red: #f23645;
+  --tv-yellow: #f7a600;
+  
+  /* Chart colors - NEUTRAL GREY GRID (no blue tint) */
+  --tv-candle-up: #089981;
+  --tv-candle-down: #f23645;
+  --tv-grid: #f3f3f3;         /* Grid lines - neutral grey, NOT blue */
+  --tv-grid-strong: #ebebeb;  /* Major grid lines */
+  --tv-crosshair: #758696;    /* Crosshair lines */
+  --tv-crosshair-label-bg: #e0e3eb; /* Crosshair label background (light grey) */
+  
+  /* Inputs/chips */
+  --tv-input-bg: #f0f3fa;
+  --tv-chip-bg: #f0f3fa;
+  --tv-chip-hover: #e0e3eb;
+}
+
+/* ========== SHARED DIMENSIONS (theme-independent) ========== */
+:root {
   /* Layout regions */
   --tv-header-h: 50px;
   --tv-header-h-min: 48px;

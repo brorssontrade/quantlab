@@ -39,9 +39,10 @@ function Toggle({ id, checked, onCheckedChange, "data-testid": testId }: ToggleP
       role="switch"
       aria-checked={checked}
       onClick={() => onCheckedChange(!checked)}
-      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors ${
-        checked ? "bg-blue-500" : "bg-slate-600"
-      }`}
+      className="relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors"
+      style={{
+        backgroundColor: checked ? 'var(--tv-blue)' : 'var(--tv-border)',
+      }}
       data-testid={testId}
     >
       <span
@@ -130,7 +131,10 @@ export function SettingsDialog({ onClose }: SettingsDialogProps) {
         <button
           type="button"
           onClick={handleCancel}
-          className="h-6 w-6 flex items-center justify-center text-sm hover:bg-slate-700 rounded"
+          className="h-6 w-6 flex items-center justify-center text-sm rounded"
+          style={{ backgroundColor: 'transparent' }}
+          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--tv-panel-hover)'}
+          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
           aria-label="Close"
           data-testid="settings-close"
         >
@@ -154,8 +158,23 @@ export function SettingsDialog({ onClose }: SettingsDialogProps) {
             className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 text-xs font-medium transition-colors ${
               activeTab === tab.id
                 ? "border-b-2 border-blue-500 text-blue-400"
-                : "text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+                : ""
             }`}
+            style={{
+              color: activeTab === tab.id ? undefined : 'var(--tv-text-muted)',
+            }}
+            onMouseEnter={(e) => {
+              if (activeTab !== tab.id) {
+                e.currentTarget.style.backgroundColor = 'var(--tv-panel-hover)';
+                e.currentTarget.style.color = 'var(--tv-text)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (activeTab !== tab.id) {
+                e.currentTarget.style.backgroundColor = 'transparent';
+                e.currentTarget.style.color = 'var(--tv-text-muted)';
+              }
+            }}
             onClick={() => setActiveTab(tab.id)}
             data-testid={`settings-tab-${tab.id}`}
           >
@@ -242,7 +261,7 @@ function AppearancePanel({ settings, onChange }: AppearancePanelProps) {
     <div className="space-y-6" role="tabpanel" id="panel-appearance" data-testid="settings-panel-appearance">
       {/* Grid Section */}
       <section className="space-y-3">
-        <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wide">Grid</h3>
+        <h3 className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--tv-text-muted)' }}>Grid</h3>
         
         <div className="flex items-center justify-between">
           <label htmlFor="showGrid" className="text-sm">Show Grid</label>
@@ -262,7 +281,12 @@ function AppearancePanel({ settings, onChange }: AppearancePanelProps) {
                 id="gridStyle"
                 value={settings.gridStyle}
                 onChange={(e) => onChange({ gridStyle: e.target.value as AppearanceSettings["gridStyle"] })}
-                className="h-8 px-2 text-xs rounded border bg-slate-900 border-slate-700"
+                className="h-8 px-2 text-xs rounded border"
+                style={{
+                  backgroundColor: 'var(--tv-input-bg)',
+                  borderColor: 'var(--tv-border)',
+                  color: 'var(--tv-text)',
+                }}
                 data-testid="settings-gridStyle"
               >
                 <option value="solid">Solid</option>
@@ -278,7 +302,8 @@ function AppearancePanel({ settings, onChange }: AppearancePanelProps) {
                 id="gridColor"
                 value={settings.gridColor.startsWith("rgba") ? "#2a2e39" : settings.gridColor}
                 onChange={(e) => onChange({ gridColor: e.target.value })}
-                className="h-8 w-16 rounded border border-slate-700 cursor-pointer"
+                className="h-8 w-16 rounded border cursor-pointer"
+                style={{ borderColor: 'var(--tv-border)' }}
                 data-testid="settings-gridColor"
               />
             </div>
@@ -288,7 +313,7 @@ function AppearancePanel({ settings, onChange }: AppearancePanelProps) {
 
       {/* Background Section */}
       <section className="space-y-3">
-        <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wide">Background</h3>
+        <h3 className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--tv-text-muted)' }}>Background</h3>
         
         <div className="flex items-center justify-between">
           <label htmlFor="backgroundColor" className="text-sm">Background Color</label>
@@ -297,7 +322,8 @@ function AppearancePanel({ settings, onChange }: AppearancePanelProps) {
             id="backgroundColor"
             value={settings.backgroundColor}
             onChange={(e) => onChange({ backgroundColor: e.target.value })}
-            className="h-8 w-16 rounded border border-slate-700 cursor-pointer"
+            className="h-8 w-16 rounded border cursor-pointer"
+            style={{ borderColor: 'var(--tv-border)' }}
             data-testid="settings-backgroundColor"
           />
         </div>
@@ -305,7 +331,7 @@ function AppearancePanel({ settings, onChange }: AppearancePanelProps) {
 
       {/* Candle Colors Section */}
       <section className="space-y-3">
-        <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wide">Candle Colors</h3>
+        <h3 className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--tv-text-muted)' }}>Candle Colors</h3>
         
         <div className="grid grid-cols-2 gap-4">
           <div className="flex items-center justify-between">
@@ -315,7 +341,8 @@ function AppearancePanel({ settings, onChange }: AppearancePanelProps) {
               id="upColor"
               value={settings.upColor}
               onChange={(e) => onChange({ upColor: e.target.value })}
-              className="h-8 w-12 rounded border border-slate-700 cursor-pointer"
+              className="h-8 w-12 rounded border cursor-pointer"
+              style={{ borderColor: 'var(--tv-border)' }}
               data-testid="settings-upColor"
             />
           </div>
@@ -327,7 +354,8 @@ function AppearancePanel({ settings, onChange }: AppearancePanelProps) {
               id="downColor"
               value={settings.downColor}
               onChange={(e) => onChange({ downColor: e.target.value })}
-              className="h-8 w-12 rounded border border-slate-700 cursor-pointer"
+              className="h-8 w-12 rounded border cursor-pointer"
+              style={{ borderColor: 'var(--tv-border)' }}
               data-testid="settings-downColor"
             />
           </div>
@@ -336,7 +364,7 @@ function AppearancePanel({ settings, onChange }: AppearancePanelProps) {
 
       {/* Crosshair Section */}
       <section className="space-y-3">
-        <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wide">Crosshair</h3>
+        <h3 className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--tv-text-muted)' }}>Crosshair</h3>
         
         <div className="flex items-center justify-between">
           <label htmlFor="crosshairMode" className="text-sm">Mode</label>
@@ -344,7 +372,12 @@ function AppearancePanel({ settings, onChange }: AppearancePanelProps) {
             id="crosshairMode"
             value={settings.crosshairMode}
             onChange={(e) => onChange({ crosshairMode: e.target.value as AppearanceSettings["crosshairMode"] })}
-            className="h-8 px-2 text-xs rounded border bg-slate-900 border-slate-700"
+            className="h-8 px-2 text-xs rounded border"
+            style={{
+              backgroundColor: 'var(--tv-input-bg)',
+              borderColor: 'var(--tv-border)',
+              color: 'var(--tv-text)',
+            }}
             data-testid="settings-crosshairMode"
           >
             <option value="normal">Normal</option>
@@ -367,7 +400,7 @@ function LayoutPanel({ settings, onChange }: LayoutPanelProps) {
     <div className="space-y-6" role="tabpanel" id="panel-layout" data-testid="settings-panel-layout">
       {/* Panel Visibility */}
       <section className="space-y-3">
-        <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wide">Panel Visibility</h3>
+        <h3 className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--tv-text-muted)' }}>Panel Visibility</h3>
         
         <div className="flex items-center justify-between">
           <label htmlFor="showLeftToolbar" className="text-sm">Left Toolbar</label>
@@ -402,7 +435,7 @@ function LayoutPanel({ settings, onChange }: LayoutPanelProps) {
 
       {/* Legend */}
       <section className="space-y-3">
-        <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wide">Legend</h3>
+        <h3 className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--tv-text-muted)' }}>Legend</h3>
         
         <div className="flex items-center justify-between">
           <label htmlFor="showLegend" className="text-sm">Show Legend</label>
@@ -421,7 +454,12 @@ function LayoutPanel({ settings, onChange }: LayoutPanelProps) {
               id="legendPosition"
               value={settings.legendPosition}
               onChange={(e) => onChange({ legendPosition: e.target.value as LayoutSettings["legendPosition"] })}
-              className="h-8 px-2 text-xs rounded border bg-slate-900 border-slate-700"
+              className="h-8 px-2 text-xs rounded border"
+              style={{
+                backgroundColor: 'var(--tv-input-bg)',
+                borderColor: 'var(--tv-border)',
+                color: 'var(--tv-text)',
+              }}
               data-testid="settings-legendPosition"
             >
               <option value="top-left">Top Left</option>
@@ -446,7 +484,7 @@ function AdvancedPanel({ settings, onChange }: AdvancedPanelProps) {
     <div className="space-y-6" role="tabpanel" id="panel-advanced" data-testid="settings-panel-advanced">
       {/* Performance */}
       <section className="space-y-3">
-        <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wide">Performance</h3>
+        <h3 className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--tv-text-muted)' }}>Performance</h3>
         
         <div className="flex items-center justify-between">
           <label htmlFor="maxBarsOnChart" className="text-sm">Max Bars on Chart</label>
@@ -475,7 +513,7 @@ function AdvancedPanel({ settings, onChange }: AdvancedPanelProps) {
 
       {/* Data */}
       <section className="space-y-3">
-        <h3 className="text-xs font-medium text-slate-400 uppercase tracking-wide">Data</h3>
+        <h3 className="text-xs font-medium uppercase tracking-wide" style={{ color: 'var(--tv-text-muted)' }}>Data</h3>
         
         <div className="flex items-center justify-between">
           <label htmlFor="autoSaveDrawings" className="text-sm">Auto-save Drawings</label>

@@ -75,6 +75,7 @@ export interface CanvasTokens {
   panel: string;
   grid: string;
   subtleGrid: string;
+  border: string;          // TV-41: Axis/scale border (more visible than grid)
   gridOpacity: number;
   vertGridOpacity: number;
   horzGridOpacity: number;
@@ -278,6 +279,7 @@ const darkTheme: ChartsTheme = {
     panel: "#1e222d",
     grid: "#2a2e39",
     subtleGrid: "rgba(42, 46, 57, 0.5)",
+    border: "#363a45",      // TV-41: Axis border (more visible than grid)
     gridOpacity: 0.6,
     vertGridOpacity: 0.5,
     horzGridOpacity: 0.6,
@@ -362,46 +364,47 @@ const darkTheme: ChartsTheme = {
   overlayLabelText: "#d1d4dc",
 };
 
-// Light theme - TradingView Paper inspired
+// Light theme - TradingView Paper exact parity
 const lightTheme: ChartsTheme = {
   name: "light",
 
-  // Structured tokens
+  // Structured tokens - TradingView exact values
   canvas: {
-    background: "#ffffff",
-    panel: "#f8f9fa",
-    grid: "#e0e3eb",
-    subtleGrid: "rgba(224, 227, 235, 0.6)",
+    background: "#ffffff",      // TradingView: pure white
+    panel: "#ffffff",           // TradingView: white panels
+    grid: "#f3f3f3",            // TradingView: neutral grey grid (NO blue tint)
+    subtleGrid: "rgba(243, 243, 243, 0.6)",
+    border: "#e0e3eb",          // TV-41: Axis border (more visible than grid)
     gridOpacity: 0.5,
     vertGridOpacity: 0.4,
     horzGridOpacity: 0.5,
   },
   text: {
-    primary: "#131722",
-    secondary: "#6a6d78",
+    primary: "#131722",         // TradingView: near-black text
+    secondary: "#787b86",       // TradingView: muted text
     muted: "#9598a1",
-    axis: "#6a6d78",  // TradingView light axis
+    axis: "#131722",            // TradingView: dark axis text
     legend: "#131722",
     tooltip: "#131722",
   },
   crosshairTokens: {
-    line: "#9598a1",  // TradingView grey crosshair
-    labelBackground: "#1e222d",  // Dark pill even in light mode (TradingView style)
-    labelText: "#ffffff",
+    line: "#758696",            // TradingView: crosshair grey
+    labelBackground: "#e0e3eb", // TradingView light: light grey label background
+    labelText: "#131722",       // TradingView light: dark text on light label
     width: 1,
     style: 0, // Solid
   },
   candle: {
-    upColor: "#26a69a",  // Same green in both themes
-    downColor: "#ef5350",  // Same red in both themes
-    borderUp: "#26a69a",
-    borderDown: "#ef5350",
-    wickUp: "#26a69a",
-    wickDown: "#ef5350",
+    upColor: "#089981",         // TradingView: exact green
+    downColor: "#f23645",       // TradingView: exact red
+    borderUp: "#089981",
+    borderDown: "#f23645",
+    wickUp: "#089981",
+    wickDown: "#f23645",
   },
   volume: {
-    up: "rgba(38, 166, 154, 0.3)",
-    down: "rgba(239, 83, 80, 0.3)",
+    up: "rgba(8, 153, 129, 0.3)",
+    down: "rgba(242, 54, 69, 0.3)",
     neutral: "rgba(149, 152, 161, 0.2)",
     opacity: 0.3,
   },
@@ -429,25 +432,25 @@ const lightTheme: ChartsTheme = {
   typography: sharedTypography,
   spacing: sharedSpacing,
 
-  // Legacy compatibility
+  // Legacy compatibility - TradingView exact values
   background: "#ffffff",
-  panel: "#f8f9fa",
-  grid: "#e0e3eb",
-  subtleGrid: "rgba(224, 227, 235, 0.6)",
-  axisText: "#6a6d78",
-  crosshair: "#9598a1",  // Legacy crosshair color
-  candleUp: "#26a69a",
-  candleDown: "#ef5350",
-  candleBorderUp: "#26a69a",
-  candleBorderDown: "#ef5350",
-  wickUp: "#26a69a",
-  wickDown: "#ef5350",
-  volumeUp: "rgba(38, 166, 154, 0.3)",
-  volumeDown: "rgba(239, 83, 80, 0.3)",
+  panel: "#ffffff",
+  grid: "#f3f3f3",              // TradingView: neutral grey (NO blue tint)
+  subtleGrid: "rgba(243, 243, 243, 0.6)",
+  axisText: "#131722",          // TradingView: dark axis
+  crosshair: "#758696",         // TradingView: crosshair grey
+  candleUp: "#089981",          // TradingView: exact green
+  candleDown: "#f23645",        // TradingView: exact red
+  candleBorderUp: "#089981",
+  candleBorderDown: "#f23645",
+  wickUp: "#089981",
+  wickDown: "#f23645",
+  volumeUp: "rgba(8, 153, 129, 0.3)",
+  volumeDown: "rgba(242, 54, 69, 0.3)",
   volumeNeutral: "rgba(149, 152, 161, 0.2)",
   fontFamily: sharedTypography.fontFamily.primary,
-  crosshairLabelBg: "#1e222d",
-  priceLine: "#6a6d78",
+  crosshairLabelBg: "#e0e3eb",  // TradingView light: light grey label
+  priceLine: "#787b86",
   overlayLine: "#2962ff",
   overlaySelection: "#131722",
   overlayHandleFill: "#ffffff",
@@ -499,10 +502,10 @@ export function getLwcChartOptions(theme: ChartsTheme) {
       },
     },
     rightPriceScale: {
-      borderColor: theme.canvas.grid,
+      borderColor: theme.canvas.border,  // TV-41: Use border token (more visible than grid)
     },
     timeScale: {
-      borderColor: theme.canvas.grid,
+      borderColor: theme.canvas.border,  // TV-41: Use border token (more visible than grid)
     },
   };
 }

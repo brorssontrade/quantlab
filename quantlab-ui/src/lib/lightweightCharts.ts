@@ -6,6 +6,7 @@ export {
   CrosshairMode,
   ColorType,
   LineStyle,
+  LineType,
   PriceScaleMode,
 } from "lightweight-charts";
 
@@ -14,6 +15,7 @@ export type {
   HistogramData,
   IChartApi,
   ISeriesApi,
+  IPriceLine,
   LineWidth,
   LogicalRange,
   MouseEventParams,

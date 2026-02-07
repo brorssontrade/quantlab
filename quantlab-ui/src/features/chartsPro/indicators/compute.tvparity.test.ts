@@ -59,7 +59,7 @@ import tvBaselines from "./__fixtures__/tv-parity-baselines.json";
 
 // Import fixtures for parity tests
 import metaFixture from "./__fixtures__/META.US.1d.json";
-import meta1hFixture from "./__fixtures__/meta.us.1h.json";
+import meta1hFixture from "./__fixtures__/meta.us.1h.resampled.json";  // Session-aligned from 5m
 import meta5mFixture from "./__fixtures__/meta.us.5m.json";
 import spy5mFixture from "./__fixtures__/spy.us.5m.json";
 import btcusd1dFixture from "./__fixtures__/btc-usd.1d.json";

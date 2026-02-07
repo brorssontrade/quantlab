@@ -95,14 +95,40 @@
 | `features/chartsPro/components/TVLayoutShell/TVRightRail.tsx` | **TV-39: Slim vertical icon rail (40-44px) for panel toggles (Watchlist/Alerts/Objects)** | TVRightRail, RailButton |
 | `features/chartspro/components/TopBar/` | **TV-1+: TopBar (symbol/timeframe/type), TV-10.2: Settings overlay, TV-12: Layout Manager** | TopBar.tsx, PrimaryControls.tsx, SettingsPanel.tsx, LayoutManager.tsx |
 | `features/chartspro/components/TopBar/TVCompactHeader.tsx` | **TV-39: TradingView-style compact single-row header (48-52px), replaces multi-row TopBar (~170px)** | TVCompactHeader, SymbolChip, TimeframeDropdown, ChartTypeDropdown, SimpleDropdown, CompactButton |
+| `features/chartsPro/components/TopBar/SymbolSearchModal.tsx` | **T-SEARCH-01: TradingView-style symbol search modal (category tabs, flags, recent, keyboard nav)** | SymbolSearchModal, CATEGORY_TABS, inferSymbolMetadata |
+| `features/chartsPro/components/TopBar/SymbolSearch.tsx` | **TV-2: Symbol search dropdown + modal integration** | SymbolSearch, SymbolSearchModal integration |
 | `features/chartsPro/components/TopBar/SettingsPanel.tsx` | **TV-10.2: Settings gear panel (appearance + scales, localStorage cp.settings.*)** | SettingsPanel, ChartSettings, DEFAULT_SETTINGS |
 | `features/chartsPro/components/TopBar/LayoutManager.tsx` | **TV-12.1-12.4: Layout save/load/delete manager (overlay panel, localStorage cp.layouts.*, JSON schema)** | LayoutManager, SavedLayout, LayoutManagerState |
-| `features/chartsPro/components/Modal/` | **TV-18.1+: Modal infrastructure (central portal for indicators, alerts, text edit, settings)** | ModalPortal, IndicatorsModal, TextModal, SettingsDialog, IndicatorsModalV2 |
+| `features/chartsPro/components/Modal/` | **TV-18.1+: Modal infrastructure (central portal for indicators, alerts, text edit, settings)** | ModalPortal, IndicatorsModal, TextModal, SettingsDialog, IndicatorsModalV2, IndicatorsModalV3, IndicatorSettingsModal |
 | `features/chartsPro/components/Modal/ModalPortal.tsx` | **TV-18.1: Central modal component (portal, Esc + click-outside, focus trap, data-testid)** | ModalPortal |
-| `features/chartsPro/components/Modal/IndicatorsModal.tsx` | **TV-18.2: Legacy indicators picker (deprecated, use IndicatorsModalV2)** | IndicatorsModal |
-| `features/chartsPro/components/Modal/IndicatorsModalV2.tsx` | **PRIO 3: TV-style indicators modal (categories sidebar, search, keyboard nav, premium styling)** | IndicatorsModalV2 |
+| `features/chartsPro/components/Modal/IndicatorsModal.tsx` | **TV-18.2: Legacy indicators picker (deprecated, use IndicatorsModalV3)** | IndicatorsModal |
+| `features/chartsPro/components/Modal/IndicatorsModalV2.tsx` | **PRIO 3: TV-style indicators modal (deprecated, use IndicatorsModalV3)** | IndicatorsModalV2 |
+| `features/chartsPro/components/Modal/IndicatorsModalV3.tsx` | **T-IND-POPUP-V3: Enhanced indicators modal (favorites, info panel, keyboard nav)** | IndicatorsModalV3 |
+| `features/chartsPro/components/Modal/IndicatorSettingsModal.tsx` | **T-IND-POPUP-V3: Per-indicator settings dialog (params, style, visibility)** | IndicatorSettingsModal |
 | `features/chartsPro/components/Modal/TextModal.tsx` | **TV-20.3: Text annotation modal (edit content, Enter=save, data-testid)** | TextModal |
 | `features/chartsPro/components/Modal/SettingsDialog.tsx` | **TV-23.1: Chart settings dialog (tabs: Appearance/Layout/Advanced, pending changes, localStorage)** | SettingsDialog |
+| `features/chartsPro/components/PaneStack/` | **T-PANE-STACK: Multi-pane system for separate indicators (true IChartApi per pane)** | PaneStack, IndicatorPane, PaneDivider, SyncController, types |
+| `features/chartsPro/components/PaneStack/PaneStack.tsx` | **T-PANE-STACK: Main container orchestrating indicator panes with dividers** | PaneStack, usePaneHeights |
+| `features/chartsPro/components/PaneStack/IndicatorPane.tsx` | **T-PANE-STACK: Individual indicator pane with own IChartApi and legend** | IndicatorPane, LegendItem |
+| `features/chartsPro/components/PaneStack/SyncController.ts` | **T-PANE-STACK: Cross-pane sync (timeScale + crosshair, loop protection)** | SyncController, getSyncController |
+| `features/chartsPro/components/PaneStack/PaneDivider.tsx` | **T-PANE-STACK: Resizable divider between panes (drag handle)** | PaneDivider |
+| `features/chartsPro/components/PaneStack/types.ts` | **T-PANE-STACK: Type definitions (PaneId, PaneState, SyncState, constants)** | PaneId, PaneState, PaneInstance |
+| `features/chartsPro/components/VwapBandsFillOverlay.tsx` | **PR-IND-08: VWAP band fill canvas overlay (3 bands, DPR-aware, RAF-batched, anchor breaks)** | VwapBandsFillOverlay |
+| `features/chartsPro/components/PivotPointsOverlay.tsx` | **Pivot Points Standard: Canvas overlay for horizontal pivot levels (P, S1-S5, R1-R5, labels, period boundaries)** | PivotPointsOverlay |
+| `features/chartsPro/components/PivotPointsHLOverlay.tsx` | **T-IND-BATCH1: Pivot Points High Low overlay (H/L markers at swing highs/lows)** | PivotPointsHLOverlay |
+| `features/chartsPro/components/ZigZagOverlay.tsx` | **T-IND-BATCH1: Zig Zag overlay (line segments connecting swing points with labels)** | ZigZagOverlay |
+| `features/chartsPro/components/AutoFibOverlay.tsx` | **T-IND-BATCH1: Auto Fib Retracement overlay (Fibonacci levels with fills and labels)** | AutoFibOverlay |
+| `features/chartsPro/components/EnvFillOverlay.tsx` | **T-IND-OVERLAY-BATCH: Envelope fill overlay (upper/lower band fill, DPR-aware, RAF-batched)** | EnvFillOverlay |
+| `features/chartsPro/components/MedianCloudOverlay.tsx` | **T-IND-OVERLAY-BATCH: Median cloud overlay (direction-aware fill, green up/violet down)** | MedianCloudOverlay |
+| `features/chartsPro/components/LinRegFillOverlay.tsx` | **T-IND-OVERLAY-BATCH: Linear Regression channel fill overlay (upper/lower deviation bands)** | LinRegFillOverlay |
+| `features/chartsPro/components/AlligatorOverlay.tsx` | **CP-B5: Williams Alligator overlay (forward-shifted SMMA lines: jaw/teeth/lips)** | AlligatorOverlay |
+| `features/chartsPro/components/FractalsOverlay.tsx` | **CP-B5: Williams Fractals overlay (up/down triangle markers at pivot highs/lows)** | FractalsOverlay |
+| `features/chartsPro/components/KnoxvilleOverlay.tsx` | **CP-B5: Knoxville Divergence overlay (divergence lines + +KD/-KD text labels, TV-parity)** | KnoxvilleOverlay |
+| `features/chartsPro/components/RSIDivergenceOverlay.tsx` | **CP-B5-FIX: RSI Divergence overlay (background fill, dotted levels, divergence lines, Bull/Bear labels)** | RSIDivergenceOverlay |
+| `features/chartsPro/indicators/highLowLookup.ts` | **T-IND-BATCH1: Shared helper (range extremes, pivot/swing detection, Fib levels, bar snapping)** | highestHigh, lowestLow, detectPivots, detectSwings, calculateFibLevels |
+| `features/chartsPro/components/DcFillOverlay.tsx` | **T-IND-DC-01: Donchian Channels fill canvas overlay (upper/lower band fill, DPR-aware, RAF-batched)** | DcFillOverlay |
+| `features/chartsPro/components/IndicatorLegend.tsx` | **T-IND-LEGEND-VISIBLE: Indicator legend for price-pane indicators** | IndicatorLegend |
+| `features/chartsPro/components/IndicatorFloatingToolbar.tsx` | **T-IND-POPUP-V3: Enhanced floating toolbar per indicator pane** | IndicatorFloatingToolbar |
 | `features/chartsPro/state/settings.ts` | **TV-23.1: Settings Zustand store (ChartSettings, pendingSettings, localStorage cp.settings)** | useSettingsStore, DEFAULT_SETTINGS |
 | `features/chartsPro/components/LeftToolbar/` | **Day 7+: Left toolbar (7 tools, keyboard shortcuts, persistence, TV-3.9: responsive mobile pill)** | LeftToolbar.tsx, MobilePill.tsx, ToolButton.tsx |
 | `features/chartsPro/components/FloatingToolbar/` | **TV-30.1+30.2a: Floating quick-edit toolbar (appears when drawing selected, portal-based, stroke/fill opacity sliders)** | FloatingToolbar.tsx, index.ts |
@@ -163,16 +189,30 @@
 | `features/chartsPro/components/LastPriceLine.tsx` | **Day 9+10: Last price line with countdown (integrated)** | LastPriceLine |
 | `features/chartsPro/components/CrosshairOverlay.tsx` | **Day 10: Testable crosshair pills** | CrosshairOverlay |
 | `features/chartsPro/components/Watermark.tsx` | **Day 10: Symbol watermark** | Watermark |
-| `features/chartsPro/hooks/` | Custom hooks | useOhlcv, useIndicators |
+| `features/chartsPro/hooks/` | Custom hooks | useOhlcv, useIndicators, useBreadthData |
+| `features/chartsPro/hooks/useBreadthData.ts` | **CP-B6: Market breadth data hook (ADR/ADL parity)** | useBreadthData, alignBreadthToChartBars |
 | `features/chartsPro/state/` | State management | controls, drawings, toolbar |
 | `features/chartsPro/state/drawings.ts` | **T-013: Drawings state (Zustand, localStorage + backend sync, debounced autosave, hydration)** | useDrawings, hydrateFromBackend |
 | `features/chartsPro/state/toolbar.ts` | **PRIO 2: Toolbar state (Zustand, compareItems, overlayState, inspectorOpen, compareScaleMode)** | useToolbarStore, CompareItem, OverlayState |
+| `features/chartsPro/state/indicatorFavorites.ts` | **T-IND-POPUP-V3: Indicator favorites store (Zustand, localStorage persistence, recent tracking)** | useIndicatorFavoritesStore, toggleFavorite, addRecent |
 | `features/chartsPro/api/drawingsApi.ts` | **T-013: Backend API client (CRUD, serialization, payloadToDrawing, drawingToPayload)** | fetchDrawings, saveDrawings, deleteDrawing |
 | `features/chartsPro/types.ts` | **TV-7+TV-20+TV-24: Type definitions, DrawingKind (hline, vline, trend, channel, pitchfork, rectangle, text, priceRange, dateRange, dateAndPriceRange, fibRetracement, ray, extendedLine), IndicatorInstance** | DrawingKind, Drawing, Pitchfork, Channel, TextDrawing, Ray, ExtendedLine, IndicatorInstance |
-| `features/chartsPro/indicators/` | **PRIO 3: Technical indicators (registry, compute, worker)** | indicatorManifest, compute, registryV2 |
-| `features/chartsPro/indicators/indicatorManifest.ts` | **PRIO 3: Indicator registry manifest (9 indicators, categories, inputs, outputs, TV defaults)** | INDICATOR_MANIFESTS, CATEGORY_META |
-| `features/chartsPro/indicators/compute.ts` | **PRIO 3: Pure compute functions (SMA, EMA, RSI, MACD, BB, ATR, ADX, VWAP, OBV)** | computeSMA, computeEMA, ... |
-| `features/chartsPro/indicators/registryV2.ts` | **PRIO 3: Unified compute with caching (50 entries, 5min TTL)** | computeIndicator, cache |
+| `features/chartsPro/indicators/` | **PRIO 3: Technical indicators (registry, compute, worker)** | indicatorManifest, compute, registryV2, indicatorDocs |
+| `features/chartsPro/indicators/indicatorManifest.ts` | **PRIO 3: Indicator registry manifest (82 indicators, categories, inputs, outputs, TV defaults)** | INDICATOR_MANIFESTS, CATEGORY_META, IndicatorDocs |
+| `features/chartsPro/indicators/indicatorDocs.ts` | **T-IND-POPUP-V3: TradingView-style indicator documentation (82 indicators, incl. VP suite, breadth)** | INDICATOR_DOCS, getIndicatorDocs |
+| `features/chartsPro/indicators/compute.ts` | **PRIO 3: Pure compute functions (SMA, EMA, RSI, MACD, AO, BB, ATR, ADX, VWAP, OBV, StochRSI, Williams %R, MFI, TRIX, TSI, SMII, SMIO, Coppock, HV, BBW, BBTrend, PVT, Klinger, PVI, NVI, RelVol, etc.)** | computeSMA, computeEMA, computeAO, computeMFI, computeTRIX, computeTSI, computeSMII, computeSMIO, computeCoppockCurve, computeHistoricalVolatility, computeBBW, computeBBTrend, computePVT, computeKlingerOscillator, computePVI, computeNVI, computeRelVolAtTime, ... |
+| `features/chartsPro/indicators/registryV2.ts` | **PRIO 3: Unified compute with caching (82 entries, 5min TTL)** | computeIndicator, cache |
+| `features/chartsPro/hooks/useVRVP.ts` | **CP-B7: Visible Range Volume Profile hook** | useVRVP |
+| `features/chartsPro/hooks/useVPFR.ts` | **CP-B7: Fixed Range Volume Profile hook (two-click anchor)** | useVPFR |
+| `features/chartsPro/hooks/useAAVP.ts` | **CP-B7: Auto Anchored Volume Profile hook** | useAAVP |
+| `features/chartsPro/hooks/useSVP.ts` | **CP-B7: Session Volume Profile hook (EXCHANGE_SESSIONS config)** | useSVP |
+| `features/chartsPro/hooks/useSVPHD.ts` | **CP-B7: Session Volume Profile HD (two-pass rendering)** | useSVPHD |
+| `features/chartsPro/hooks/usePVP.ts` | **CP-B7: Periodic Volume Profile hook** | usePVP |
+| `features/chartsPro/hooks/useLtfData.ts` | **CP-B7: Lower timeframe data hook for VP** | useLtfData |
+| `features/chartsPro/components/VolumeProfileOverlay.tsx` | **CP-B7: Volume Profile canvas overlay (VPErrorBoundary, coordinate guards)** | VolumeProfileOverlay, VPErrorBoundary |
+| `features/chartsPro/components/Modal/IndicatorsModalV3.tsx` | **T-IND-POPUP-V3: Enhanced indicator picker (favorites, info panel, search, keyboard nav)** | IndicatorsModalV3 |
+| `features/chartsPro/components/Modal/IndicatorSettingsModal.tsx` | **T-IND-POPUP-V3: Indicator settings modal (params, style, visibility)** | IndicatorSettingsModal |
+| `features/chartsPro/components/IndicatorFloatingToolbar.tsx` | **T-IND-POPUP-V3: TV-style floating toolbar per indicator pane** | IndicatorFloatingToolbar, PaneSeparator |
 | `features/chartsPro/theme.ts` | Chart theming (TradingView-style colors Day 10) | - |
 | `features/fundamentals/` | Fundamentals tab | FundamentalsTab |
 | `features/fundamentals/FundamentalsTab.tsx` | Main component | - |
@@ -214,7 +254,21 @@
 | `tests/chartsPro.objects.alerts.spec.ts` | **Day 10: Objects + Alerts contract tests (9 tests)** |
 | `tests/chartsPro.cp2.spec.ts` | CP2 feature tests |
 | `tests/chartsPro.cp7.spec.ts` | CP7 feature tests |
+| `tests/chartsPro.indicatorAudit.spec.ts` | **Parity Audit: Systematic audit harness for all 82 indicators (smoke + screenshots)** |
 | `tests/chartsPro.*.spec.ts` | Various chart tests |
+
+### `src/features/chartsPro/indicators/__fixtures__/` – Golden Test Fixtures
+
+| Path | Purpose |
+|------|---------|
+| `__fixtures__/META.US.1d.json` | **Parity Audit: 50 bars OHLCV + golden values for META daily** |
+
+### `src/features/chartsPro/indicators/` – Indicator Tests
+
+| Path | Purpose |
+|------|---------|
+| `indicators/compute.test.ts` | Unit tests for compute functions (145+ tests) |
+| `indicators/compute.golden.test.ts` | **Parity Audit: Golden value tests using fixture data** |
 
 ---
 
@@ -234,6 +288,7 @@
 |------|---------|
 | `data/eodhd_client.py` | EODHD API client |
 | `data/alphavantage_client.py` | Alpha Vantage client |
+| `data/breadth_provider.py` | **CP-B6: Market breadth data provider (ADR/ADL parity)** |
 
 ### `quantkit/indicators/` – Technical Indicators
 
@@ -318,9 +373,17 @@
 |------|---------|
 | `scripts/backtest_min.py` | Minimal backtest runner |
 | `scripts/check_db.py` | Database health check |
+| `scripts/check_symbol_health.py` | **T-HEALTH-01: Verify all symbols return valid OHLCV data (API health, latency, JSON output)** |
 | `scripts/init_duckdb.py` | Initialize DuckDB |
 | `scripts/optimize_baseline.py` | Baseline optimization |
 | `scripts/plot_symbol.py` | Symbol chart plotter |
+
+### `quantlab-ui/scripts/` – Frontend Automation
+
+| Path | Purpose |
+|------|---------|
+| `quantlab-ui/scripts/indicatorInventory.ts` | **Parity Audit: Inventory check (manifest/registry/docs count validation)** |
+| `quantlab-ui/scripts/generateParityMatrix.ts` | **Parity Audit: Generate INDICATOR_PARITY_MATRIX.md from manifest** |
 
 ---
 

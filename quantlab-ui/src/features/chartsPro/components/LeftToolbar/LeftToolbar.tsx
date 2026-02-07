@@ -145,11 +145,7 @@ function DesktopToolbar({
 
   return (
     <div
-      className="
-        hidden md:flex flex-col items-center
-        border-r border-slate-800/40
-        bg-slate-950/40
-      "
+      className="hidden md:flex flex-col items-center"
       style={{
         gap: 'var(--cp-gap-xs)',
         padding: '8px 4px', /* TV-style compact padding - prevents child overflow */
@@ -163,6 +159,8 @@ function DesktopToolbar({
         overflow: 'hidden', /* Clip any overflow - no scrollbars */
         overflowX: 'clip', /* Modern clip is stronger than hidden */
         overflowY: 'auto', /* Allow vertical scroll if needed */
+        backgroundColor: 'var(--tv-panel)',
+        borderRight: '1px solid var(--tv-border)',
       }}
       data-testid="tv-leftbar-container"
     >
@@ -170,7 +168,8 @@ function DesktopToolbar({
       {favoriteTools.length > 0 && (
         <>
           <div 
-            className="text-[9px] text-yellow-500/70 font-medium uppercase tracking-wider mt-1"
+            className="text-[9px] font-medium uppercase tracking-wider mt-1"
+            style={{ color: 'var(--tv-yellow, #f7a600)', opacity: 0.7 }}
             title="Starred favorites"
           >
             <Star className="h-3 w-3 inline-block" fill="currentColor" />
@@ -183,16 +182,16 @@ function DesktopToolbar({
               onClick={() => handleToolSelect(tool.id)}
               title={`${tool.label}${tool.shortcut ? ` (${tool.shortcut})` : ''}`}
               data-testid={`lefttoolbar-fav-${tool.id}`}
-              className={`h-9 w-9 ${
-                activeTool === tool.id
-                  ? "bg-slate-700 text-white"
-                  : "text-slate-400 hover:text-slate-200"
-              }`}
+              className="h-9 w-9"
+              style={{
+                backgroundColor: activeTool === tool.id ? 'var(--tv-panel-hover)' : 'transparent',
+                color: activeTool === tool.id ? 'var(--tv-text)' : 'var(--tv-text-muted)',
+              }}
             >
               <span className="text-base">{tool.icon}</span>
             </Button>
           ))}
-          <div className="my-0.5 w-6 border-t border-yellow-500/30" />
+          <div className="my-0.5 w-6" style={{ borderTop: '1px solid var(--tv-yellow, #f7a600)', opacity: 0.3 }} />
         </>
       )}
       
@@ -200,7 +199,8 @@ function DesktopToolbar({
       {recentTools.length > 0 && (
         <>
           <div 
-            className="text-[9px] text-slate-500 font-medium uppercase tracking-wider"
+            className="text-[9px] font-medium uppercase tracking-wider"
+            style={{ color: 'var(--tv-text-muted)' }}
             title="Recently used"
           >
             <Clock className="h-3 w-3 inline-block" />
@@ -213,16 +213,16 @@ function DesktopToolbar({
               onClick={() => handleToolSelect(tool.id)}
               title={`${tool.label} (recent)`}
               data-testid={`lefttoolbar-recent-${tool.id}`}
-              className={`h-8 w-8 ${
-                activeTool === tool.id
-                  ? "bg-slate-700 text-white"
-                  : "text-slate-500 hover:text-slate-300"
-              }`}
+              className="h-8 w-8"
+              style={{
+                backgroundColor: activeTool === tool.id ? 'var(--tv-panel-hover)' : 'transparent',
+                color: activeTool === tool.id ? 'var(--tv-text)' : 'var(--tv-text-muted)',
+              }}
             >
               <span className="text-sm">{tool.icon}</span>
             </Button>
           ))}
-          <div className="my-0.5 w-6 border-t border-slate-700/60" />
+          <div className="my-0.5 w-6" style={{ borderTop: '1px solid var(--tv-border)' }} />
         </>
       )}
       
@@ -243,18 +243,19 @@ function DesktopToolbar({
               onClick={(e) => handleGroupClick(group, e.currentTarget)}
               title={group.label}
               data-testid={`lefttoolbar-group-${group.id}`}
-              className={`h-9 w-9 relative ${
-                groupActive
-                  ? "bg-slate-700 text-white"
-                  : "text-slate-400 hover:text-slate-200"
-              } ${isOpen ? "ring-2 ring-purple-500/50" : ""}`}
+              className={`h-9 w-9 relative ${isOpen ? "ring-2 ring-[var(--tv-blue)]/50" : ""}`}
+              style={{
+                backgroundColor: groupActive ? 'var(--tv-panel-hover)' : 'transparent',
+                color: groupActive ? 'var(--tv-text)' : 'var(--tv-text-muted)',
+              }}
             >
               <span className="text-base">{getGroupIcon(group, activeTool)}</span>
               
               {/* Flyout indicator (small triangle) */}
               {hasMultipleTools && (
                 <span 
-                  className="absolute bottom-0.5 right-0.5 text-[8px] text-slate-500"
+                  className="absolute bottom-0.5 right-0.5 text-[8px]"
+                  style={{ color: 'var(--tv-text-dim)' }}
                   aria-hidden="true"
                 >
                   ▸
@@ -266,7 +267,7 @@ function DesktopToolbar({
       })}
 
       {/* Divider */}
-      <div className="my-1 w-6 border-t border-slate-700/60" />
+      <div className="my-1 w-6" style={{ borderTop: '1px solid var(--tv-border)' }} />
 
       {/* Utility buttons */}
       <Button
@@ -274,7 +275,8 @@ function DesktopToolbar({
         size="icon"
         title="Undo (Ctrl+Z)"
         data-testid="tool-undo"
-        className="h-9 w-9 text-slate-400 hover:text-slate-200"
+        className="h-9 w-9"
+        style={{ color: 'var(--tv-text-muted)' }}
       >
         <Undo2 className="h-4 w-4" />
       </Button>
@@ -284,7 +286,8 @@ function DesktopToolbar({
         size="icon"
         title="Delete (Del)"
         data-testid="tool-delete"
-        className="h-9 w-9 text-slate-400 hover:text-slate-200"
+        className="h-9 w-9"
+        style={{ color: 'var(--tv-text-muted)' }}
       >
         <Trash2 className="h-4 w-4" />
       </Button>
@@ -294,25 +297,24 @@ function DesktopToolbar({
         size="icon"
         title="Fit to content (Ctrl+F)"
         data-testid="tool-fit"
-        className="h-9 w-9 text-slate-400 hover:text-slate-200"
+        className="h-9 w-9"
+        style={{ color: 'var(--tv-text-muted)' }}
       >
         <Maximize2 className="h-4 w-4" />
       </Button>
 
       {/* TV-20.14: Drawing Controls (Lock/Hide/Remove) */}
-      <div className="my-1 w-6 border-t border-slate-700/60" />
+      <div className="my-1 w-6" style={{ borderTop: '1px solid var(--tv-border)' }} />
 
       <Button
         variant="ghost"
         size="icon"
         title={drawingsLocked ? "Unlock all drawings" : "Lock all drawings"}
         data-testid="drawings-lock-toggle"
-        className={cn(
-          "h-9 w-9",
-          drawingsLocked 
-            ? "text-amber-400 hover:text-amber-300" 
-            : "text-slate-400 hover:text-slate-200"
-        )}
+        className="h-9 w-9"
+        style={{
+          color: drawingsLocked ? 'var(--tv-yellow)' : 'var(--tv-text-muted)',
+        }}
         onClick={onToggleDrawingsLocked}
       >
         {drawingsLocked ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
@@ -323,12 +325,10 @@ function DesktopToolbar({
         size="icon"
         title={drawingsHidden ? "Show all drawings" : "Hide all drawings"}
         data-testid="drawings-hide-toggle"
-        className={cn(
-          "h-9 w-9",
-          drawingsHidden 
-            ? "text-amber-400 hover:text-amber-300" 
-            : "text-slate-400 hover:text-slate-200"
-        )}
+        className="h-9 w-9"
+        style={{
+          color: drawingsHidden ? 'var(--tv-yellow)' : 'var(--tv-text-muted)',
+        }}
         onClick={onToggleDrawingsHidden}
       >
         {drawingsHidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -339,7 +339,8 @@ function DesktopToolbar({
         size="icon"
         title="Remove all drawings"
         data-testid="drawings-remove-all"
-        className="h-9 w-9 text-slate-400 hover:text-red-400"
+        className="h-9 w-9"
+        style={{ color: 'var(--tv-text-muted)' }}
         onClick={onRemoveAllDrawings}
       >
         <Trash2 className="h-4 w-4" />
@@ -429,16 +430,12 @@ function MobilePill({ activeTool, onSelectTool }: LeftToolbarProps) {
       data-testid="tv-leftbar-mobile-container"
     >
       <div
-        className="
-          pointer-events-auto
-          flex items-center
-          bg-slate-900/95 backdrop-blur-sm
-          border border-slate-700/60
-          rounded-full shadow-lg
-        "
+        className="pointer-events-auto flex items-center backdrop-blur-sm rounded-full shadow-lg"
         style={{
           gap: 'var(--cp-gap-xs)',
           padding: 'var(--cp-pad-xs) var(--cp-pad-sm)',
+          backgroundColor: 'var(--tv-panel)',
+          border: '1px solid var(--tv-border)',
         }}
         data-testid="tv-leftbar-pill"
       >
@@ -449,7 +446,8 @@ function MobilePill({ activeTool, onSelectTool }: LeftToolbarProps) {
           onClick={() => setExpanded(!expanded)}
           title={expanded ? "Collapse tools" : "Expand tools"}
           data-testid="tool-pill-toggle"
-          className="h-10 w-10 text-slate-400 hover:text-slate-200 flex-shrink-0"
+          className="h-10 w-10 flex-shrink-0"
+          style={{ color: 'var(--tv-text-muted)' }}
         >
           {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
         </Button>
@@ -457,7 +455,7 @@ function MobilePill({ activeTool, onSelectTool }: LeftToolbarProps) {
         {expanded && (
           <>
             {/* Divider */}
-            <div className="h-6 w-px bg-slate-700/60" />
+            <div className="h-6 w-px" style={{ backgroundColor: 'var(--tv-border)' }} />
 
             {/* Drawing tools (enabled only) */}
             {MOBILE_TOOLS.map((tool) => (
@@ -468,18 +466,18 @@ function MobilePill({ activeTool, onSelectTool }: LeftToolbarProps) {
                 onClick={() => onSelectTool(tool.id)}
                 title={tool.label}
                 data-testid={`tool-${tool.id}`}
-                className={`h-10 w-10 text-lg ${
-                  activeTool === tool.id
-                    ? "bg-slate-600 text-white"
-                    : "text-slate-400 hover:text-slate-200"
-                }`}
+                className="h-10 w-10 text-lg"
+                style={{
+                  backgroundColor: activeTool === tool.id ? 'var(--tv-panel-hover)' : 'transparent',
+                  color: activeTool === tool.id ? 'var(--tv-text)' : 'var(--tv-text-muted)',
+                }}
               >
                 {tool.icon}
               </Button>
             ))}
 
             {/* Divider */}
-            <div className="h-6 w-px bg-slate-700/60" />
+            <div className="h-6 w-px" style={{ backgroundColor: 'var(--tv-border)' }} />
 
             {/* Utility buttons (only Undo + Delete for mobile) */}
             <Button
@@ -487,7 +485,8 @@ function MobilePill({ activeTool, onSelectTool }: LeftToolbarProps) {
               size="icon"
               title="Undo"
               data-testid="tool-undo"
-              className="h-10 w-10 text-slate-400 hover:text-slate-200"
+              className="h-10 w-10"
+              style={{ color: 'var(--tv-text-muted)' }}
             >
               <Undo2 className="h-5 w-5" />
             </Button>
@@ -497,7 +496,8 @@ function MobilePill({ activeTool, onSelectTool }: LeftToolbarProps) {
               size="icon"
               title="Delete"
               data-testid="tool-delete"
-              className="h-10 w-10 text-slate-400 hover:text-slate-200"
+              className="h-10 w-10"
+              style={{ color: 'var(--tv-text-muted)' }}
             >
               <Trash2 className="h-5 w-5" />
             </Button>

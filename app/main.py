@@ -1217,7 +1217,9 @@ _CHART_FETCH_PLAN: dict[str, list[tuple[str, str | None]]] = {
     "1W": [("1d", "1w")],
 }
 
-_CHART_MAX_LIMIT = 5000
+# OBV-parity: Increase max limit to support extended history for cumulative indicators
+# Daily/Weekly can use up to 15k bars (~60 years), which covers most stock histories
+_CHART_MAX_LIMIT = 15000
 _CHART_MIN_LIMIT = 100
 
 
@@ -1729,6 +1731,339 @@ def chart_ohlcv(
     if error_detail:
         response.headers["X-Data-Error"] = error_detail
     return payload
+
+
+# ---------------------------------------------------------------------
+# INTRABAR Endpoint - Lower timeframe data for Volume Delta/CVD
+# ---------------------------------------------------------------------
+
+# Map chart timeframe to intrabar timeframe (per TV auto-timeframe rules)
+# EODHD only supports 5m and 1h, so this is the closest approximation
+_INTRABAR_TF_MAP: dict[str, str] = {
+    "D": "5m",    # Daily → 5-minute bars (TV does D→5m)
+    "1W": "1h",   # Weekly → 1-hour bars (TV does W→60m)
+    "4h": "1h",   # 4-hour → 1-hour bars (closest available)
+    "1h": "5m",   # 1-hour → 5-minute bars (closest to TV's 1m)
+    "15m": "5m",  # 15-min → 5-minute bars (closest available)
+    "5m": "5m",   # 5-min → 5-minute bars (no lower available)
+}
+
+_INTRABAR_CACHE_TTL = 600  # 10 minutes
+_INTRABAR_CACHE: dict[tuple[str, str, str | None, str | None], tuple[float, list[dict[str, object]]]] = {}
+
+
+class IntrabarRow(BaseModel):
+    t: str
+    o: float
+    h: float
+    l: float
+    c: float
+    v: float
+
+
+class IntrabarResponse(BaseModel):
+    symbol: str
+    chartTf: str
+    intrabarTf: str
+    rows: List[IntrabarRow]
+    count: int
+    error: str | None = None
+
+
+@app.get("/chart/intrabars", response_model=IntrabarResponse)
+def chart_intrabars(
+    response: Response,
+    symbol: str = Query(..., description="Symbol, e.g. AAPL.US"),
+    chartTf: str = Query("D", description="Chart timeframe: D, 1W, 4h, 1h, 15m, 5m"),
+    ltfTf: str | None = Query(None, description="Override LTF timeframe: 5m, 1h. If provided, ignores chartTf mapping."),
+    start: str | None = Query(None, description="ISO start timestamp of chart bars"),
+    end: str | None = Query(None, description="ISO end timestamp of chart bars"),
+    limit: int = Query(5000, description="Maximum number of intrabar candles to return"),
+) -> IntrabarResponse:
+    """
+    Fetch lower-timeframe (intrabar) data for Volume Delta/CVD/Volume Profile calculations.
+    
+    Example: For a Daily chart, returns 5-minute bars within the date range.
+    Frontend aggregates these to compute up/down volume per chart bar or volume profile.
+    
+    For Volume Profiles: use ltfTf parameter to specify exact LTF resolution.
+    """
+    clean_symbol = symbol.strip()
+    if not clean_symbol:
+        raise HTTPException(status_code=422, detail="symbol is required")
+    
+    norm_chart_tf = _normalize_chart_bar(chartTf)
+    
+    # If ltfTf is provided, use it directly (for Volume Profiles)
+    # Otherwise, derive from chart timeframe (for Volume Delta/CVD)
+    if ltfTf:
+        # Validate and normalize ltfTf
+        ltf_lower = ltfTf.lower().strip()
+        if ltf_lower in ("5m", "5"):
+            intrabar_tf = "5m"
+        elif ltf_lower in ("1h", "60m", "60"):
+            intrabar_tf = "1h"
+        elif ltf_lower in ("1d", "d", "1"):
+            intrabar_tf = "1d"
+        else:
+            # Default to 5m if unknown
+            intrabar_tf = "5m"
+    else:
+        intrabar_tf = _INTRABAR_TF_MAP.get(norm_chart_tf, "5m")
+    
+    capped_limit = max(100, min(int(limit or 5000), 10000))
+    
+    start_ts = _parse_chart_ts(start)
+    end_ts = _parse_chart_ts(end)
+    
+    cache_key = (
+        clean_symbol.upper(),
+        intrabar_tf,
+        start_ts.isoformat() if start_ts else None,
+        end_ts.isoformat() if end_ts else None,
+    )
+    now = time.time()
+    cached = _INTRABAR_CACHE.get(cache_key)
+    if cached and now - cached[0] < _INTRABAR_CACHE_TTL:
+        rows_cached = cached[1]
+        response.headers["X-Cache"] = "hit"
+        response.headers["X-Intrabar-Tf"] = intrabar_tf
+        return IntrabarResponse(
+            symbol=clean_symbol,
+            chartTf=norm_chart_tf,
+            intrabarTf=intrabar_tf,
+            rows=[IntrabarRow(**r) for r in rows_cached[:capped_limit]],
+            count=len(rows_cached[:capped_limit]),
+        )
+    
+    error_detail: str | None = None
+    try:
+        # Fetch intrabar data from EODHD
+        # intrabar_tf is either "5m" or "1h"
+        df = fetch_timeseries(clean_symbol, intrabar_tf, force=False)
+        
+        if df.empty:
+            # Try force refresh
+            df = fetch_timeseries(clean_symbol, intrabar_tf, force=True)
+        
+        if df.empty:
+            raise HTTPException(status_code=404, detail=f"No intrabar data for symbol '{clean_symbol}'")
+        
+        # Normalize column names (fetch_timeseries returns ts, open, high, low, close, volume)
+        df = df.rename(columns={
+            "ts": "Ts",
+            "open": "Open",
+            "high": "High",
+            "low": "Low",
+            "close": "Close",
+            "volume": "Volume",
+        })
+        
+        # Filter by date range
+        if "Ts" in df.columns:
+            df["Ts"] = pd.to_datetime(df["Ts"], utc=True)
+            if start_ts is not None:
+                df = df[df["Ts"] >= start_ts]
+            if end_ts is not None:
+                df = df[df["Ts"] <= end_ts]
+        
+        df = df.sort_values("Ts").head(capped_limit)
+        
+        rows: list[IntrabarRow] = []
+        for row in df.itertuples(index=False):
+            ts = pd.Timestamp(row.Ts)
+            if ts.tzinfo is None:
+                ts = ts.tz_localize("UTC")
+            rows.append(IntrabarRow(
+                t=ts.isoformat(),
+                o=float(row.Open),
+                h=float(row.High),
+                l=float(row.Low),
+                c=float(row.Close),
+                v=float(row.Volume),
+            ))
+        
+        # Cache the result
+        rows_dict = [r.model_dump() for r in rows]
+        _INTRABAR_CACHE[cache_key] = (now, rows_dict)
+        
+        response.headers["X-Cache"] = "miss"
+        response.headers["X-Intrabar-Tf"] = intrabar_tf
+        return IntrabarResponse(
+            symbol=clean_symbol,
+            chartTf=norm_chart_tf,
+            intrabarTf=intrabar_tf,
+            rows=rows,
+            count=len(rows),
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning("chart intrabars: unexpected failure for %s: %s", clean_symbol, exc, exc_info=True)
+        error_detail = str(exc)
+    
+    return IntrabarResponse(
+        symbol=clean_symbol,
+        chartTf=norm_chart_tf,
+        intrabarTf=intrabar_tf,
+        rows=[],
+        count=0,
+        error=error_detail,
+    )
+
+
+# ============================================================================
+# Market Breadth Endpoint (for ADR/ADL/ADR_B TradingView parity)
+# ============================================================================
+
+class BreadthRow(BaseModel):
+    """Single breadth data point: advances/declines for one day."""
+    t: str  # ISO timestamp
+    adv: int  # Advancing issues count
+    dec: int  # Declining issues count
+    unch: int = 0  # Unchanged issues count (optional)
+
+
+class BreadthResponse(BaseModel):
+    """Response from /chart/breadth endpoint."""
+    marketKey: str  # e.g., "US", "NYSE", "NASDAQ"
+    timeframe: str  # e.g., "1d"
+    rows: List[BreadthRow]
+    count: int
+    error: str | None = None
+    adlSeed: int = 0  # Starting ADL value for historical parity
+
+
+# Breadth cache
+_BREADTH_CACHE: dict[tuple, tuple[float, list]] = {}
+_BREADTH_CACHE_TTL = 3600  # 1 hour (breadth data is daily, rarely changes intraday)
+
+
+@app.get("/chart/breadth", response_model=BreadthResponse)
+def chart_breadth(
+    response: Response,
+    symbol: str = Query(..., description="Symbol to determine market, e.g. META.US"),
+    timeframe: str = Query("1d", description="Timeframe for breadth data (currently only 1d)"),
+    start: str | None = Query(None, description="ISO start timestamp"),
+    end: str | None = Query(None, description="ISO end timestamp"),
+    limit: int = Query(5000, description="Maximum number of breadth bars to return"),
+) -> BreadthResponse:
+    """
+    Fetch historical market breadth data for ADR/ADL/ADR_B indicator calculations.
+    
+    Breadth data represents the count of advancing and declining stocks in the
+    relevant market (e.g., NYSE, NASDAQ, or combined US markets) for each day.
+    
+    TradingView uses this data for:
+    - ADR (Advance/Decline Ratio): advances / declines per bar
+    - ADR_B (Advance/Decline Ratio Bars): rolling sum of advances / rolling sum of declines
+    - ADL (Advance/Decline Line): cumulative sum of (advances - declines)
+    
+    Note: ADL values require a seed value for absolute parity with TradingView.
+    The adlSeed field provides this offset (calibrated against TV reference).
+    """
+    from quantkit.data.breadth_provider import (
+        get_market_key_for_symbol,
+        load_breadth_series,
+        compute_adl_seed,
+    )
+    
+    clean_symbol = symbol.strip()
+    if not clean_symbol:
+        raise HTTPException(status_code=422, detail="symbol is required")
+    
+    norm_tf = timeframe.lower().strip()
+    if norm_tf not in ("1d", "d", "day", "daily"):
+        # Currently only daily breadth data is supported
+        norm_tf = "1d"
+    
+    capped_limit = max(100, min(int(limit or 5000), 10000))
+    
+    # Determine market key from symbol
+    market_key = get_market_key_for_symbol(clean_symbol)
+    
+    # Parse date range
+    start_ts = _parse_chart_ts(start)
+    end_ts = _parse_chart_ts(end)
+    
+    # Check cache
+    cache_key = (market_key, norm_tf, start_ts, end_ts)
+    now = time.time()
+    cached = _BREADTH_CACHE.get(cache_key)
+    if cached and now - cached[0] < _BREADTH_CACHE_TTL:
+        rows_cached = cached[1]
+        adl_seed = cached[2] if len(cached) > 2 else 0
+        response.headers["X-Cache"] = "hit"
+        response.headers["X-Market-Key"] = market_key
+        return BreadthResponse(
+            marketKey=market_key,
+            timeframe=norm_tf,
+            rows=[BreadthRow(**r) for r in rows_cached[:capped_limit]],
+            count=len(rows_cached[:capped_limit]),
+            adlSeed=adl_seed,
+        )
+    
+    error_detail: str | None = None
+    try:
+        # Load breadth data from provider
+        df = load_breadth_series(market_key, norm_tf, start_ts, end_ts)
+        
+        if df.empty:
+            # No breadth data available - return error message
+            return BreadthResponse(
+                marketKey=market_key,
+                timeframe=norm_tf,
+                rows=[],
+                count=0,
+                error=f"No breadth data available for market '{market_key}'. Run breadth ingestion job or configure data source.",
+                adlSeed=0,
+            )
+        
+        # Get ADL seed for parity
+        adl_seed = compute_adl_seed(market_key, start_ts.date() if start_ts else None)
+        
+        # Convert to response rows
+        df = df.sort_values("time").head(capped_limit)
+        rows: list[BreadthRow] = []
+        for _, row in df.iterrows():
+            ts = pd.Timestamp(row["time"])
+            if ts.tzinfo is None:
+                ts = ts.tz_localize("UTC")
+            rows.append(BreadthRow(
+                t=ts.isoformat(),
+                adv=int(row.get("advances", 0)),
+                dec=int(row.get("declines", 0)),
+                unch=int(row.get("unchanged", 0)),
+            ))
+        
+        # Cache the result
+        rows_dict = [r.model_dump() for r in rows]
+        _BREADTH_CACHE[cache_key] = (now, rows_dict, adl_seed)
+        
+        response.headers["X-Cache"] = "miss"
+        response.headers["X-Market-Key"] = market_key
+        return BreadthResponse(
+            marketKey=market_key,
+            timeframe=norm_tf,
+            rows=rows,
+            count=len(rows),
+            adlSeed=adl_seed,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning("chart breadth: unexpected failure for %s: %s", market_key, exc, exc_info=True)
+        error_detail = str(exc)
+    
+    return BreadthResponse(
+        marketKey=market_key,
+        timeframe=norm_tf,
+        rows=[],
+        count=0,
+        error=error_detail,
+        adlSeed=0,
+    )
+
 
 def _format_indicator_description(payload: dict[str, object]) -> str:
     pieces: list[str] = []

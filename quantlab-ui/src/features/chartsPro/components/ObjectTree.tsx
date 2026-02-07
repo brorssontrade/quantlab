@@ -153,9 +153,9 @@ export function ObjectTree({
                       className={cn(
                         "chartspro-object-row rounded-sm border px-2 py-1 text-[11px] transition",
                         "grid grid-cols-[1fr_auto_auto_auto_auto] gap-1.5 items-center",
-                        "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#2962ff]",
+                        "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--tv-blue)]",
                         isDragging && "opacity-70",
-                        isDragOver && "ring-1 ring-[#2962ff]"
+                        isDragOver && "ring-1 ring-[var(--tv-blue)]"
                       )}
                       style={{
                         backgroundColor: isSelected ? "var(--tv-bg-secondary, #2a2e39)" : "transparent",

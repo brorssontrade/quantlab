@@ -40,8 +40,11 @@ function mapCrosshairMode(mode: CrosshairMode): LwCrosshairMode {
 }
 
 /**
- * TV-23.2 + TV-35.2: Apply chart-level settings (background, grid, crosshair) from AppearanceSettings
- * Enhanced with typography tokens for TradingView-level text rendering
+ * TV-23.2 + TV-35.2 + TV-40: Apply chart-level settings from AppearanceSettings
+ * 
+ * THEME PRIORITY (TV-40): Theme tokens ALWAYS win for background/grid/crosshair.
+ * AppearanceSettings are user-customizable "extras" (grid style, crosshair mode),
+ * but core palette comes from theme for proper light/dark switching.
  */
 export function applyAppearanceToChart(
   chart: IChartApi,
@@ -52,9 +55,10 @@ export function applyAppearanceToChart(
   const gridStyle = mapGridStyle(appearance.gridStyle);
   const crosshairMode = mapCrosshairMode(appearance.crosshairMode);
 
+  // TV-40: Use theme tokens for palette, appearance for behaviors (style, visibility)
   const options: DeepPartial<ChartOptions> = {
     layout: {
-      background: { type: ColorType.Solid, color: appearance.backgroundColor },
+      background: { type: ColorType.Solid, color: theme.canvas.background },
       textColor: theme.text.axis,
       fontFamily: theme.typography.fontFamily.axis,
       fontSize: theme.typography.fontSize.sm, // 10px for axis labels
@@ -62,12 +66,12 @@ export function applyAppearanceToChart(
     },
     grid: {
       horzLines: {
-        color: appearance.gridColor,
+        color: theme.canvas.grid,
         style: gridStyle,
         visible: gridVisible,
       },
       vertLines: {
-        color: appearance.gridColor,
+        color: theme.canvas.grid,
         style: gridStyle,
         visible: gridVisible,
       },
@@ -75,23 +79,23 @@ export function applyAppearanceToChart(
     crosshair: {
       mode: crosshairMode,
       vertLine: {
-        color: appearance.crosshairColor,
+        color: theme.crosshairTokens.line,
         width: theme.crosshairTokens.width as 1 | 2 | 3 | 4,
         style: LineStyle.Dashed,
         labelVisible: true,
         labelBackgroundColor: theme.crosshairTokens.labelBackground,
       },
       horzLine: {
-        color: appearance.crosshairColor,
+        color: theme.crosshairTokens.line,
         labelVisible: true,
         labelBackgroundColor: theme.crosshairTokens.labelBackground,
       },
     },
     rightPriceScale: {
-      borderColor: theme.canvas.grid,
+      borderColor: theme.canvas.border,  // TV-41: Use border token (more visible than grid)
     },
     timeScale: {
-      borderColor: theme.canvas.grid,
+      borderColor: theme.canvas.border,  // TV-41: Use border token (more visible than grid)
     },
   };
 
@@ -100,33 +104,38 @@ export function applyAppearanceToChart(
 }
 
 /**
- * TV-23.2: Apply series-level appearance settings (candle colors)
+ * TV-23.2 + TV-40: Apply series-level appearance settings (candle colors)
+ * 
+ * THEME PRIORITY (TV-40): Theme tokens ALWAYS win for candle/series colors.
+ * This ensures light/dark switching actually changes the chart appearance.
  */
 export function applyAppearanceToSeries(
   series: ISeriesApi<any>,
   chartType: ChartType,
-  appearance: AppearanceSettings
+  _appearance: AppearanceSettings,
+  theme: ChartsTheme
 ): void {
+  // TV-40: Use theme.candle for proper light/dark palette
   if (chartType === "candles" || chartType === "bars") {
     series.applyOptions({
-      upColor: appearance.upColor,
-      downColor: appearance.downColor,
-      borderUpColor: appearance.upColor,
-      borderDownColor: appearance.downColor,
-      wickUpColor: appearance.wickUpColor,
-      wickDownColor: appearance.wickDownColor,
+      upColor: theme.candle.upColor,
+      downColor: theme.candle.downColor,
+      borderUpColor: theme.candle.borderUp,
+      borderDownColor: theme.candle.borderDown,
+      wickUpColor: theme.candle.wickUp,
+      wickDownColor: theme.candle.wickDown,
       wickVisible: true,
       borderVisible: true,
     } as DeepPartial<SeriesOptionsCommon>);
   } else if (chartType === "line") {
     series.applyOptions({
-      color: appearance.upColor,
+      color: theme.candle.upColor,
     } as DeepPartial<SeriesOptionsCommon>);
   } else if (chartType === "area") {
     series.applyOptions({
-      topColor: appearance.upColor,
-      bottomColor: appearance.downColor,
-      lineColor: appearance.upColor,
+      topColor: theme.candle.upColor,
+      bottomColor: theme.candle.downColor,
+      lineColor: theme.candle.upColor,
     } as DeepPartial<SeriesOptionsCommon>);
   }
 }

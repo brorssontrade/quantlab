@@ -393,14 +393,24 @@ export interface CompareSeriesConfig {
   hidden?: boolean;
 }
 
-// PRIO 3: Extended indicator kinds - ALL 23 indicators
-// Sync with indicatorManifest.ts (single source of truth)
-export type IndicatorKind = 
-  | "sma" | "ema" | "smma" | "wma" | "dema" | "tema" | "hma" | "kama" | "vwma" | "mcginley"
-  | "rsi" | "macd" | "stoch" | "stochrsi" | "cci" | "roc" | "mom" | "willr"
-  | "bb" | "atr" | "adx" | "vwap" | "obv";
+// PRIO 3: IndicatorKind - RE-EXPORTED from manifest (single source of truth)
+// DO NOT duplicate this type definition here!
+// Import it from indicatorManifest.ts instead
+export type { IndicatorKind } from "./indicators/indicatorManifest";
+import type { IndicatorKind } from "./indicators/indicatorManifest";
 
 export type IndicatorPane = "price" | "separate";
+
+/**
+ * Per-line style configuration for indicators
+ * Used to customize individual output lines (e.g., MACD line vs signal line)
+ */
+export interface LineStyleConfig {
+  color?: string;
+  lineWidth?: number;
+  lineStyle?: "solid" | "dashed" | "dotted";
+  visible?: boolean;
+}
 
 export interface IndicatorBase {
   id: string;
@@ -410,6 +420,11 @@ export interface IndicatorBase {
   hidden?: boolean;
   // PRIO 3: Generic params - allows any indicator-specific params
   params: Record<string, number | string>;
+  /**
+   * Per-line style overrides (keyed by output line id, e.g., "macd", "signal", "histogram")
+   * Style changes update series.applyOptions() WITHOUT triggering recompute
+   */
+  styleByLineId?: Record<string, LineStyleConfig>;
 }
 
 // Legacy specific param interfaces (kept for backwards compatibility)
@@ -449,7 +464,11 @@ export interface AdxParams {
 }
 
 export interface VwapParams {
-  anchorPeriod: "session" | "week" | "month";
+  anchorPeriod: "session" | "week" | "month" | "quarter" | "year";
+  showBands?: boolean;
+  bandMultiplier1?: number;  // Default: 1.0
+  bandMultiplier2?: number;  // Default: 2.0
+  bandMultiplier3?: number;  // Default: 3.0
 }
 
 export interface ObvParams {

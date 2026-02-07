@@ -136,13 +136,18 @@ export function ToolFlyout({
     <div
       ref={flyoutRef}
       className="
-        bg-slate-900/98 backdrop-blur-md
-        border border-slate-700/60
+        backdrop-blur-md
         rounded-lg shadow-2xl
         min-w-[200px] max-w-[280px]
         overflow-hidden
       "
-      style={flyoutStyle}
+      style={{
+        ...flyoutStyle,
+        backgroundColor: 'var(--tv-panel)',
+        borderWidth: '1px',
+        borderStyle: 'solid',
+        borderColor: 'var(--tv-border)',
+      }}
       data-testid="lefttoolbar-flyout"
       role="menu"
       aria-label={`${group.label} tools`}
@@ -151,9 +156,12 @@ export function ToolFlyout({
       <div
         className="
           px-3 py-2
-          border-b border-slate-700/40
-          text-xs font-medium text-slate-400 uppercase tracking-wider
+          text-xs font-medium uppercase tracking-wider
         "
+        style={{
+          borderBottom: '1px solid var(--tv-border)',
+          color: 'var(--tv-text-muted)',
+        }}
       >
         {group.label}
       </div>
@@ -189,13 +197,23 @@ export function ToolFlyout({
                 className={`
                   flex-1 flex items-center gap-3 px-3 py-2
                   text-left text-sm transition-colors
-                  ${isFocused ? "bg-slate-800/60" : ""}
                   ${isActive && enabled ? "bg-purple-600/20 text-purple-300" : ""}
-                  ${enabled 
-                    ? "text-slate-200 hover:bg-slate-800/80 cursor-pointer" 
-                    : "text-slate-500 cursor-not-allowed opacity-50"
-                  }
+                  ${!enabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}
                 `}
+                style={{
+                  backgroundColor: isFocused && !isActive ? 'var(--tv-panel-hover)' : undefined,
+                  color: enabled ? 'var(--tv-text)' : 'var(--tv-text-muted)',
+                }}
+                onMouseEnter={(e) => {
+                  if (enabled && !isActive) {
+                    e.currentTarget.style.backgroundColor = 'var(--tv-panel-hover)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isFocused && !isActive) {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }
+                }}
               >
                 {/* Icon */}
                 <span className="w-6 text-center text-lg">
@@ -207,14 +225,20 @@ export function ToolFlyout({
 
                 {/* Shortcut badge */}
                 {tool.shortcut && enabled && (
-                  <span className="text-xs text-slate-500 font-mono bg-slate-800/60 px-1.5 py-0.5 rounded">
+                  <span 
+                    className="text-xs font-mono px-1.5 py-0.5 rounded"
+                    style={{
+                      color: 'var(--tv-text-muted)',
+                      backgroundColor: 'var(--tv-bg-secondary)',
+                    }}
+                  >
                     {tool.shortcut}
                   </span>
                 )}
 
                 {/* Coming soon badge for disabled */}
                 {!enabled && (
-                  <span className="text-[10px] text-slate-600 italic">
+                  <span className="text-[10px] italic" style={{ color: 'var(--tv-text-dim, var(--tv-text-muted))' }}>
                     {tool.tooltip || "Soon"}
                   </span>
                 )}
@@ -226,13 +250,16 @@ export function ToolFlyout({
                   onClick={handleStarClick}
                   data-testid={`lefttoolbar-star-${tool.id}`}
                   aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
-                  className={`
-                    px-2 py-2 transition-colors
-                    ${isFavorite 
-                      ? "text-yellow-400 hover:text-yellow-300" 
-                      : "text-slate-600 hover:text-slate-400"
-                    }
-                  `}
+                  className="px-2 py-2 transition-colors"
+                  style={{
+                    color: isFavorite ? 'var(--tv-yellow)' : 'var(--tv-text-muted)',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.color = isFavorite ? '#ffca28' : 'var(--tv-text)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.color = isFavorite ? 'var(--tv-yellow)' : 'var(--tv-text-muted)';
+                  }}
                 >
                   <Star 
                     className="h-4 w-4" 

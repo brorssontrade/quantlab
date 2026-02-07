@@ -119,3 +119,155 @@ test.describe("ChartsPro TV-2 Symbol Search", () => {
     expect(dataAfter).toBeGreaterThan(0);
   });
 });
+
+test.describe("ChartsPro Symbol Search Modal", () => {
+  test.beforeEach(async ({ page }) => {
+    await gotoChartsPro(page);
+  });
+
+  /**
+   * Test: Modal opens via expand button click
+   */
+  test("expand button opens modal", async ({ page }) => {
+    // Click symbol chip to show input
+    await activateSymbolInput(page);
+    
+    // Click expand button (magnifying glass icon)
+    const expandBtn = page.getByTestId("symbol-search-expand");
+    await expandBtn.click();
+    
+    // Modal should be visible
+    const modal = page.getByTestId("symbol-search-modal");
+    await expect(modal).toBeVisible({ timeout: 5000 });
+    
+    // Modal should have search input focused
+    const modalInput = modal.locator("input[type='text']");
+    await expect(modalInput).toBeFocused();
+  });
+
+  /**
+   * Test: Modal opens via Ctrl+K keyboard shortcut
+   */
+  test("Ctrl+K opens modal", async ({ page }) => {
+    // Activate symbol input first
+    const input = await activateSymbolInput(page);
+    
+    // Press Ctrl+K
+    await input.press("Control+k");
+    
+    // Modal should be visible
+    const modal = page.getByTestId("symbol-search-modal");
+    await expect(modal).toBeVisible({ timeout: 5000 });
+  });
+
+  /**
+   * Test: Modal closes on Escape
+   */
+  test("Escape closes modal", async ({ page }) => {
+    // Open modal
+    await activateSymbolInput(page);
+    await page.getByTestId("symbol-search-expand").click();
+    
+    const modal = page.getByTestId("symbol-search-modal");
+    await expect(modal).toBeVisible();
+    
+    // Press Escape
+    await page.keyboard.press("Escape");
+    
+    // Modal should be hidden
+    await expect(modal).not.toBeVisible();
+  });
+
+  /**
+   * Test: Selecting symbol from modal updates chart
+   */
+  test("selecting symbol from modal updates chart", async ({ page }) => {
+    // Get initial state
+    const initialSymbol = await page.locator(TOPBAR.symbolChip).textContent();
+    
+    // Open modal
+    await activateSymbolInput(page);
+    await page.getByTestId("symbol-search-expand").click();
+    
+    const modal = page.getByTestId("symbol-search-modal");
+    await expect(modal).toBeVisible();
+    
+    // Type search query
+    const modalInput = modal.locator("input[type='text']");
+    await modalInput.fill("NVDA");
+    
+    // Wait for search results
+    await page.waitForTimeout(300); // debounce
+    
+    // Click first result (using keyboard)
+    await modalInput.press("ArrowDown");
+    await modalInput.press("Enter");
+    
+    // Modal should close
+    await expect(modal).not.toBeVisible();
+    
+    // Symbol chip should update
+    const symbolChip = page.locator(TOPBAR.symbolChip);
+    await expect(symbolChip).toContainText("NVDA");
+  });
+
+  /**
+   * Test: Category tabs work
+   */
+  test("category tabs filter results", async ({ page }) => {
+    // Open modal
+    await activateSymbolInput(page);
+    await page.getByTestId("symbol-search-expand").click();
+    
+    const modal = page.getByTestId("symbol-search-modal");
+    await expect(modal).toBeVisible();
+    
+    // Click US Stocks tab
+    const usTab = modal.getByRole("tab", { name: "US Stocks" });
+    await usTab.click();
+    
+    // Verify tab is selected
+    await expect(usTab).toHaveAttribute("aria-selected", "true");
+    
+    // Results should show (at least one row visible)
+    const resultItems = modal.locator("[data-testid^='symbol-result-']");
+    await expect(resultItems.first()).toBeVisible({ timeout: 5000 });
+  });
+
+  /**
+   * Test: Modal shows full symbol universe (>50 symbols)
+   * Regression test to prevent shortlist fallback
+   */
+  test("modal shows > 50 symbols from API", async ({ page }) => {
+    // Open modal
+    await activateSymbolInput(page);
+    await page.getByTestId("symbol-search-expand").click();
+    
+    const modal = page.getByTestId("symbol-search-modal");
+    await expect(modal).toBeVisible();
+    
+    // Header should show symbol count > 50
+    const countSpan = page.getByTestId("symbol-search-count");
+    await expect(countSpan).toBeVisible({ timeout: 5000 });
+    
+    const headerText = await countSpan.textContent();
+    const match = headerText?.match(/(\d+) symbols/);
+    expect(match).toBeTruthy();
+    
+    const symbolCount = parseInt(match![1], 10);
+    console.log(`[Symbol Search] Modal shows ${symbolCount} symbols`);
+    
+    // Must have more than the 10-item fallback
+    expect(symbolCount).toBeGreaterThan(50);
+    
+    // Bonus: check that a non-shortlist symbol exists (e.g., SAND.ST)
+    // Type to search
+    const modalInput = modal.locator("input[type='text']");
+    await modalInput.fill("SAND");
+    await page.waitForTimeout(300);
+    
+    // Should find SAND.ST (Sandvik)
+    const sandResult = modal.locator("[data-testid='symbol-result-SAND.ST']");
+    await expect(sandResult).toBeVisible({ timeout: 3000 });
+  });
+});

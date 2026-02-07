@@ -53,6 +53,7 @@ import { TV_LAYOUT } from "../TVLayoutShell";
 import { useToolbarStore, type CompareItem, type CompareMode, type OverlayState, type CompareScaleMode } from "../../state/toolbar";
 import { colorFor } from "../../state/compare";
 import { TIMEFRAME_OPTIONS } from "../../state/controls";
+import { SymbolSearchModal } from "./SymbolSearchModal";
 
 // ========== TYPES ==========
 type ApiStatus = "online" | "offline" | "checking";
@@ -131,22 +132,22 @@ const CompactApiStatus = memo(function CompactApiStatus({
       {/* Status dot */}
       <div
         className={`w-1.5 h-1.5 rounded-full ${
-          isChecking ? "bg-[#787b86] animate-pulse" :
-          isOnline ? "bg-[#089981]" : "bg-[#f23645]"
+          isChecking ? "bg-[var(--tv-text-muted)] animate-pulse" :
+          isOnline ? "bg-[var(--tv-green)]" : "bg-[var(--tv-red)]"
         }`}
         title={isChecking ? "Checking..." : isOnline ? "API Online" : "API Offline"}
       />
       
       {/* Mode toggle - only show if online */}
       {isOnline && onDataModeChange ? (
-        <div className="flex items-center rounded-sm overflow-hidden border border-[#363a45]">
+        <div className="flex items-center rounded-sm overflow-hidden border border-[var(--tv-border)]">
           <button
             type="button"
             onClick={() => onDataModeChange("live")}
             className={`px-1.5 py-0.5 text-[10px] font-medium transition-colors ${
               dataMode === "live" 
-                ? "bg-[#089981]/20 text-[#089981]" 
-                : "text-[#787b86] hover:text-[#d1d4dc]"
+                ? "bg-[var(--tv-green)]/20 text-[var(--tv-green)]" 
+                : "text-[var(--tv-text-muted)] hover:text-[var(--tv-text)]"
             }`}
             title="Live data"
           >
@@ -157,8 +158,8 @@ const CompactApiStatus = memo(function CompactApiStatus({
             onClick={() => onDataModeChange("mock")}
             className={`px-1.5 py-0.5 text-[10px] font-medium transition-colors ${
               dataMode === "mock" 
-                ? "bg-[#f7a600]/20 text-[#f7a600]" 
-                : "text-[#787b86] hover:text-[#d1d4dc]"
+                ? "bg-[var(--tv-yellow)]/20 text-[var(--tv-yellow)]" 
+                : "text-[var(--tv-text-muted)] hover:text-[var(--tv-text)]"
             }`}
             title="Mock data"
           >
@@ -167,8 +168,8 @@ const CompactApiStatus = memo(function CompactApiStatus({
         </div>
       ) : (
         <span className={`text-[10px] font-medium ${
-          isChecking ? "text-[#787b86]" :
-          isOnline ? "text-[#089981]" : "text-[#f23645]"
+          isChecking ? "text-[var(--tv-text-muted)]" :
+          isOnline ? "text-[var(--tv-green)]" : "text-[var(--tv-red)]"
         }`}>
           {isChecking ? "..." : isOnline ? "ON" : "OFF"}
         </span>
@@ -231,8 +232,8 @@ const CompactButton = memo(function CompactButton({
         text-[11px] font-medium
         transition-colors duration-75
         ${active 
-          ? "bg-[#2962ff]/15 text-[#2962ff]" 
-          : "bg-transparent text-[#787b86] hover:bg-[#2a2e39] hover:text-[#d1d4dc]"
+          ? "bg-[var(--tv-blue)]/15 text-[var(--tv-blue)]" 
+          : "bg-transparent text-[var(--tv-text-muted)] hover:bg-[var(--tv-panel-hover)] hover:text-[var(--tv-text)]"
         }
         ${disabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}
         ${className}
@@ -336,7 +337,7 @@ function SimpleDropdown({ trigger, children, align = "start", "data-testid": tes
       className="
         fixed z-[3000]
         min-w-[140px] py-1
-        bg-[#1e222d] border border-[#363a45] rounded-sm shadow-xl
+        bg-[var(--tv-panel)] border border-[var(--tv-border)] rounded-sm shadow-xl
       "
       style={{
         top: menuPos.top,
@@ -382,8 +383,8 @@ function DropdownItem({ children, onClick, disabled, active, "data-testid": test
       className={`
         w-full px-3 py-1 text-left text-[11px]
         transition-colors
-        ${active ? "bg-[#2962ff]/15 text-[#2962ff]" : "text-[#d1d4dc]"}
-        ${disabled ? "text-[#787b86]/50 cursor-not-allowed" : "hover:bg-[#2a2e39]"}
+        ${active ? "bg-[var(--tv-blue)]/15 text-[var(--tv-blue)]" : "text-[var(--tv-text)]"}
+        ${disabled ? "text-[var(--tv-text-muted)]/50 cursor-not-allowed" : "hover:bg-[var(--tv-panel-hover)]"}
       `}
     >
       {children}
@@ -392,7 +393,7 @@ function DropdownItem({ children, onClick, disabled, active, "data-testid": test
 }
 
 function DropdownSeparator() {
-  return <div className="h-px bg-[#363a45] my-1" />;
+  return <div className="h-px bg-[var(--tv-border)] my-1" />;
 }
 
 // ========== SYMBOL CHIP ==========
@@ -405,6 +406,7 @@ interface SymbolChipProps {
 const SymbolChip = memo(function SymbolChip({ symbol, onSymbolChange, loading }: SymbolChipProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(symbol);
+  const [modalOpen, setModalOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -422,52 +424,92 @@ const SymbolChip = memo(function SymbolChip({ symbol, onSymbolChange, loading }:
     setEditing(false);
   };
 
-  if (editing) {
-    return (
-      <input
-        ref={inputRef}
-        type="text"
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={handleSubmit}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") handleSubmit();
-          if (e.key === "Escape") {
-            setDraft(symbol);
-            setEditing(false);
-          }
-        }}
-        className="
-          h-7 w-24 px-2
-          bg-[#2a2e39] text-white text-sm font-semibold
-          border border-[#363a45] rounded-sm
-          outline-none focus:border-[#2962ff]
-        "
-        data-testid="topbar-symbol-input"
-      />
-    );
-  }
+  const handleModalSelect = useCallback((newSymbol: string) => {
+    const cleaned = newSymbol.trim().toUpperCase();
+    if (cleaned && cleaned !== symbol) {
+      onSymbolChange(cleaned);
+    }
+  }, [symbol, onSymbolChange]);
+
+  const openModal = useCallback(() => {
+    setModalOpen(true);
+    setEditing(false);
+  }, []);
 
   return (
-    <button
-      onClick={() => {
-        setDraft(symbol);
-        setEditing(true);
-      }}
-      className="
-        inline-flex items-center gap-1
-        h-[26px] px-1.5
-        bg-transparent text-[#d1d4dc] text-[12px] font-semibold
-        rounded-sm hover:bg-[#2a2e39]
-        transition-colors
-      "
-      data-testid="tv-symbol-chip"
-    >
-      {loading ? (
-        <Loader2 className="w-3 h-3 animate-spin text-[#787b86]" />
-      ) : null}
-      {symbol}
-    </button>
+    <>
+      {editing ? (
+        <div className="relative">
+          <input
+            ref={inputRef}
+            type="text"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={handleSubmit}
+            onKeyDown={(e) => {
+              // Ctrl/Cmd+K opens the full modal
+              if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+                e.preventDefault();
+                openModal();
+                return;
+              }
+              if (e.key === "Enter") handleSubmit();
+              if (e.key === "Escape") {
+                setDraft(symbol);
+                setEditing(false);
+              }
+            }}
+            className="
+              h-7 w-28 px-2 pr-6
+              bg-[var(--tv-input-bg)] text-[var(--tv-text)] text-sm font-semibold
+              border border-[var(--tv-border)] rounded-sm
+              outline-none focus:border-[var(--tv-blue)]
+            "
+            data-testid="topbar-symbol-input"
+          />
+          {/* Search icon button to open modal - use onMouseDown to prevent blur */}
+          <button
+            type="button"
+            onMouseDown={(e) => { e.preventDefault(); openModal(); }}
+            className="absolute right-1 top-1/2 -translate-y-1/2 rounded p-0.5 text-[var(--tv-text-muted)] hover:bg-[var(--tv-panel-hover)] hover:text-[var(--tv-text)]"
+            title="Advanced search (Ctrl+K)"
+            data-testid="symbol-search-expand"
+          >
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </button>
+        </div>
+      ) : (
+        <button
+          onClick={() => {
+            setDraft(symbol);
+            setEditing(true);
+          }}
+          className="
+            inline-flex items-center gap-1
+            h-[26px] px-1.5
+            bg-transparent text-[var(--tv-text)] text-[12px] font-semibold
+            rounded-sm hover:bg-[var(--tv-panel-hover)]
+            transition-colors
+          "
+          data-testid="tv-symbol-chip"
+        >
+          {loading ? (
+            <Loader2 className="w-3 h-3 animate-spin text-[var(--tv-text-muted)]" />
+          ) : null}
+          {symbol}
+        </button>
+      )}
+      
+      {/* Modal is always rendered (visibility controlled by isOpen) */}
+      <SymbolSearchModal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onSelect={handleModalSelect}
+        currentSymbol={symbol}
+      />
+    </>
   );
 });
 
@@ -486,8 +528,8 @@ const TimeframeDropdown = memo(function TimeframeDropdown({ value, onChange }: T
           className="
             inline-flex items-center gap-0.5
             h-[26px] px-1.5
-            bg-transparent text-[#787b86] text-[11px] font-medium
-            rounded-sm hover:bg-[#2a2e39] hover:text-[#d1d4dc]
+            bg-transparent text-[var(--tv-text-muted)] text-[11px] font-medium
+            rounded-sm hover:bg-[var(--tv-panel-hover)] hover:text-[var(--tv-text)]
             transition-colors
           "
           data-testid="timeframe-button"
@@ -509,7 +551,7 @@ const TimeframeDropdown = memo(function TimeframeDropdown({ value, onChange }: T
           >
             <span className="flex items-center justify-between w-full">
               {TF_LABELS[tf]}
-              {!isReady && <span className="text-[9px] text-[#787b86]/60">Soon</span>}
+              {!isReady && <span className="text-[9px] text-[var(--tv-text-muted)]/60">Soon</span>}
             </span>
           </DropdownItem>
         );
@@ -540,8 +582,8 @@ const ChartTypeDropdown = memo(function ChartTypeDropdown({
           className="
             inline-flex items-center gap-0.5
             h-[26px] px-1.5
-            bg-transparent text-[#787b86] text-[11px] font-medium
-            rounded-sm hover:bg-[#2a2e39] hover:text-[#d1d4dc]
+            bg-transparent text-[var(--tv-text-muted)] text-[11px] font-medium
+            rounded-sm hover:bg-[var(--tv-panel-hover)] hover:text-[var(--tv-text)]
             transition-colors
           "
           data-testid="chart-type-button"
@@ -600,8 +642,8 @@ const UtilsMenu = memo(function UtilsMenu({
           className="
             inline-flex items-center justify-center
             w-7 h-7
-            bg-transparent text-[#787b86]
-            rounded hover:bg-[#2a2e39] hover:text-white
+            bg-transparent text-[var(--tv-text-muted)]
+            rounded hover:bg-[var(--tv-panel-hover)] hover:text-[var(--tv-text)]
             transition-colors
           "
           data-testid="utils-menu-button"
@@ -612,13 +654,13 @@ const UtilsMenu = memo(function UtilsMenu({
     >
       <DropdownItem onClick={onMagnetToggle} data-testid="utils-magnet-btn">
         <span className="flex items-center gap-2">
-          <Magnet className={`w-4 h-4 ${magnetEnabled ? "text-[#2962ff]" : ""}`} />
+          <Magnet className={`w-4 h-4 ${magnetEnabled ? "text-[var(--tv-blue)]" : ""}`} />
           Magnet {magnetEnabled ? "On" : "Off"}
         </span>
       </DropdownItem>
       <DropdownItem onClick={onSnapToggle} data-testid="utils-snap-btn">
         <span className="flex items-center gap-2">
-          <Grid3X3 className={`w-4 h-4 ${snapEnabled ? "text-[#2962ff]" : ""}`} />
+          <Grid3X3 className={`w-4 h-4 ${snapEnabled ? "text-[var(--tv-blue)]" : ""}`} />
           Snap {snapEnabled ? "On" : "Off"}
         </span>
       </DropdownItem>
@@ -752,8 +794,8 @@ const TopControls = memo(function TopControls({ defaultTimeframe }: TopControlsP
           rounded-sm text-[10px] font-medium uppercase
           transition-colors
           ${compareScaleMode === "percent"
-            ? "bg-[#2962ff]/15 text-[#2962ff]"
-            : "bg-transparent text-[#787b86] hover:bg-[#2a2e39] hover:text-[#d1d4dc]"
+            ? "bg-[var(--tv-blue)]/15 text-[var(--tv-blue)]"
+            : "bg-transparent text-[var(--tv-text-muted)] hover:bg-[var(--tv-panel-hover)] hover:text-[var(--tv-text)]"
           }
         `}
         title={compareScaleMode === "percent" ? "Scale: Percent" : "Scale: Price"}
@@ -771,10 +813,10 @@ const TopControls = memo(function TopControls({ defaultTimeframe }: TopControlsP
           placeholder="+ Compare"
           className="
             h-[22px] w-20 px-1.5
-            bg-transparent text-[10px] text-[#d1d4dc]
-            border border-[#363a45] rounded-sm
-            placeholder:text-[#787b86]
-            focus:outline-none focus:border-[#2962ff]
+            bg-transparent text-[10px] text-[var(--tv-text)]
+            border border-[var(--tv-border)] rounded-sm
+            placeholder:text-[var(--tv-text-muted)]
+            focus:outline-none focus:border-[var(--tv-blue)]
           "
           data-testid="topbar-compare-input"
         />
@@ -783,8 +825,8 @@ const TopControls = memo(function TopControls({ defaultTimeframe }: TopControlsP
           onChange={(e) => setAddTimeframeValue(e.target.value as Tf)}
           className="
             h-[22px] px-0.5
-            bg-[#1e222d] text-[10px] text-[#787b86]
-            border border-[#363a45] rounded-sm
+            bg-[var(--tv-panel)] text-[10px] text-[var(--tv-text-muted)]
+            border border-[var(--tv-border)] rounded-sm
             focus:outline-none
           "
           data-testid="topbar-compare-tf"
@@ -798,8 +840,8 @@ const TopControls = memo(function TopControls({ defaultTimeframe }: TopControlsP
           onChange={(e) => setAddModeValue(e.target.value as CompareMode)}
           className="
             h-[22px] px-0.5
-            bg-[#1e222d] text-[10px] text-[#787b86]
-            border border-[#363a45] rounded-sm
+            bg-[var(--tv-panel)] text-[10px] text-[var(--tv-text-muted)]
+            border border-[var(--tv-border)] rounded-sm
             focus:outline-none
           "
           data-testid="topbar-compare-mode"
@@ -812,7 +854,7 @@ const TopControls = memo(function TopControls({ defaultTimeframe }: TopControlsP
           <button
             type="button"
             onClick={handleAddCompare}
-            className="h-[22px] px-1.5 text-[10px] bg-[#2962ff]/15 text-[#2962ff] rounded-sm hover:bg-[#2962ff]/25"
+            className="h-[22px] px-1.5 text-[10px] bg-[var(--tv-blue)]/15 text-[var(--tv-blue)] rounded-sm hover:bg-[var(--tv-blue)]/25"
             data-testid="topbar-compare-add-btn"
           >
             <Plus className="w-3 h-3" />
@@ -821,7 +863,7 @@ const TopControls = memo(function TopControls({ defaultTimeframe }: TopControlsP
       </div>
       
       {/* Separator */}
-      {compareItems.length > 0 && <div className="w-px h-4 bg-[#363a45] mx-1" />}
+      {compareItems.length > 0 && <div className="w-px h-4 bg-[var(--tv-border)] mx-1" />}
       
       {/* Compare chips */}
       {compareItems.map((item) => (
@@ -830,7 +872,7 @@ const TopControls = memo(function TopControls({ defaultTimeframe }: TopControlsP
           className={`
             inline-flex items-center gap-0.5
             h-[22px] px-1.5
-            bg-[#2a2e39] rounded-sm
+            bg-[var(--tv-chip-bg)] rounded-sm
             text-[10px] font-medium
             ${item.hidden ? "opacity-50" : ""}
           `}
@@ -840,13 +882,13 @@ const TopControls = memo(function TopControls({ defaultTimeframe }: TopControlsP
             className="w-1.5 h-1.5 rounded-full"
             style={{ backgroundColor: colorFor(item.symbol) }}
           />
-          <span className="text-[#d1d4dc]">{item.symbol}</span>
+          <span className="text-[var(--tv-text)]">{item.symbol}</span>
           <select
             value={item.mode}
             onChange={(e) => setCompareMode(item.symbol, e.target.value as CompareMode)}
             className="
               h-4 px-0.5 ml-0.5
-              bg-transparent text-[9px] text-[#787b86]
+              bg-transparent text-[9px] text-[var(--tv-text-muted)]
               border-none
               focus:outline-none cursor-pointer
             "
@@ -859,24 +901,24 @@ const TopControls = memo(function TopControls({ defaultTimeframe }: TopControlsP
           <button
             type="button"
             onClick={() => toggleCompare(item.symbol)}
-            className="p-0.5 hover:bg-[#363a45] rounded-sm"
+            className="p-0.5 hover:bg-[var(--tv-chip-hover)] rounded-sm"
             title={item.hidden ? "Show" : "Hide"}
           >
-            {item.hidden ? <EyeOff className="w-2.5 h-2.5 text-[#787b86]" /> : <Eye className="w-2.5 h-2.5 text-[#787b86]" />}
+            {item.hidden ? <EyeOff className="w-2.5 h-2.5 text-[var(--tv-text-muted)]" /> : <Eye className="w-2.5 h-2.5 text-[var(--tv-text-muted)]" />}
           </button>
           <button
             type="button"
             onClick={() => removeCompare(item.symbol)}
-            className="p-0.5 hover:bg-[#363a45] rounded-sm"
+            className="p-0.5 hover:bg-[var(--tv-chip-hover)] rounded-sm"
             title="Remove"
           >
-            <X className="w-2.5 h-2.5 text-[#787b86]" />
+            <X className="w-2.5 h-2.5 text-[var(--tv-text-muted)]" />
           </button>
         </div>
       ))}
       
       {/* Separator before overlays */}
-      <div className="w-px h-4 bg-[#363a45] mx-1" />
+      <div className="w-px h-4 bg-[var(--tv-border)] mx-1" />
       
       {/* Overlay toggles (SMA/EMA) */}
       {OVERLAY_CONFIG.map((item) => {
@@ -892,8 +934,8 @@ const TopControls = memo(function TopControls({ defaultTimeframe }: TopControlsP
               rounded-sm text-[10px] font-medium
               transition-colors
               ${active
-                ? "bg-[#2962ff]/15 text-[#2962ff]"
-                : "bg-transparent text-[#787b86] hover:bg-[#2a2e39] hover:text-[#d1d4dc]"
+                ? "bg-[var(--tv-blue)]/15 text-[var(--tv-blue)]"
+                : "bg-transparent text-[var(--tv-text-muted)] hover:bg-[var(--tv-panel-hover)] hover:text-[var(--tv-text)]"
               }
             `}
             data-testid={`topbar-overlay-${item.group}-${item.value}`}
@@ -904,7 +946,7 @@ const TopControls = memo(function TopControls({ defaultTimeframe }: TopControlsP
       })}
       
       {/* Separator before inspector */}
-      <div className="w-px h-4 bg-[#363a45] mx-1" />
+      <div className="w-px h-4 bg-[var(--tv-border)] mx-1" />
       
       {/* Inspector toggle */}
       <button
@@ -916,8 +958,8 @@ const TopControls = memo(function TopControls({ defaultTimeframe }: TopControlsP
           rounded-sm text-[10px] font-medium
           transition-colors
           ${inspectorOpen
-            ? "bg-[#2962ff]/15 text-[#2962ff]"
-            : "bg-transparent text-[#787b86] hover:bg-[#2a2e39] hover:text-[#d1d4dc]"
+            ? "bg-[var(--tv-blue)]/15 text-[var(--tv-blue)]"
+            : "bg-transparent text-[var(--tv-text-muted)] hover:bg-[var(--tv-panel-hover)] hover:text-[var(--tv-text)]"
           }
         `}
         data-testid="topbar-inspector-toggle"
@@ -988,7 +1030,7 @@ export const TVCompactHeader = memo(function TVCompactHeader({
           loading={loading}
         />
         
-        <div className="w-px h-4 bg-[#363a45]" />
+        <div className="w-px h-4 bg-[var(--tv-border)]" />
         
         <TimeframeDropdown 
           value={timeframe} 
@@ -1026,7 +1068,7 @@ export const TVCompactHeader = memo(function TVCompactHeader({
           onDataModeChange={onDataModeChange}
         />
         
-        <div className="w-px h-4 bg-[#363a45]" />
+        <div className="w-px h-4 bg-[var(--tv-border)]" />
         
         {/* Info/About button */}
         {onInfoClick && (
@@ -1064,7 +1106,7 @@ export const TVCompactHeader = memo(function TVCompactHeader({
           <Ruler className="w-4 h-4" />
         </CompactButton>
 
-        <div className="w-px h-4 bg-[#363a45]" />
+        <div className="w-px h-4 bg-[var(--tv-border)]" />
 
         {/* Theme toggle */}
         <CompactButton
