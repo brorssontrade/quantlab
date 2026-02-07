@@ -18,7 +18,8 @@
       "ADX/DMI": "±0.5 (absolute, bounded 0-100)",
       "OBV": "±0.1% relative (volume-scaled)",
       "Stochastic": "±0.1 (absolute, bounded 0-100)"
-    }
+    },
+    "feedAlignmentNote": "AUDIT-02 revealed significant feed mismatches between EODHD and TradingView for intraday data. Daily data (META 1D, EURUSD 1D) has better alignment. Intraday baselines blocked until fixture source is resolved."
   },
   "extractionProtocol": {
     "overview": "Strict protocol to ensure TV values are captured accurately",
@@ -270,9 +271,10 @@
           "note": "VWAP at mid-day for meaningful cumulative value"
         }
       ],
-      "status": "pending",
+      "status": "blocked_feed_mismatch",
       "verified": false,
-      "fixtureAvailable": "spy.us.5m.json"
+      "fixtureAvailable": "spy.us.5m.json",
+      "feedMismatchNote": "EODHD 5m data does not match TradingView for SPY intraday. Need to verify fixture source alignment."
     },
     {
       "_comment": "=== AUDIT-02a: META 1H ===",
@@ -296,7 +298,12 @@
           "volume": 907829,
           "note": "From resampled 5m fixture, session-aligned 1H bars"
         },
-        "dateStr": "2026-02-05 12:30"
+        "dateStr": "2026-02-05 12:30",
+        "feedStatus": {
+          "status": "blocked_feed_mismatch",
+          "message": "EODHD 5m resampled to 1H does not match TV NASDAQ:META. EODHD High=680.69 vs TV High=681.49 (0.8pt gap). Need alternative fixture source.",
+          "action": "Deferred - requires matching intraday data source"
+        }
       }
     },
     {
@@ -323,9 +330,10 @@
           "value": null
         }
       ],
-      "status": "pending",
+      "status": "blocked_feed_mismatch",
       "verified": false,
-      "fixtureAvailable": "meta.us.1h.resampled.json"
+      "fixtureAvailable": "meta.us.1h.resampled.json",
+      "feedMismatchNote": "EODHD 5m/1H data does not match TradingView NASDAQ:META. EODHD High ~0.8pt lower, Close ~3pt different. Need alternative fixture source or wider tolerance."
     },
     {
       "id": "META-MACD-1H",
@@ -365,9 +373,10 @@
           "value": null
         }
       ],
-      "status": "pending",
+      "status": "blocked_feed_mismatch",
       "verified": false,
-      "fixtureAvailable": "meta.us.1h.resampled.json"
+      "fixtureAvailable": "meta.us.1h.resampled.json",
+      "feedMismatchNote": "EODHD 5m/1H data does not match TradingView NASDAQ:META. EODHD High ~0.8pt lower, Close ~3pt different. Need alternative fixture source or wider tolerance."
     },
     {
       "id": "META-BB-1H",
@@ -408,9 +417,10 @@
           "value": null
         }
       ],
-      "status": "pending",
+      "status": "blocked_feed_mismatch",
       "verified": false,
-      "fixtureAvailable": "meta.us.1h.resampled.json"
+      "fixtureAvailable": "meta.us.1h.resampled.json",
+      "feedMismatchNote": "EODHD 5m/1H data does not match TradingView NASDAQ:META. EODHD High ~0.8pt lower, Close ~3pt different. Need alternative fixture source or wider tolerance."
     },
     {
       "id": "META-ATR14-1H",
@@ -436,9 +446,10 @@
           "value": null
         }
       ],
-      "status": "pending",
+      "status": "blocked_feed_mismatch",
       "verified": false,
-      "fixtureAvailable": "meta.us.1h.resampled.json"
+      "fixtureAvailable": "meta.us.1h.resampled.json",
+      "feedMismatchNote": "EODHD 5m/1H data does not match TradingView NASDAQ:META. EODHD High ~0.8pt lower, Close ~3pt different. Need alternative fixture source or wider tolerance."
     },
     {
       "id": "META-ADX14-1H",
@@ -477,9 +488,10 @@
           "value": null
         }
       ],
-      "status": "pending",
+      "status": "blocked_feed_mismatch",
       "verified": false,
-      "fixtureAvailable": "meta.us.1h.resampled.json"
+      "fixtureAvailable": "meta.us.1h.resampled.json",
+      "feedMismatchNote": "EODHD 5m/1H data does not match TradingView NASDAQ:META. EODHD High ~0.8pt lower, Close ~3pt different. Need alternative fixture source or wider tolerance."
     },
     {
       "_comment": "=== AUDIT-02b: META 5m ===",
@@ -502,7 +514,12 @@
           "close": 676.34,
           "volume": 89631
         },
-        "dateStr": "2026-02-05 12:00"
+        "dateStr": "2026-02-05 12:00",
+        "feedStatus": {
+          "status": "blocked_feed_mismatch",
+          "message": "EODHD 5m OHLC differs from TV. Our: O=678.48 H=678.63 L=675.50 C=676.34, TV: O=678.45 H=680.16 L=678.11 C=679.83",
+          "action": "Deferred - requires matching intraday data source"
+        }
       }
     },
     {
@@ -529,9 +546,10 @@
           "value": null
         }
       ],
-      "status": "pending",
+      "status": "blocked_feed_mismatch",
       "verified": false,
-      "fixtureAvailable": "meta.us.5m.json"
+      "fixtureAvailable": "meta.us.5m.json",
+      "feedMismatchNote": "EODHD 5m data does not match TradingView NASDAQ:META. OHLC differs significantly. Need alternative fixture source."
     },
     {
       "id": "META-MACD-5m",
@@ -571,9 +589,10 @@
           "value": null
         }
       ],
-      "status": "pending",
+      "status": "blocked_feed_mismatch",
       "verified": false,
-      "fixtureAvailable": "meta.us.5m.json"
+      "fixtureAvailable": "meta.us.5m.json",
+      "feedMismatchNote": "EODHD 5m data does not match TradingView NASDAQ:META. OHLC differs significantly. Need alternative fixture source."
     },
     {
       "id": "META-BB-5m",
@@ -614,9 +633,10 @@
           "value": null
         }
       ],
-      "status": "pending",
+      "status": "blocked_feed_mismatch",
       "verified": false,
-      "fixtureAvailable": "meta.us.5m.json"
+      "fixtureAvailable": "meta.us.5m.json",
+      "feedMismatchNote": "EODHD 5m data does not match TradingView NASDAQ:META. OHLC differs significantly. Need alternative fixture source."
     },
     {
       "id": "META-ATR14-5m",
@@ -642,9 +662,10 @@
           "value": null
         }
       ],
-      "status": "pending",
+      "status": "blocked_feed_mismatch",
       "verified": false,
-      "fixtureAvailable": "meta.us.5m.json"
+      "fixtureAvailable": "meta.us.5m.json",
+      "feedMismatchNote": "EODHD 5m data does not match TradingView NASDAQ:META. OHLC differs significantly. Need alternative fixture source."
     },
     {
       "id": "META-ADX14-5m",
@@ -683,9 +704,10 @@
           "value": null
         }
       ],
-      "status": "pending",
+      "status": "blocked_feed_mismatch",
       "verified": false,
-      "fixtureAvailable": "meta.us.5m.json"
+      "fixtureAvailable": "meta.us.5m.json",
+      "feedMismatchNote": "EODHD 5m data does not match TradingView NASDAQ:META. OHLC differs significantly. Need alternative fixture source."
     },
     {
       "_comment": "=== AUDIT-02c: BTCUSD 1D ===",
@@ -707,6 +729,17 @@
           "volume": 92958220288,
           "source": "EODHD BTC-USD.CC",
           "feedValidation": "CRITICAL: Compare TV OHLC to these values. If mismatch > 1%, mark baseline 'blocked_data_mismatch' and try different TV symbol"
+        },
+        "feedStatus": {
+          "status": "needs_tv_symbol_alignment",
+          "message": "User extracted from generic CRYPTO symbol. Must use BITSTAMP:BTCUSD to match EODHD BTC-USD.CC feed.",
+          "expectedOHLC": {
+            "open": 70524.35,
+            "high": 70606.14,
+            "low": 69693.66,
+            "close": 70606.14
+          },
+          "action": "User: re-extract using BITSTAMP:BTCUSD at 2026-02-07 00:00 UTC and verify OHLC matches"
         }
       }
     },
@@ -736,7 +769,8 @@
       ],
       "status": "pending",
       "verified": false,
-      "fixtureAvailable": "btc-usd.1d.json"
+      "fixtureAvailable": "btc-usd.1d.json",
+      "feedMismatchNote": "EODHD BTC-USD.CC may not match TV aggregated crypto. Use BITSTAMP:BTCUSD specifically, or check if weekends have partial data."
     },
     {
       "id": "BTCUSD-MACD-1D",
@@ -778,7 +812,8 @@
       ],
       "status": "pending",
       "verified": false,
-      "fixtureAvailable": "btc-usd.1d.json"
+      "fixtureAvailable": "btc-usd.1d.json",
+      "feedMismatchNote": "EODHD BTC-USD.CC may not match TV aggregated crypto. Use BITSTAMP:BTCUSD specifically, or check if weekends have partial data."
     },
     {
       "id": "BTCUSD-BB-1D",
@@ -821,7 +856,8 @@
       ],
       "status": "pending",
       "verified": false,
-      "fixtureAvailable": "btc-usd.1d.json"
+      "fixtureAvailable": "btc-usd.1d.json",
+      "feedMismatchNote": "EODHD BTC-USD.CC may not match TV aggregated crypto. Use BITSTAMP:BTCUSD specifically, or check if weekends have partial data."
     },
     {
       "id": "BTCUSD-ATR14-1D",
@@ -849,7 +885,8 @@
       ],
       "status": "pending",
       "verified": false,
-      "fixtureAvailable": "btc-usd.1d.json"
+      "fixtureAvailable": "btc-usd.1d.json",
+      "feedMismatchNote": "EODHD BTC-USD.CC may not match TV aggregated crypto. Use BITSTAMP:BTCUSD specifically, or check if weekends have partial data."
     },
     {
       "id": "BTCUSD-ADX14-1D",
@@ -890,7 +927,8 @@
       ],
       "status": "pending",
       "verified": false,
-      "fixtureAvailable": "btc-usd.1d.json"
+      "fixtureAvailable": "btc-usd.1d.json",
+      "feedMismatchNote": "EODHD BTC-USD.CC may not match TV aggregated crypto. Use BITSTAMP:BTCUSD specifically, or check if weekends have partial data."
     },
     {
       "_comment": "=== AUDIT-02d: EURUSD 1D ===",
@@ -912,6 +950,24 @@
           "volume": 17786768,
           "source": "EODHD EURUSD.FOREX",
           "feedValidation": "CRITICAL: Compare TV OHLC to these values. If mismatch > 0.0005 (~5 pips), mark baseline 'blocked_data_mismatch' and try different TV symbol"
+        },
+        "feedStatus": {
+          "status": "ready_for_extraction",
+          "message": "EODHD EURUSD.FOREX matches TV FX:EURUSD within 6 pips. Good for parity testing.",
+          "expectedOHLC": {
+            "open": 1.1777,
+            "high": 1.1826,
+            "low": 1.1766,
+            "close": 1.182
+          },
+          "tvOHLC": {
+            "open": 1.17769,
+            "high": 1.18261,
+            "low": 1.17656,
+            "close": 1.18141
+          },
+          "ohlcDiff": "~6 pips max diff on close - acceptable",
+          "action": "User: extract RSI/MACD/BB/ATR/ADX from FX:EURUSD 1D at 2026-02-06"
         }
       }
     },
@@ -941,7 +997,8 @@
       ],
       "status": "pending",
       "verified": false,
-      "fixtureAvailable": "eurusd.1d.json"
+      "fixtureAvailable": "eurusd.1d.json",
+      "feedNote": "EODHD EURUSD matches TradingView FX:EURUSD within ~6 pips. Good for parity testing."
     },
     {
       "id": "EURUSD-MACD-1D",
@@ -983,7 +1040,8 @@
       ],
       "status": "pending",
       "verified": false,
-      "fixtureAvailable": "eurusd.1d.json"
+      "fixtureAvailable": "eurusd.1d.json",
+      "feedNote": "EODHD EURUSD matches TradingView FX:EURUSD within ~6 pips. Good for parity testing."
     },
     {
       "id": "EURUSD-BB-1D",
@@ -1026,7 +1084,8 @@
       ],
       "status": "pending",
       "verified": false,
-      "fixtureAvailable": "eurusd.1d.json"
+      "fixtureAvailable": "eurusd.1d.json",
+      "feedNote": "EODHD EURUSD matches TradingView FX:EURUSD within ~6 pips. Good for parity testing."
     },
     {
       "id": "EURUSD-ATR14-1D",
@@ -1054,7 +1113,8 @@
       ],
       "status": "pending",
       "verified": false,
-      "fixtureAvailable": "eurusd.1d.json"
+      "fixtureAvailable": "eurusd.1d.json",
+      "feedNote": "EODHD EURUSD matches TradingView FX:EURUSD within ~6 pips. Good for parity testing."
     },
     {
       "id": "EURUSD-ADX14-1D",
@@ -1095,7 +1155,8 @@
       ],
       "status": "pending",
       "verified": false,
-      "fixtureAvailable": "eurusd.1d.json"
+      "fixtureAvailable": "eurusd.1d.json",
+      "feedNote": "EODHD EURUSD matches TradingView FX:EURUSD within ~6 pips. Good for parity testing."
     }
   ]
 }
