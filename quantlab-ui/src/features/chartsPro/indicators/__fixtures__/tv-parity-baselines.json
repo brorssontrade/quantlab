@@ -1,0 +1,663 @@
+{
+  "meta": {
+    "description": "TradingView Parity Baselines - External reference values",
+    "purpose": "Verify our compute functions match TradingView exactly",
+    "methodology": "Values extracted from TradingView charts using Data Window",
+    "lastUpdated": "2026-02-07",
+    "note": "These values are EXTERNAL baselines, not from our engine. Do NOT update to match compute output.",
+    "statusValues": {
+      "pending": "Baseline not yet extracted from TradingView - test skips",
+      "ready": "Values extracted and verified - test runs assertions"
+    },
+    "tolerances": {
+      "description": "Per-indicator tolerances used in parity tests",
+      "RSI": "±0.1 (absolute, bounded 0-100)",
+      "MACD": "±0.5% relative with ±0.03 absolute floor (accounts for EMA seeding variance)",
+      "Bollinger Bands": "±0.05% relative (price-scaled)",
+      "ATR": "±1% relative (volatility measure)",
+      "ADX/DMI": "±0.5 (absolute, bounded 0-100)",
+      "OBV": "±0.1% relative (volume-scaled)",
+      "Stochastic": "±0.1 (absolute, bounded 0-100)"
+    }
+  },
+  "extractionProtocol": {
+    "overview": "Strict protocol to ensure TV values are captured accurately",
+    "requirements": {
+      "symbol": "Use exact TradingView symbol (e.g., NASDAQ:META, AMEX:SPY)",
+      "session": "Regular Trading Hours (RTH) only, unless baseline specifies Extended",
+      "timezone": "Exchange timezone (America/New_York for US equities)",
+      "adjustments": "Adjusted for splits/dividends (default TV setting)"
+    },
+    "steps": [
+      "1. Open TradingView chart with EXACT symbol from baseline",
+      "2. Set timeframe to match baseline.timeframe",
+      "3. Add indicator with EXACT params from baseline.params",
+      "4. Navigate to the EXACT date/bar specified in baseline.dateRange.end",
+      "5. Open Data Window (keyboard: D) or hover on indicator",
+      "6. Record value to 4+ decimal places",
+      "7. Update baseline: set value, status='ready', verified=true",
+      "8. Add extractionDate as ISO date string"
+    ],
+    "barTimeAlignment": {
+      "critical": "Tests use barTime for EXACT bar matching, not 'last value'",
+      "format": "Unix timestamp in seconds (UTC midnight for daily bars)",
+      "example": "2024-03-08 = 1709856000 (UTC midnight)",
+      "intradayNote": "For intraday, use bar start time in UTC (e.g., 09:35 ET = 14:35 UTC)"
+    },
+    "timeframeNormalization": {
+      "canonical": "Always use: 1D, 1H, 5m, 1m (uppercase D/H, lowercase m)",
+      "fixtureKeys": "Format: SYMBOL-TIMEFRAME (e.g., META.US-1D, SPY-5m)"
+    },
+    "pineScriptHelper": "//@version=5\nindicator('Parity Helper', overlay=false)\nrsi14 = ta.rsi(close, 14)\natr14 = ta.atr(14)\n[macd, signal, hist] = ta.macd(close, 12, 26, 9)\n[middle, upper, lower] = ta.bb(close, 20, 2)\n[plus, minus, adx] = ta.dmi(14, 14)\nlabel.new(bar_index, 0, 'RSI:' + str.tostring(rsi14, '#.####') + '\\nATR:' + str.tostring(atr14, '#.####') + '\\nMACD:' + str.tostring(macd, '#.####') + '\\nADX:' + str.tostring(adx, '#.####'))"
+  },
+  "baselines": [
+    {
+      "id": "META-RSI14-1D",
+      "symbol": "META.US",
+      "tvSymbol": "NASDAQ:META",
+      "exchange": "NASDAQ",
+      "timeframe": "1D",
+      "indicator": "RSI",
+      "params": { "period": 14, "source": "close" },
+      "dateRange": { "start": "2024-01-02", "end": "2024-03-08" },
+      "extractionMethod": "TradingView data window",
+      "extractionDate": "2026-02-07",
+      "values": [
+        { "date": "2024-03-08", "barTime": 1709856000, "value": 67.7527 }
+      ],
+      "status": "ready",
+      "verified": true
+    },
+    {
+      "id": "META-MACD-1D",
+      "symbol": "META.US",
+      "tvSymbol": "NASDAQ:META",
+      "exchange": "NASDAQ",
+      "timeframe": "1D",
+      "indicator": "MACD",
+      "params": { "fast": 12, "slow": 26, "signal": 9 },
+      "dateRange": { "start": "2024-01-02", "end": "2024-03-08" },
+      "extractionMethod": "TradingView data window",
+      "extractionDate": "2026-02-07",
+      "values": [
+        { "date": "2024-03-08", "barTime": 1709856000, "field": "macd", "value": 21.3484 },
+        { "date": "2024-03-08", "barTime": 1709856000, "field": "signal", "value": 22.6365 },
+        { "date": "2024-03-08", "barTime": 1709856000, "field": "histogram", "value": -1.2881 }
+      ],
+      "status": "ready",
+      "verified": true
+    },
+    {
+      "id": "META-BB-1D",
+      "symbol": "META.US",
+      "tvSymbol": "NASDAQ:META",
+      "exchange": "NASDAQ",
+      "timeframe": "1D",
+      "indicator": "Bollinger Bands",
+      "params": { "period": 20, "stdDev": 2, "source": "close", "maType": "sma" },
+      "dateRange": { "start": "2024-01-02", "end": "2024-03-08" },
+      "extractionMethod": "TradingView data window",
+      "extractionDate": "2026-02-07",
+      "values": [
+        { "date": "2024-03-08", "barTime": 1709856000, "field": "upper", "value": 511.6190 },
+        { "date": "2024-03-08", "barTime": 1709856000, "field": "middle", "value": 484.2790 },
+        { "date": "2024-03-08", "barTime": 1709856000, "field": "lower", "value": 456.9389 }
+      ],
+      "status": "ready",
+      "verified": true
+    },
+    {
+      "id": "META-ATR14-1D",
+      "symbol": "META.US",
+      "tvSymbol": "NASDAQ:META",
+      "exchange": "NASDAQ",
+      "timeframe": "1D",
+      "indicator": "ATR",
+      "params": { "period": 14, "smoothing": "rma" },
+      "dateRange": { "start": "2024-01-02", "end": "2024-03-08" },
+      "extractionMethod": "TradingView data window",
+      "extractionDate": "2026-02-07",
+      "values": [
+        { "date": "2024-03-08", "barTime": 1709856000, "value": 13.6094 }
+      ],
+      "status": "ready",
+      "verified": true
+    },
+    {
+      "id": "META-ADX14-1D",
+      "symbol": "META.US",
+      "tvSymbol": "NASDAQ:META",
+      "exchange": "NASDAQ",
+      "timeframe": "1D",
+      "indicator": "ADX/DMI",
+      "params": { "adxPeriod": 14, "diPeriod": 14 },
+      "dateRange": { "start": "2024-01-02", "end": "2024-03-08" },
+      "extractionMethod": "TradingView data window",
+      "extractionDate": "2026-02-07",
+      "values": [
+        { "date": "2024-03-08", "barTime": 1709856000, "field": "adx", "value": 52.6643 },
+        { "date": "2024-03-08", "barTime": 1709856000, "field": "plusDI", "value": 42.0943 },
+        { "date": "2024-03-08", "barTime": 1709856000, "field": "minusDI", "value": 10.3795 }
+      ],
+      "status": "ready",
+      "verified": true
+    },
+    {
+      "id": "SPY-VWAP-5m",
+      "symbol": "SPY.US",
+      "tvSymbol": "AMEX:SPY",
+      "exchange": "AMEX",
+      "timeframe": "5m",
+      "indicator": "VWAP",
+      "params": { "anchor": "session", "source": "hlc3" },
+      "dateRange": { "start": "2026-02-06 09:30", "end": "2026-02-06 16:00" },
+      "extractionMethod": "TradingView data window",
+      "extractionDate": null,
+      "sessionDetails": {
+        "critical": "VWAP resets on RTH session open (09:30 ET), NOT UTC midnight",
+        "tvSetting": "Session VWAP with 'Session' anchor (default)",
+        "timezone": "America/New_York",
+        "sessionHours": "09:30-16:00 ET"
+      },
+      "barTime": 1770411300,
+      "barUtcIso": "2026-02-06T20:55:00Z",
+      "barEtIso": "2026-02-06T15:55:00-05:00",
+      "barHumanReadable": "2026-02-06 15:55 ET (last 5m bar in RTH)",
+      "expectedOHLC": {
+        "open": 691.99,
+        "high": 692.03,
+        "low": 690.58,
+        "close": 690.60,
+        "volume": 5862684
+      },
+      "values": [
+        { "date": "2026-02-06 15:55", "barTime": 1770411300, "value": null, "note": "VWAP value at last 5m bar before close" }
+      ],
+      "status": "pending",
+      "verified": false,
+      "fixtureAvailable": "spy.us.5m.json"
+    },
+
+    {
+      "_comment": "=== AUDIT-02a: META 1H ===",
+      "extractionProtocol": {
+        "pack": "AUDIT-02a",
+        "symbol": "NASDAQ:META",
+        "timeframe": "1H",
+        "session": "Regular Trading Hours (RTH) only - 09:30-16:00 ET",
+        "timezone": "America/New_York (exchange local)",
+        "adjustments": "Adjusted for splits/dividends",
+        "dataWindow": "Navigate to exact bar, open Data Window (D key)",
+        "barTime": 1770409800,
+        "barUtcIso": "2026-02-06T20:30:00Z",
+        "barEtIso": "2026-02-06T15:30:00-05:00",
+        "barHumanReadable": "2026-02-06 15:30 ET (last 1H bar in RTH)",
+        "expectedOHLC": {
+          "open": 660.595,
+          "high": 663.65,
+          "low": 659.16,
+          "close": 661.275,
+          "volume": 1102522,
+          "note": "Match these to TV Data Window OHLCV before extracting indicator values"
+        }
+      }
+    },
+    {
+      "id": "META-RSI14-1H",
+      "symbol": "META.US",
+      "tvSymbol": "NASDAQ:META",
+      "exchange": "NASDAQ",
+      "timeframe": "1H",
+      "indicator": "RSI",
+      "params": { "period": 14, "source": "close" },
+      "dateRange": { "start": "2025-10-13", "end": "2026-02-07" },
+      "extractionMethod": "TradingView data window",
+      "extractionDate": null,
+      "values": [
+        { "date": "2026-02-07 15:30", "barTime": 1770409800, "value": null }
+      ],
+      "status": "pending",
+      "verified": false,
+      "fixtureAvailable": "meta.us.1h.json"
+    },
+    {
+      "id": "META-MACD-1H",
+      "symbol": "META.US",
+      "tvSymbol": "NASDAQ:META",
+      "exchange": "NASDAQ",
+      "timeframe": "1H",
+      "indicator": "MACD",
+      "params": { "fast": 12, "slow": 26, "signal": 9 },
+      "dateRange": { "start": "2025-10-13", "end": "2026-02-07" },
+      "extractionMethod": "TradingView data window",
+      "extractionDate": null,
+      "values": [
+        { "date": "2026-02-07 15:30", "barTime": 1770409800, "field": "macd", "value": null },
+        { "date": "2026-02-07 15:30", "barTime": 1770409800, "field": "signal", "value": null },
+        { "date": "2026-02-07 15:30", "barTime": 1770409800, "field": "histogram", "value": null }
+      ],
+      "status": "pending",
+      "verified": false,
+      "fixtureAvailable": "meta.us.1h.json"
+    },
+    {
+      "id": "META-BB-1H",
+      "symbol": "META.US",
+      "tvSymbol": "NASDAQ:META",
+      "exchange": "NASDAQ",
+      "timeframe": "1H",
+      "indicator": "Bollinger Bands",
+      "params": { "period": 20, "stdDev": 2, "source": "close", "maType": "sma" },
+      "dateRange": { "start": "2025-10-13", "end": "2026-02-07" },
+      "extractionMethod": "TradingView data window",
+      "extractionDate": null,
+      "values": [
+        { "date": "2026-02-07 15:30", "barTime": 1770409800, "field": "upper", "value": null },
+        { "date": "2026-02-07 15:30", "barTime": 1770409800, "field": "middle", "value": null },
+        { "date": "2026-02-07 15:30", "barTime": 1770409800, "field": "lower", "value": null }
+      ],
+      "status": "pending",
+      "verified": false,
+      "fixtureAvailable": "meta.us.1h.json"
+    },
+    {
+      "id": "META-ATR14-1H",
+      "symbol": "META.US",
+      "tvSymbol": "NASDAQ:META",
+      "exchange": "NASDAQ",
+      "timeframe": "1H",
+      "indicator": "ATR",
+      "params": { "period": 14, "smoothing": "rma" },
+      "dateRange": { "start": "2025-10-13", "end": "2026-02-07" },
+      "extractionMethod": "TradingView data window",
+      "extractionDate": null,
+      "values": [
+        { "date": "2026-02-07 15:30", "barTime": 1770409800, "value": null }
+      ],
+      "status": "pending",
+      "verified": false,
+      "fixtureAvailable": "meta.us.1h.json"
+    },
+    {
+      "id": "META-ADX14-1H",
+      "symbol": "META.US",
+      "tvSymbol": "NASDAQ:META",
+      "exchange": "NASDAQ",
+      "timeframe": "1H",
+      "indicator": "ADX/DMI",
+      "params": { "adxPeriod": 14, "diPeriod": 14 },
+      "dateRange": { "start": "2025-10-13", "end": "2026-02-07" },
+      "extractionMethod": "TradingView data window",
+      "extractionDate": null,
+      "values": [
+        { "date": "2026-02-07 15:30", "barTime": 1770409800, "field": "adx", "value": null },
+        { "date": "2026-02-07 15:30", "barTime": 1770409800, "field": "plusDI", "value": null },
+        { "date": "2026-02-07 15:30", "barTime": 1770409800, "field": "minusDI", "value": null }
+      ],
+      "status": "pending",
+      "verified": false,
+      "fixtureAvailable": "meta.us.1h.json"
+    },
+
+    {
+      "_comment": "=== AUDIT-02b: META 5m ===",
+      "extractionProtocol": {
+        "pack": "AUDIT-02b",
+        "symbol": "NASDAQ:META",
+        "timeframe": "5m",
+        "session": "Regular Trading Hours (RTH) only - 09:30-16:00 ET",
+        "timezone": "America/New_York (exchange local)",
+        "adjustments": "Adjusted for splits/dividends",
+        "dataWindow": "Navigate to exact bar, open Data Window (D key)",
+        "barTime": 1770411300,
+        "barUtcIso": "2026-02-06T20:55:00Z",
+        "barEtIso": "2026-02-06T15:55:00-05:00",
+        "barHumanReadable": "2026-02-06 15:55 ET (last 5m bar in RTH)",
+        "expectedOHLC": {
+          "open": 662.12,
+          "high": 662.465,
+          "low": 661.275,
+          "close": 661.275,
+          "volume": 495969,
+          "note": "Match these to TV Data Window OHLCV before extracting indicator values"
+        }
+      }
+    },
+    {
+      "id": "META-RSI14-5m",
+      "symbol": "META.US",
+      "tvSymbol": "NASDAQ:META",
+      "exchange": "NASDAQ",
+      "timeframe": "5m",
+      "indicator": "RSI",
+      "params": { "period": 14, "source": "close" },
+      "dateRange": { "start": "2025-10-13", "end": "2026-02-06" },
+      "extractionMethod": "TradingView data window",
+      "extractionDate": null,
+      "values": [
+        { "date": "2026-02-06 15:55", "barTime": 1770411300, "value": null }
+      ],
+      "status": "pending",
+      "verified": false,
+      "fixtureAvailable": "meta.us.5m.json"
+    },
+    {
+      "id": "META-MACD-5m",
+      "symbol": "META.US",
+      "tvSymbol": "NASDAQ:META",
+      "exchange": "NASDAQ",
+      "timeframe": "5m",
+      "indicator": "MACD",
+      "params": { "fast": 12, "slow": 26, "signal": 9 },
+      "dateRange": { "start": "2025-10-13", "end": "2026-02-06" },
+      "extractionMethod": "TradingView data window",
+      "extractionDate": null,
+      "values": [
+        { "date": "2026-02-06 15:55", "barTime": 1770411300, "field": "macd", "value": null },
+        { "date": "2026-02-06 15:55", "barTime": 1770411300, "field": "signal", "value": null },
+        { "date": "2026-02-06 15:55", "barTime": 1770411300, "field": "histogram", "value": null }
+      ],
+      "status": "pending",
+      "verified": false,
+      "fixtureAvailable": "meta.us.5m.json"
+    },
+    {
+      "id": "META-BB-5m",
+      "symbol": "META.US",
+      "tvSymbol": "NASDAQ:META",
+      "exchange": "NASDAQ",
+      "timeframe": "5m",
+      "indicator": "Bollinger Bands",
+      "params": { "period": 20, "stdDev": 2, "source": "close", "maType": "sma" },
+      "dateRange": { "start": "2025-10-13", "end": "2026-02-06" },
+      "extractionMethod": "TradingView data window",
+      "extractionDate": null,
+      "values": [
+        { "date": "2026-02-06 15:55", "barTime": 1770411300, "field": "upper", "value": null },
+        { "date": "2026-02-06 15:55", "barTime": 1770411300, "field": "middle", "value": null },
+        { "date": "2026-02-06 15:55", "barTime": 1770411300, "field": "lower", "value": null }
+      ],
+      "status": "pending",
+      "verified": false,
+      "fixtureAvailable": "meta.us.5m.json"
+    },
+    {
+      "id": "META-ATR14-5m",
+      "symbol": "META.US",
+      "tvSymbol": "NASDAQ:META",
+      "exchange": "NASDAQ",
+      "timeframe": "5m",
+      "indicator": "ATR",
+      "params": { "period": 14, "smoothing": "rma" },
+      "dateRange": { "start": "2025-10-13", "end": "2026-02-06" },
+      "extractionMethod": "TradingView data window",
+      "extractionDate": null,
+      "values": [
+        { "date": "2026-02-06 15:55", "barTime": 1770411300, "value": null }
+      ],
+      "status": "pending",
+      "verified": false,
+      "fixtureAvailable": "meta.us.5m.json"
+    },
+    {
+      "id": "META-ADX14-5m",
+      "symbol": "META.US",
+      "tvSymbol": "NASDAQ:META",
+      "exchange": "NASDAQ",
+      "timeframe": "5m",
+      "indicator": "ADX/DMI",
+      "params": { "adxPeriod": 14, "diPeriod": 14 },
+      "dateRange": { "start": "2025-10-13", "end": "2026-02-06" },
+      "extractionMethod": "TradingView data window",
+      "extractionDate": null,
+      "values": [
+        { "date": "2026-02-06 15:55", "barTime": 1770411300, "field": "adx", "value": null },
+        { "date": "2026-02-06 15:55", "barTime": 1770411300, "field": "plusDI", "value": null },
+        { "date": "2026-02-06 15:55", "barTime": 1770411300, "field": "minusDI", "value": null }
+      ],
+      "status": "pending",
+      "verified": false,
+      "fixtureAvailable": "meta.us.5m.json"
+    },
+
+    {
+      "_comment": "=== AUDIT-02c: BTCUSD 1D ===",
+      "extractionProtocol": {
+        "pack": "AUDIT-02c",
+        "symbol": "BITSTAMP:BTCUSD (preferred) or INDEX:BTCUSD",
+        "timeframe": "1D",
+        "session": "24/7 (crypto)",
+        "timezone": "UTC",
+        "dataWindow": "Navigate to exact bar, open Data Window (D key)",
+        "barTime": 1770422400,
+        "barUtcIso": "2026-02-07T00:00:00Z",
+        "barHumanReadable": "2026-02-07 00:00 UTC (daily bar)",
+        "expectedOHLC": {
+          "open": 70524.35,
+          "high": 70606.14,
+          "low": 69693.66,
+          "close": 70606.14,
+          "volume": 92958220288,
+          "source": "EODHD BTC-USD.CC",
+          "feedValidation": "CRITICAL: Compare TV OHLC to these values. If mismatch > 1%, mark baseline 'blocked_data_mismatch' and try different TV symbol"
+        }
+      }
+    },
+    {
+      "id": "BTCUSD-RSI14-1D",
+      "symbol": "BTC-USD.CC",
+      "tvSymbol": "BITSTAMP:BTCUSD",
+      "exchange": "CC",
+      "timeframe": "1D",
+      "indicator": "RSI",
+      "params": { "period": 14, "source": "close" },
+      "dateRange": { "start": "2023-01-01", "end": "2026-02-07" },
+      "extractionMethod": "TradingView data window",
+      "extractionDate": null,
+      "values": [
+        { "date": "2026-02-07", "barTime": 1770422400, "value": null }
+      ],
+      "status": "pending",
+      "verified": false,
+      "fixtureAvailable": "btc-usd.1d.json"
+    },
+    {
+      "id": "BTCUSD-MACD-1D",
+      "symbol": "BTC-USD.CC",
+      "tvSymbol": "BITSTAMP:BTCUSD",
+      "exchange": "CC",
+      "timeframe": "1D",
+      "indicator": "MACD",
+      "params": { "fast": 12, "slow": 26, "signal": 9 },
+      "dateRange": { "start": "2023-01-01", "end": "2026-02-07" },
+      "extractionMethod": "TradingView data window",
+      "extractionDate": null,
+      "values": [
+        { "date": "2026-02-07", "barTime": 1770422400, "field": "macd", "value": null },
+        { "date": "2026-02-07", "barTime": 1770422400, "field": "signal", "value": null },
+        { "date": "2026-02-07", "barTime": 1770422400, "field": "histogram", "value": null }
+      ],
+      "status": "pending",
+      "verified": false,
+      "fixtureAvailable": "btc-usd.1d.json"
+    },
+    {
+      "id": "BTCUSD-BB-1D",
+      "symbol": "BTC-USD.CC",
+      "tvSymbol": "BITSTAMP:BTCUSD",
+      "exchange": "CC",
+      "timeframe": "1D",
+      "indicator": "Bollinger Bands",
+      "params": { "period": 20, "stdDev": 2, "source": "close", "maType": "sma" },
+      "dateRange": { "start": "2023-01-01", "end": "2026-02-07" },
+      "extractionMethod": "TradingView data window",
+      "extractionDate": null,
+      "values": [
+        { "date": "2026-02-07", "barTime": 1770422400, "field": "upper", "value": null },
+        { "date": "2026-02-07", "barTime": 1770422400, "field": "middle", "value": null },
+        { "date": "2026-02-07", "barTime": 1770422400, "field": "lower", "value": null }
+      ],
+      "status": "pending",
+      "verified": false,
+      "fixtureAvailable": "btc-usd.1d.json"
+    },
+    {
+      "id": "BTCUSD-ATR14-1D",
+      "symbol": "BTC-USD.CC",
+      "tvSymbol": "BITSTAMP:BTCUSD",
+      "exchange": "CC",
+      "timeframe": "1D",
+      "indicator": "ATR",
+      "params": { "period": 14, "smoothing": "rma" },
+      "dateRange": { "start": "2023-01-01", "end": "2026-02-07" },
+      "extractionMethod": "TradingView data window",
+      "extractionDate": null,
+      "values": [
+        { "date": "2026-02-07", "barTime": 1770422400, "value": null }
+      ],
+      "status": "pending",
+      "verified": false,
+      "fixtureAvailable": "btc-usd.1d.json"
+    },
+    {
+      "id": "BTCUSD-ADX14-1D",
+      "symbol": "BTC-USD.CC",
+      "tvSymbol": "BITSTAMP:BTCUSD",
+      "exchange": "CC",
+      "timeframe": "1D",
+      "indicator": "ADX/DMI",
+      "params": { "adxPeriod": 14, "diPeriod": 14 },
+      "dateRange": { "start": "2023-01-01", "end": "2026-02-07" },
+      "extractionMethod": "TradingView data window",
+      "extractionDate": null,
+      "values": [
+        { "date": "2026-02-07", "barTime": 1770422400, "field": "adx", "value": null },
+        { "date": "2026-02-07", "barTime": 1770422400, "field": "plusDI", "value": null },
+        { "date": "2026-02-07", "barTime": 1770422400, "field": "minusDI", "value": null }
+      ],
+      "status": "pending",
+      "verified": false,
+      "fixtureAvailable": "btc-usd.1d.json"
+    },
+
+    {
+      "_comment": "=== AUDIT-02d: EURUSD 1D ===",
+      "extractionProtocol": {
+        "pack": "AUDIT-02d",
+        "symbol": "FX:EURUSD (preferred) or OANDA:EURUSD",
+        "timeframe": "1D",
+        "session": "Forex (Sun 5pm - Fri 5pm ET)",
+        "timezone": "UTC",
+        "dataWindow": "Navigate to exact bar, open Data Window (D key)",
+        "barTime": 1770336000,
+        "barUtcIso": "2026-02-06T00:00:00Z",
+        "barHumanReadable": "2026-02-06 00:00 UTC (daily bar)",
+        "expectedOHLC": {
+          "open": 1.1777,
+          "high": 1.1826,
+          "low": 1.1766,
+          "close": 1.182,
+          "volume": 17786768,
+          "source": "EODHD EURUSD.FOREX",
+          "feedValidation": "CRITICAL: Compare TV OHLC to these values. If mismatch > 0.0005 (~5 pips), mark baseline 'blocked_data_mismatch' and try different TV symbol"
+        }
+      }
+    },
+    {
+      "id": "EURUSD-RSI14-1D",
+      "symbol": "EURUSD.FOREX",
+      "tvSymbol": "FX:EURUSD",
+      "exchange": "FOREX",
+      "timeframe": "1D",
+      "indicator": "RSI",
+      "params": { "period": 14, "source": "close" },
+      "dateRange": { "start": "2023-01-01", "end": "2026-02-06" },
+      "extractionMethod": "TradingView data window",
+      "extractionDate": null,
+      "values": [
+        { "date": "2026-02-06", "barTime": 1770336000, "value": null }
+      ],
+      "status": "pending",
+      "verified": false,
+      "fixtureAvailable": "eurusd.1d.json"
+    },
+    {
+      "id": "EURUSD-MACD-1D",
+      "symbol": "EURUSD.FOREX",
+      "tvSymbol": "FX:EURUSD",
+      "exchange": "FOREX",
+      "timeframe": "1D",
+      "indicator": "MACD",
+      "params": { "fast": 12, "slow": 26, "signal": 9 },
+      "dateRange": { "start": "2023-01-01", "end": "2026-02-06" },
+      "extractionMethod": "TradingView data window",
+      "extractionDate": null,
+      "values": [
+        { "date": "2026-02-06", "barTime": 1770336000, "field": "macd", "value": null },
+        { "date": "2026-02-06", "barTime": 1770336000, "field": "signal", "value": null },
+        { "date": "2026-02-06", "barTime": 1770336000, "field": "histogram", "value": null }
+      ],
+      "status": "pending",
+      "verified": false,
+      "fixtureAvailable": "eurusd.1d.json"
+    },
+    {
+      "id": "EURUSD-BB-1D",
+      "symbol": "EURUSD.FOREX",
+      "tvSymbol": "FX:EURUSD",
+      "exchange": "FOREX",
+      "timeframe": "1D",
+      "indicator": "Bollinger Bands",
+      "params": { "period": 20, "stdDev": 2, "source": "close", "maType": "sma" },
+      "dateRange": { "start": "2023-01-01", "end": "2026-02-06" },
+      "extractionMethod": "TradingView data window",
+      "extractionDate": null,
+      "values": [
+        { "date": "2026-02-06", "barTime": 1770336000, "field": "upper", "value": null },
+        { "date": "2026-02-06", "barTime": 1770336000, "field": "middle", "value": null },
+        { "date": "2026-02-06", "barTime": 1770336000, "field": "lower", "value": null }
+      ],
+      "status": "pending",
+      "verified": false,
+      "fixtureAvailable": "eurusd.1d.json"
+    },
+    {
+      "id": "EURUSD-ATR14-1D",
+      "symbol": "EURUSD.FOREX",
+      "tvSymbol": "FX:EURUSD",
+      "exchange": "FOREX",
+      "timeframe": "1D",
+      "indicator": "ATR",
+      "params": { "period": 14, "smoothing": "rma" },
+      "dateRange": { "start": "2023-01-01", "end": "2026-02-06" },
+      "extractionMethod": "TradingView data window",
+      "extractionDate": null,
+      "values": [
+        { "date": "2026-02-06", "barTime": 1770336000, "value": null }
+      ],
+      "status": "pending",
+      "verified": false,
+      "fixtureAvailable": "eurusd.1d.json"
+    },
+    {
+      "id": "EURUSD-ADX14-1D",
+      "symbol": "EURUSD.FOREX",
+      "tvSymbol": "FX:EURUSD",
+      "exchange": "FOREX",
+      "timeframe": "1D",
+      "indicator": "ADX/DMI",
+      "params": { "adxPeriod": 14, "diPeriod": 14 },
+      "dateRange": { "start": "2023-01-01", "end": "2026-02-06" },
+      "extractionMethod": "TradingView data window",
+      "extractionDate": null,
+      "values": [
+        { "date": "2026-02-06", "barTime": 1770336000, "field": "adx", "value": null },
+        { "date": "2026-02-06", "barTime": 1770336000, "field": "plusDI", "value": null },
+        { "date": "2026-02-06", "barTime": 1770336000, "field": "minusDI", "value": null }
+      ],
+      "status": "pending",
+      "verified": false,
+      "fixtureAvailable": "eurusd.1d.json"
+    }
+  ]
+}
